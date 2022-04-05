@@ -12,7 +12,7 @@ services:
     command: git config --global --add safe.directory /repo
     command: bash
     environment:
-      - REDIS_URL=redis
+      - REDIS_ADDRESS=redis
       - REDIS_PORT=6378
       - BITRATE=64
       - RUST_LOG=DEBUG
