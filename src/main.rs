@@ -1,6 +1,6 @@
 use log::info;
 use std::net::TcpListener;
-use VoDToPodcastRSS::run;
+use vod_to_podcast_rss::run;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
