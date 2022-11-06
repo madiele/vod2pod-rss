@@ -11,3 +11,11 @@ async fn main() -> std::io::Result<()> {
 
     run(listener)?.await
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_example() {
+        
+    }
+}
