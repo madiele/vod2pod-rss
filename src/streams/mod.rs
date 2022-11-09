@@ -1,8 +1,15 @@
+use actix_web::dev::ServiceRequest;
 use ffmpeg_next::Error;
 
 pub struct Streams<'a> {
     duratiion_s: i32,
     stream_url: &'a str,
+}
+
+pub struct Streaming_settings {
+    bitrate: i32,
+    skip_silence: bool,
+    output_type: String,
 }
 
 impl<'a> Streams<'a> {
@@ -17,7 +24,7 @@ impl<'a> Streams<'a> {
     }
 
     //TODO: to revise should take something to send the data too
-    async fn transcode(&self, bitrate: i32) -> Result<i32, Error> {
+    async fn start_streaming_to_client(&self, request: ServiceRequest, streaming_settings: &Streaming_settings) -> Result<i32, Error> {
         todo!()
     }
 
