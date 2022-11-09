@@ -5,11 +5,6 @@ pub struct Streams {
     stream_url: String,
 }
 
-pub trait Streamable {
-    fn transcode(&self, bitrate: i32) -> Result<i32, Error>;
-    fn total_byte_len(&self, bitrate: i32) -> i64;
-}
-
 impl Streams {
     pub fn new(duratiion_s: i32, stream_url: String) -> Self { Self { duratiion_s, stream_url } }
 
@@ -20,18 +15,14 @@ impl Streams {
     pub fn stream_url(&self) -> &str {
         self.stream_url.as_ref()
     }
-}
 
-impl Streamable for Streams {
-    fn transcode(&self, bitrate: i32) -> Result<i32, Error> {
+    //TODO: to revise should take something to send the data too
+    async fn transcode(&self, bitrate: i32) -> Result<i32, Error> {
         todo!()
     }
 
-    fn total_byte_len(&self, bitrate: i32) -> i64 {
-        todo!()
-    }
+    fn total_byte_len(&self, bitrate: i32) -> i64 { i64::from(self.duratiion_s * bitrate) }
 }
-
 
 #[cfg(test)]
 mod test {
