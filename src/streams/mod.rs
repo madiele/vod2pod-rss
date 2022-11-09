@@ -13,7 +13,7 @@ impl<'a> Streams<'a> {
     }
 
     pub fn stream_url(&self) -> &str {
-        self.stream_url.as_ref()
+        self.stream_url
     }
 
     //TODO: to revise should take something to send the data too
