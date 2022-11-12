@@ -58,7 +58,7 @@ impl<'a> Transcoder<'a> {
         }
     }
     
-    fn set_ffmpeg_command<'b>(command: &'b mut Command, ffmpeg_paramenters: &'b FFMPEG_parameters) -> &'b mut Command {
+    fn set_ffmpeg_command<'b>(command: &'b mut Command, ffmpeg_paramenters: &FFMPEG_parameters) -> &'b mut Command {
         command.args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
@@ -97,6 +97,10 @@ impl<'a> Transcoder<'a> {
 
 #[cfg(test)]
 mod test {
+    use std::path::PathBuf;
+
+    use regex::Regex;
+
     use super::*;
 
     # [test]
@@ -165,4 +169,26 @@ mod test {
         }
         println!();
     }
+    
+    #[test]
+    fn check_ffmpeg_runs () {
+        let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_to_mp3.push("src/transcoder/test.mp3");
+        let duration = 60;
+        let stream_url = path_to_mp3.as_os_str().to_str().unwrap();
+        println!("{stream_url}");
+        let params = FFMPEG_parameters { seek_time: 25, url: stream_url.to_string(), max_rate_kbit: 64, buffer_size: 1000, transcode_bandwith: 2, audio_codec: FFMPEG_audio_codec::Libmp3lame, bitrate_kbit: 3 };
+        let mut transcoder = Transcoder::new(duration, stream_url, &params);
+        match transcoder.ffmpeg_command.output() {
+            Ok(x) => {
+                let out = x.stderr.as_slice();
+                let out = String::from_utf8_lossy(out);
+                println!("command run sucessfully \nOutput: {out}");
+                let regex = Regex::new("time=00:00:02.19").unwrap();
+                assert!(regex.is_match(out.to_string().as_str()));
+            },
+            Err(e) => panic!("ffmpeg error {e}"),
+        }
+    }
+    
 }
