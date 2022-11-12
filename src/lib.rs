@@ -1,4 +1,4 @@
-pub mod streams;
+pub mod transcoder;
 
 use actix_web::dev::Server;
 use actix_web::HttpResponse;
