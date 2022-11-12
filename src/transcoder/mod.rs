@@ -9,8 +9,8 @@ enum FFMPEG_audio_codec {
     Libmp3lame
 }
 
-impl<'a> FFMPEG_audio_codec {
-    fn as_str(self) -> &'a str {
+impl FFMPEG_audio_codec {
+    fn as_str(&self) -> &'static str {
         match self {
             FFMPEG_audio_codec::Libmp3lame => "libmp3lame",
         }
@@ -33,6 +33,10 @@ pub struct FFMPEG_parameters {
     transcode_bandwith: u32,
 }
 
+impl FFMPEG_parameters {
+    pub fn bitarate(&self) -> u64 {u64::from(self.bitrate_kbit * 1024)}
+}
+
 pub struct Streaming_settings {
     
 }
@@ -44,8 +48,8 @@ pub struct Transcoder<'a> {
 }
 
 impl<'a> Transcoder<'a> {
-    pub fn new(duratiion_s: i32, stream_url: &'a str, ffmpeg_paramenters: FFMPEG_parameters) -> Self {
-        let mut command = Command::new("sh");
+    pub fn new(duratiion_s: i32, stream_url: &'a str, ffmpeg_paramenters: &FFMPEG_parameters) -> Self {
+        let mut command = Command::new("ffmpeg");
         Self::set_ffmpeg_command(&mut command, ffmpeg_paramenters);
         Self {
             duratiion_s,
@@ -54,7 +58,7 @@ impl<'a> Transcoder<'a> {
         }
     }
     
-    fn set_ffmpeg_command(command: &mut Command, ffmpeg_paramenters: FFMPEG_parameters) -> &mut Command {
+    fn set_ffmpeg_command<'b>(command: &'b mut Command, ffmpeg_paramenters: &'b FFMPEG_parameters) -> &'b mut Command {
         command.args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
@@ -99,11 +103,66 @@ mod test {
     fn check_correct_total_byte_len() {
         let duration = 60;
         let stream_url = "http://url.mp3";
-        let stream = Transcoder::new(duration, stream_url,
-        FFMPEG_parameters { seek_time: 2, url: "laksjd".to_string(), max_rate_kbit: 2, buffer_size: 2, transcode_bandwith: 2, audio_codec: FFMPEG_audio_codec::Libmp3lame, bitrate_kbit: 3 });
+        let params = FFMPEG_parameters { seek_time: 30, url: stream_url.to_string(), max_rate_kbit: 64, buffer_size: 1000, transcode_bandwith: 2, audio_codec: FFMPEG_audio_codec::Libmp3lame, bitrate_kbit: 3 };
+        let transcoder = Transcoder::new(duration, stream_url, &params);
         let bitarate = 100;
-        let stream_byte_len = stream.total_byte_len(bitarate);
+        let stream_byte_len = transcoder.total_byte_len(bitarate);
 
         assert_eq!(stream_byte_len, i64::from(bitarate * duration))
+    }
+    
+    #[test]
+    fn check_ffmpeg_command() {
+        let duration = 60;
+        let stream_url = "http://url.mp3";
+        let params = FFMPEG_parameters { seek_time: 30, url: stream_url.to_string(), max_rate_kbit: 64, buffer_size: 1000, transcode_bandwith: 2, audio_codec: FFMPEG_audio_codec::Libmp3lame, bitrate_kbit: 3 };
+        let transcoder = Transcoder::new(duration, stream_url, &params);
+        let ppath = transcoder.ffmpeg_command.get_program();
+        if let Some(x) = ppath.to_str() {
+            println!("{} ",x);
+            assert_eq!(x, "ffmpeg");
+        }        
+        let mut args = transcoder.ffmpeg_command.get_args();
+
+        while let Some(arg) = args.next()  {
+            match arg.to_str() {
+                Some("-ss") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-ss {}", value);
+                    assert_eq!(value, params.seek_time.to_string().as_str());
+                },
+                Some("-i") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-i {}", value);
+                    assert_eq!(value, params.url.as_str());
+                },
+                Some("-acodec") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-acodec {}", value);
+                    assert_eq!(value, params.audio_codec.as_str());
+                },
+                Some("-ab") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-ab {}", value);
+                },
+                Some("-f") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-f {}", value);
+                    assert_eq!(value, "mp3");
+                },
+                Some("-bufsize") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-bufsize {}", value);
+                },
+                Some("-maxrate") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    println!("-maxrate {}", value);
+                },
+                Some("pipe:stdout") => { println!("pipe:stdout") },
+                Some(x) => panic!("ffmpeg run with uknown option: {x}"),
+                None => panic!("ffmpeg run with no options"),
+            }
+        }
+        println!();
     }
 }
