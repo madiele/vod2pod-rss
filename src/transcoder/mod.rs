@@ -36,8 +36,6 @@ impl FFMPEG_parameters {
     }
 }
 
-pub struct Streaming_settings {}
-
 pub struct Transcoder<'a> {
     duratiion_s: i32,
     stream_url: &'a str,
