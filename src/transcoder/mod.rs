@@ -4,7 +4,7 @@ use actix_web::{ dev::{ ServiceRequest, ServiceResponse }, HttpResponse, web::By
 use futures::Future;
 use genawaiter::{ yield_, sync::{ Gen, Co }, sync_producer };
 
-enum FFMPEGAudioCodec {
+pub enum FFMPEGAudioCodec {
     Libmp3lame,
 }
 
@@ -23,11 +23,11 @@ impl Default for FFMPEGAudioCodec {
 }
 
 pub struct FFMPEG_parameters {
-    seek_time: u32,
-    url: String,
-    audio_codec: FFMPEGAudioCodec,
-    bitrate_kbit: u32,
-    max_rate_kbit: u32,
+    pub seek_time: u32,
+    pub url: String,
+    pub audio_codec: FFMPEGAudioCodec,
+    pub bitrate_kbit: u32,
+    pub max_rate_kbit: u32,
 }
 
 impl FFMPEG_parameters {
@@ -80,15 +80,7 @@ impl<'a> Transcoder<'a> {
         self.stream_url
     }
 
-    //TODO: should not be here, move in another module
-    async fn start_streaming_to_client(
-        self
-    ) -> HttpResponse {
-        let stream = self.get_transcode_stream();
-        HttpResponse::Ok().content_type("audio/mpeg").streaming(stream)
-    }
-
-    fn get_transcode_stream(self) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
+    pub fn get_transcode_stream(self) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
         async fn generetor_coroutine(mut command: Command, co: Co<Result<Bytes, std::io::Error>>) {
             let mut child = command
                 .stdout(Stdio::piped())
@@ -97,15 +89,18 @@ impl<'a> Transcoder<'a> {
                 .expect("failed to run commnad");
 
             let mut out = child.stdout.take().expect("failed to open stdout");
+            let mut total_bytes_read: usize = 0;
             loop {
                 let mut buff: [u8; 1024] = [0; 1024];
                 let res = out.read(&mut buff);
                 match res {
                     Ok(read_bytes) => {
                         if read_bytes == 0 {
+                            println!("reached EOF; read {total_bytes_read} bytes");
                             break;
                         }
-                        co.yield_(Ok(Bytes::copy_from_slice(&buff))).await;
+                        total_bytes_read += read_bytes;
+                        co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
                     Err(e) => co.yield_(Err(e)).await,
                 }
