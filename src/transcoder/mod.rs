@@ -1,5 +1,6 @@
-use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error };
+use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error, time::Duration };
 
+use actix_rt::time::sleep;
 use actix_web::{ web::Bytes };
 use futures::Future;
 use genawaiter::{ sync::{ Gen, Co } };
@@ -91,9 +92,9 @@ impl<'a> Transcoder<'a> {
             let mut out = child.stdout.take().expect("failed to open stdout");
             let mut total_bytes_read: usize = 0;
             let mut buff: [u8; 1024] = [0; 1024];
+            let mut tries = 0;
             loop {
-                let res = out.read(&mut buff);
-                match res {
+                match out.read(&mut buff) {
                     Ok(read_bytes) => {
                         if read_bytes == 0 {
                             println!("reached EOF; read {total_bytes_read} bytes");
@@ -102,7 +103,20 @@ impl<'a> Transcoder<'a> {
                         total_bytes_read += read_bytes;
                         co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
-                    Err(e) => co.yield_(Err(e)).await,
+                    Err(e) => {
+                        match e.kind() {
+                            std::io::ErrorKind::Interrupted => {
+                                if tries > 10 {
+                                    println!("read was interrupted too many times");
+                                    co.yield_(Err(e)).await;
+                                }
+                                println!("read was interrupted, retrying in 1sec");
+                                sleep(Duration::from_secs(1)).await;
+                                tries += 1;
+                            }
+                            _ => co.yield_(Err(e)).await,
+                        }
+                    }
                 }
             }
         }
