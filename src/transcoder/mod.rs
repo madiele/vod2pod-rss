@@ -1,22 +1,22 @@
 use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error };
 
-use actix_web::{ dev::ServiceRequest };
+use actix_web::{ dev::{ ServiceRequest, ServiceResponse }, HttpResponse, web::Bytes };
 use futures::Future;
-use genawaiter::{ yield_, sync::{ Gen }, sync_producer };
+use genawaiter::{ yield_, sync::{ Gen, Co }, sync_producer };
 
-enum FFMPEG_audio_codec {
+enum FFMPEGAudioCodec {
     Libmp3lame,
 }
 
-impl FFMPEG_audio_codec {
+impl FFMPEGAudioCodec {
     fn as_str(&self) -> &'static str {
         match self {
-            FFMPEG_audio_codec::Libmp3lame => "libmp3lame",
+            FFMPEGAudioCodec::Libmp3lame => "libmp3lame",
         }
     }
 }
 
-impl Default for FFMPEG_audio_codec {
+impl Default for FFMPEGAudioCodec {
     fn default() -> Self {
         Self::Libmp3lame
     }
@@ -25,11 +25,9 @@ impl Default for FFMPEG_audio_codec {
 pub struct FFMPEG_parameters {
     seek_time: u32,
     url: String,
-    audio_codec: FFMPEG_audio_codec,
+    audio_codec: FFMPEGAudioCodec,
     bitrate_kbit: u32,
     max_rate_kbit: u32,
-    buffer_size: u32,
-    transcode_bandwith: u32,
 }
 
 impl FFMPEG_parameters {
@@ -69,7 +67,7 @@ impl<'a> Transcoder<'a> {
             .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit / 1000).as_str()])
             .args(["-f", "mp3"])
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
-            .args(["-maxrate", format!("{}k", ffmpeg_paramenters.transcode_bandwith).as_str()])
+            .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["pipe:stdout"]);
         command
     }
@@ -82,18 +80,17 @@ impl<'a> Transcoder<'a> {
         self.stream_url
     }
 
-    //TODO: to revise should take something to send the data too
+    //TODO: should not be here, move in another module
     async fn start_streaming_to_client(
-        &self,
-        request: ServiceRequest,
-        streaming_settings: &Streaming_settings
-    ) -> i32 {
-        todo!();
+        self
+    ) -> HttpResponse {
+        let stream = self.get_transcode_stream();
+        HttpResponse::Ok().content_type("audio/mpeg").streaming(stream)
     }
 
-    fn get_transcode_generator(mut self) -> Gen<Result<[u8; 1024], impl Error>, (), impl Future> {
-        let pipe_ffmpeg_output = sync_producer!({
-            let mut child = self.ffmpeg_command
+    fn get_transcode_stream(self) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
+        async fn generetor_coroutine(mut command: Command, co: Co<Result<Bytes, std::io::Error>>) {
+            let mut child = command
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .spawn()
@@ -108,13 +105,13 @@ impl<'a> Transcoder<'a> {
                         if read_bytes == 0 {
                             break;
                         }
-                        yield_!(Ok(buff));
+                        co.yield_(Ok(Bytes::copy_from_slice(&buff))).await;
                     }
-                    Err(x) => yield_!(Err(x)),
+                    Err(e) => co.yield_(Err(e)).await,
                 }
             }
-        });
-        Gen::new(pipe_ffmpeg_output)
+        }
+        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
     }
 
     fn total_byte_len(&self, bitrate: i32) -> i64 {
@@ -136,9 +133,7 @@ mod test {
             seek_time: 30,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
-            buffer_size: 1000,
-            transcode_bandwith: 2,
-            audio_codec: FFMPEG_audio_codec::Libmp3lame,
+            audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
         let transcoder = Transcoder::new(duration, stream_url, &params);
@@ -156,9 +151,7 @@ mod test {
             seek_time: 30,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
-            buffer_size: 1000,
-            transcode_bandwith: 2,
-            audio_codec: FFMPEG_audio_codec::Libmp3lame,
+            audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
         let transcoder = Transcoder::new(duration, stream_url, &params);
@@ -224,9 +217,7 @@ mod test {
             seek_time: 25,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
-            buffer_size: 1000,
-            transcode_bandwith: 2,
-            audio_codec: FFMPEG_audio_codec::Libmp3lame,
+            audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
         let mut transcoder = Transcoder::new(duration, stream_url, &params);
@@ -253,13 +244,12 @@ mod test {
             seek_time: 25,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
-            buffer_size: 1000,
-            transcode_bandwith: 2,
-            audio_codec: FFMPEG_audio_codec::Libmp3lame,
+            audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let mut transcoder = Transcoder::new(duration, stream_url, &params);
-        let mut gen = transcoder.get_transcode_generator();
+        let transcoder = Transcoder::new(duration, stream_url, &params);
+        let mut gen = transcoder.get_transcode_stream();
+        let mut read_counts = 0;
         println!("!!printing buffer!!");
         loop {
             let state = gen.resume();
@@ -270,11 +260,13 @@ mod test {
                     let out = &buff;
                     let out = String::from_utf8_lossy(out);
                     print!("{out}");
+                    read_counts += 1;
                 }
                 genawaiter::GeneratorState::Complete(_) => {
                     break;
                 }
             }
         }
+        assert!(read_counts > 0);
     }
 }
