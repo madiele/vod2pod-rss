@@ -90,8 +90,8 @@ impl<'a> Transcoder<'a> {
 
             let mut out = child.stdout.take().expect("failed to open stdout");
             let mut total_bytes_read: usize = 0;
+            let mut buff: [u8; 1024] = [0; 1024];
             loop {
-                let mut buff: [u8; 1024] = [0; 1024];
                 let res = out.read(&mut buff);
                 match res {
                     Ok(read_bytes) => {
