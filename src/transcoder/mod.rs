@@ -1,8 +1,8 @@
 use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error };
 
-use actix_web::{ dev::{ ServiceRequest, ServiceResponse }, HttpResponse, web::Bytes };
+use actix_web::{ web::Bytes };
 use futures::Future;
-use genawaiter::{ yield_, sync::{ Gen, Co }, sync_producer };
+use genawaiter::{ sync::{ Gen, Co } };
 
 pub enum FFMPEGAudioCodec {
     Libmp3lame,
@@ -80,7 +80,9 @@ impl<'a> Transcoder<'a> {
         self.stream_url
     }
 
-    pub fn get_transcode_stream(self) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
+    pub fn get_transcode_stream(
+        self
+    ) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
         async fn generetor_coroutine(mut command: Command, co: Co<Result<Bytes, std::io::Error>>) {
             let mut child = command
                 .stdout(Stdio::piped())
