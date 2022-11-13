@@ -1,6 +1,6 @@
 use actix_web::{ HttpServer, web, App, HttpResponse };
-use std::{ path::PathBuf };
-use vod_to_podcast_rss::{ transcoder::{ Transcoder, FFMPEG_parameters, FFMPEGAudioCodec } };
+use std::path::PathBuf;
+use vod_to_podcast_rss::transcoder::{ Transcoder, FFMPEG_parameters, FFMPEGAudioCodec };
 
 async fn index() -> HttpResponse {
     HttpResponse::Ok().body("server works")
