@@ -1,6 +1,6 @@
 use actix_web::{ HttpServer, web, App, HttpResponse };
 use std::path::PathBuf;
-use vod_to_podcast_rss::transcoder::{ Transcoder, FFMPEG_parameters, FFMPEGAudioCodec };
+use vod_to_podcast_rss::transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec };
 
 async fn index() -> HttpResponse {
     HttpResponse::Ok().body("server works")
@@ -13,14 +13,14 @@ async fn start_streaming_to_client() -> HttpResponse {
     let duration = 27;
     let stream_url = path_to_mp3.as_os_str().to_str().unwrap();
     println!("{stream_url}");
-    let params = FFMPEG_parameters {
+    let params = FfmpegParameters {
         seek_time: 0,
         url: stream_url.to_string(),
         max_rate_kbit: 64,
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: 64,
     };
-    let transcoder = Transcoder::new(duration, stream_url, &params);
+    let transcoder = Transcoder::new(stream_url, &params);
     let stream = transcoder.get_transcode_stream();
     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
 }

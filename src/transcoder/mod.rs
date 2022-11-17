@@ -1,9 +1,9 @@
 use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error, time::Duration };
 
 use actix_rt::time::sleep;
-use actix_web::{ web::Bytes };
+use actix_web::web::Bytes;
 use futures::Future;
-use genawaiter::{ sync::{ Gen, Co } };
+use genawaiter::sync::{ Gen, Co };
 
 pub enum FFMPEGAudioCodec {
     Libmp3lame,
@@ -23,7 +23,7 @@ impl Default for FFMPEGAudioCodec {
     }
 }
 
-pub struct FFMPEG_parameters {
+pub struct FfmpegParameters {
     pub seek_time: u32,
     pub url: String,
     pub audio_codec: FFMPEGAudioCodec,
@@ -31,32 +31,29 @@ pub struct FFMPEG_parameters {
     pub max_rate_kbit: u32,
 }
 
-impl FFMPEG_parameters {
+impl FfmpegParameters {
     pub fn bitarate(&self) -> u64 {
         u64::from(self.bitrate_kbit * 1024)
     }
 }
 
 pub struct Transcoder<'a> {
-    duratiion_s: i32,
     stream_url: &'a str,
     ffmpeg_command: Command,
 }
 
 impl<'a> Transcoder<'a> {
     pub fn new(
-        duratiion_s: i32,
         stream_url: &'a str,
-        ffmpeg_paramenters: &FFMPEG_parameters
+        ffmpeg_paramenters: &FfmpegParameters
     ) -> Self {
         Self {
-            duratiion_s,
             stream_url,
             ffmpeg_command: Self::get_ffmpeg_command(ffmpeg_paramenters),
         }
     }
 
-    fn get_ffmpeg_command(ffmpeg_paramenters: &FFMPEG_parameters) -> Command {
+    fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
         command_ref
@@ -69,10 +66,6 @@ impl<'a> Transcoder<'a> {
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["pipe:stdout"]);
         command
-    }
-
-    pub fn duratiion_s(&self) -> i32 {
-        self.duratiion_s
     }
 
     pub fn stream_url(&self) -> &str {
@@ -123,9 +116,6 @@ impl<'a> Transcoder<'a> {
         Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
     }
 
-    fn total_byte_len(&self, bitrate: i32) -> i64 {
-        i64::from(self.duratiion_s * bitrate)
-    }
 }
 
 #[cfg(test)]
@@ -135,35 +125,17 @@ mod test {
     use super::*;
 
     #[test]
-    fn check_correct_total_byte_len() {
-        let duration = 60;
-        let stream_url = "http://url.mp3";
-        let params = FFMPEG_parameters {
-            seek_time: 30,
-            url: stream_url.to_string(),
-            max_rate_kbit: 64,
-            audio_codec: FFMPEGAudioCodec::Libmp3lame,
-            bitrate_kbit: 3,
-        };
-        let transcoder = Transcoder::new(duration, stream_url, &params);
-        let bitarate = 100;
-        let stream_byte_len = transcoder.total_byte_len(bitarate);
-
-        assert_eq!(stream_byte_len, i64::from(bitarate * duration))
-    }
-
-    #[test]
     fn check_ffmpeg_command() {
         let duration = 60;
         let stream_url = "http://url.mp3";
-        let params = FFMPEG_parameters {
+        let params = FfmpegParameters {
             seek_time: 30,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(duration, stream_url, &params);
+        let transcoder = Transcoder::new(stream_url, &params);
         let ppath = transcoder.ffmpeg_command.get_program();
         if let Some(x) = ppath.to_str() {
             println!("{} ", x);
@@ -222,14 +194,14 @@ mod test {
         let duration = 60;
         let stream_url = path_to_mp3.as_os_str().to_str().unwrap();
         println!("{stream_url}");
-        let params = FFMPEG_parameters {
+        let params = FfmpegParameters {
             seek_time: 25,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let mut transcoder = Transcoder::new(duration, stream_url, &params);
+        let mut transcoder = Transcoder::new(stream_url, &params);
         match transcoder.ffmpeg_command.output() {
             Ok(x) => {
                 let out = x.stderr.as_slice();
@@ -249,14 +221,14 @@ mod test {
         let duration = 60;
         let stream_url = path_to_mp3.as_os_str().to_str().unwrap();
         println!("{stream_url}");
-        let params = FFMPEG_parameters {
+        let params = FfmpegParameters {
             seek_time: 25,
             url: stream_url.to_string(),
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(duration, stream_url, &params);
+        let transcoder = Transcoder::new(stream_url, &params);
         let mut gen = transcoder.get_transcode_stream();
         let mut read_counts = 0;
         println!("!!printing buffer!!");
