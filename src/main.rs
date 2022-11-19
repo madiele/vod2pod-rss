@@ -1,5 +1,6 @@
-use actix_web::{ HttpServer, web, App, HttpResponse, guard };
-use rss::Channel;
+use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
+use reqwest::Url;
+use rss::{ Channel, Enclosure };
 use std::{ path::PathBuf, collections::HashMap };
 use vod_to_podcast_rss::transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec };
 
@@ -25,7 +26,10 @@ async fn start_streaming_to_client() -> HttpResponse {
     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
 }
 
-async fn transcodize_RSS(query: web::Query<HashMap<String, String>>) -> HttpResponse {
+async fn transcodize_RSS(
+    req: HttpRequest,
+    query: web::Query<HashMap<String, String>>
+) -> HttpResponse {
     let url = if let Some(x) = query.get("url") {
         x
     } else {
@@ -43,7 +47,7 @@ async fn transcodize_RSS(query: web::Query<HashMap<String, String>>) -> HttpResp
     };
 
     //RSS parsing
-    let rss = match Channel::read_from(&rss_body[..]) {
+    let mut rss = match Channel::read_from(&rss_body[..]) {
         Ok(x) => x,
         Err(e) => {
             println!("could not parse rss, reason: {e}");
@@ -52,23 +56,53 @@ async fn transcodize_RSS(query: web::Query<HashMap<String, String>>) -> HttpResp
     };
 
     //RSS translation
-    for item in rss.items {
-        let media_url = match item.enclosure {
-            Some(x) => x,
+    for item in &mut rss.items {
+        let enclosure = match &item.enclosure {
+            Some(x) => x.clone(),
             None => {
-                println!("item has no media, skipping: ({})", serde_json::to_string(&item).unwrap_or_default());
+                println!(
+                    "item has no media, skipping: ({})",
+                    serde_json::to_string(&item).unwrap_or_default()
+                );
                 continue;
             }
         };
 
-        let duration_str = item.itunes_ext.unwrap_or_default().duration.unwrap_or("".to_string());
-        //TODO if duration == "" then it must be calculated (pattern strategy?)
-        //TODO parse duration
+        let media_url = match Url::parse(enclosure.url()) {
+            Ok(x) => x,
+            Err(_) => {
+                println!("item has an invalid url");
+                continue;
+            }
+        };
+
+        let duration_str = item.itunes_ext
+            .clone()
+            .unwrap_or_default()
+            .duration.unwrap_or("".to_string());
+
+        //TODO use regex to extract duration from str '02:31:00'
+        let duration_secs = match u32::from_str_radix(&duration_str, 10) {
+            Ok(x) => x,
+            Err(e) => {
+                println!("failed to parse duration for {media_url}:\n{e}");
+                continue;
+            }
+        };
+
+        let mut transcode_url = req.url_for("transcode_mp3", &[""]).unwrap();
         
-        
+        transcode_url.query_pairs_mut().append_pair("url", media_url.as_str());
+
+        //TODO set lenght and mime type
+        item.set_enclosure(Enclosure {
+            length: "0".to_string(),
+            url: transcode_url.to_string(),
+            mime_type: "".to_string(),
+        });
     }
 
-    HttpResponse::Ok().finish()
+    HttpResponse::Ok().body(rss.to_string())
 }
 
 async fn transcode(query: web::Query<HashMap<String, String>>) -> HttpResponse {
