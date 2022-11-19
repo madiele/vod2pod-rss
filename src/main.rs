@@ -102,7 +102,7 @@ async fn transcodize_RSS(
         });
     }
 
-    HttpResponse::Ok().body(rss.to_string())
+    HttpResponse::Ok().content_type("application/xml").body(rss.to_string())
 }
 
 async fn transcode(query: web::Query<HashMap<String, String>>) -> HttpResponse {
