@@ -1,7 +1,9 @@
 use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
-use log::{error, info};
+use log::{ error, info, debug };
+use regex::{ Regex, Match };
 use reqwest::Url;
 use simple_logger::SimpleLogger;
+use uuid::Uuid;
 use std::{ path::PathBuf, collections::HashMap };
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec },
@@ -60,7 +62,7 @@ async fn transcodize_rss(
 
 const DEFAULT_BITRATE: &str = "64";
 const DEFAULT_DURATION: &str = "-1";
-async fn transcode(query: web::Query<HashMap<String, String>>) -> HttpResponse {
+async fn transcode(req: HttpRequest, query: web::Query<HashMap<String, String>>) -> HttpResponse {
     let empty_string = "".to_string();
     let stream_url = match ({ Url::parse(query.get("url").unwrap_or(&empty_string)) }) {
         Ok(x) => x,
@@ -88,24 +90,82 @@ async fn transcode(query: web::Query<HashMap<String, String>>) -> HttpResponse {
         }
     };
 
+    let uuid: Uuid = match
+        query.get("UUID").unwrap_or(&DEFAULT_DURATION.to_string()).parse()
+    {
+        Ok(x) => x,
+        Err(_) => {
+            error!("can't parse UUID");
+            return HttpResponse::BadRequest().body("can't parse duration");
+        }
+    };
+
+    let bytes_count: u32 = ((duration_secs * bitrate) / 8) * 1024;
+    // content-range parsing
+    //Content-Range: bytes 200-1000/67589
+    let default_content_range = format!("0-");
+    let content_range_str = match req.headers().get("Range") {
+        Some(x) => x.to_str().unwrap(),
+        None => default_content_range.as_str(),
+    };
+    debug!("received content range {content_range_str}");
+
+    let re = Regex::new(
+        r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?"
+    ).unwrap();
+    let captures = match re.captures_iter(content_range_str).next(){
+        Some(x) => x,
+        None => return HttpResponse::InternalServerError().body("content range regex failed"),
+    };
+
+    let mut start = 0;
+    if let Some(x) = captures.name("start") {
+        start = x.as_str().parse().unwrap();
+    }
+    let mut end = bytes_count - 1;
+    if let Some(x) = captures.name("end") {
+        end = x.as_str().parse().unwrap();
+    }
+
+    debug!("requested content-range: bytes {start}-{end}/{bytes_count}");
+    
+    if start > end || start > bytes_count {
+        return HttpResponse::RangeNotSatisfiable().finish();
+    }
+    let seek = ( start as f32 / bytes_count as f32) * duration_secs as f32;
+    debug!("choosen seek_time: {seek}");
     let ffmpeg_paramenters = FfmpegParameters {
-        seek_time: 0,
+        seek_time: seek.floor() as _,
         url: stream_url,
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
     };
+    debug!("seconds: {duration_secs}, bitrate: {bitrate}");
+    
+
+    //TODO use same uuid to kill old transcode, store pid of ffmpeg processes in redis, if new request with same uuid kill the old one
+    //TODO add a timeout to the ffmpeg process if it gets stuck
     let transcoder = Transcoder::new(&ffmpeg_paramenters);
     let stream = transcoder.get_transcode_stream();
-    HttpResponse::Ok()
+
+    (
+        if ffmpeg_paramenters.seek_time == 0 {
+            HttpResponse::Ok()
+        } else {
+            HttpResponse::PartialContent()
+        }
+    )
+        .insert_header(("Accept-Ranges", "bytes"))
+        .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
         .content_type("audio/mpeg")
-        .no_chunking((duration_secs * bitrate).into())
+        .no_chunking((bytes_count - start).into())
         .streaming(stream)
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    SimpleLogger::new().with_level(log::LevelFilter::Info).init().unwrap();
+    SimpleLogger::new().with_level(log::LevelFilter::Debug).init().unwrap();
     HttpServer::new(|| {
         App::new()
             .route("/", web::get().to(index))
@@ -120,6 +180,7 @@ async fn main() -> std::io::Result<()> {
             .route("/transcodize_rss", web::get().to(transcodize_rss))
     })
         .bind(("127.0.0.1", 8080))?
+            .workers(20)
         .run().await
 }
 

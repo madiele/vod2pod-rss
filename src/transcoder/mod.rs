@@ -6,7 +6,10 @@ use futures::Future;
 use genawaiter::sync::{ Gen, Co };
 use log::{debug, error, warn};
 use reqwest::Url;
+use serde::Serialize;
 
+
+#[derive(Serialize)]
 pub enum FFMPEGAudioCodec {
     Libmp3lame,
 }
@@ -25,6 +28,7 @@ impl Default for FFMPEGAudioCodec {
     }
 }
 
+#[derive(Serialize)]
 pub struct FfmpegParameters {
     pub seek_time: u32,
     pub url: Url,
@@ -57,11 +61,12 @@ impl Transcoder {
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
-            .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit / 1000).as_str()])
+            .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit ).as_str()])
             .args(["-f", "mp3"])
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["pipe:stdout"]);
+        debug!("running ffmpeg with command:\n{}", serde_json::to_string_pretty(ffmpeg_paramenters).unwrap());
         command
     }
 

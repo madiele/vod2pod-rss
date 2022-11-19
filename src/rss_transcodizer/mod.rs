@@ -17,6 +17,7 @@ use regex::Regex;
 use reqwest::Url;
 use rss::{ Channel, Enclosure };
 use serde_json::error;
+use uuid::Uuid;
 
 pub struct RssTranscodizer {
     url: String,
@@ -30,6 +31,7 @@ impl RssTranscodizer {
 
     pub async fn transcodize(&self) -> eyre::Result<String> {
         let rss_body = (async { reqwest::get(&self.url).await?.bytes().await }).await?;
+        let generation_uuid  = uuid::Uuid::new_v4().to_string();
 
         //RSS parsing
         let mut rss = match Channel::read_from(&rss_body[..]) {
@@ -81,6 +83,7 @@ impl RssTranscodizer {
                 .query_pairs_mut()
                 .append_pair("url", media_url.as_str())
                 .append_pair("bitrate", bitarate.to_string().as_str())
+                .append_pair("UUID", generation_uuid.as_str())
                 .append_pair("duration", duration_secs.to_string().as_str());
 
             item.set_enclosure(Enclosure {
