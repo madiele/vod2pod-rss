@@ -4,6 +4,8 @@ use actix_rt::time::sleep;
 use actix_web::web::Bytes;
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
+use log::{debug, error, warn};
+use reqwest::Url;
 
 pub enum FFMPEGAudioCodec {
     Libmp3lame,
@@ -25,7 +27,7 @@ impl Default for FFMPEGAudioCodec {
 
 pub struct FfmpegParameters {
     pub seek_time: u32,
-    pub url: String,
+    pub url: Url,
     pub audio_codec: FFMPEGAudioCodec,
     pub bitrate_kbit: u32,
     pub max_rate_kbit: u32,
@@ -37,15 +39,13 @@ impl FfmpegParameters {
     }
 }
 
-pub struct Transcoder<'a> {
-    stream_url: &'a str,
+pub struct Transcoder {
     ffmpeg_command: Command,
 }
 
-impl<'a> Transcoder<'a> {
-    pub fn new(stream_url: &'a str, ffmpeg_paramenters: &FfmpegParameters) -> Self {
+impl Transcoder {
+    pub fn new(ffmpeg_paramenters: &FfmpegParameters) -> Self {
         Self {
-            stream_url,
             ffmpeg_command: Self::get_ffmpeg_command(ffmpeg_paramenters),
         }
     }
@@ -63,10 +63,6 @@ impl<'a> Transcoder<'a> {
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["pipe:stdout"]);
         command
-    }
-
-    pub fn stream_url(&self) -> &str {
-        self.stream_url
     }
 
     pub fn get_transcode_stream(
@@ -87,7 +83,7 @@ impl<'a> Transcoder<'a> {
                 match out.read(&mut buff) {
                     Ok(read_bytes) => {
                         if read_bytes == 0 {
-                            println!("reached EOF; read {total_bytes_read} bytes");
+                            debug!("reached EOF; read {total_bytes_read} bytes");
                             break;
                         }
                         total_bytes_read += read_bytes;
@@ -97,10 +93,10 @@ impl<'a> Transcoder<'a> {
                         match e.kind() {
                             std::io::ErrorKind::Interrupted => {
                                 if tries > 10 {
-                                    println!("read was interrupted too many times");
+                                    error!("read was interrupted too many times");
                                     co.yield_(Err(e)).await;
                                 }
-                                println!("read was interrupted, retrying in 1sec");
+                                warn!("read was interrupted, retrying in 1sec");
                                 sleep(Duration::from_secs(1)).await;
                                 tries += 1;
                             }
@@ -117,24 +113,25 @@ impl<'a> Transcoder<'a> {
 #[cfg(test)]
 mod test {
     use std::path::PathBuf;
+    use log::info;
     use regex::Regex;
     use super::*;
 
     #[test]
     fn check_ffmpeg_command() {
         let duration = 60;
-        let stream_url = "http://url.mp3";
+        let stream_url= Url::parse("http://url.mp3").unwrap();
         let params = FfmpegParameters {
             seek_time: 30,
-            url: stream_url.to_string(),
+            url: stream_url,
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(stream_url, &params);
+        let transcoder = Transcoder::new(&params);
         let ppath = transcoder.ffmpeg_command.get_program();
         if let Some(x) = ppath.to_str() {
-            println!("{} ", x);
+            info!("{} ", x);
             assert_eq!(x, "ffmpeg");
         }
         let mut args = transcoder.ffmpeg_command.get_args();
@@ -143,44 +140,43 @@ mod test {
             match arg.to_str() {
                 Some("-ss") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-ss {}", value);
+                    info!("-ss {}", value);
                     assert_eq!(value, params.seek_time.to_string().as_str());
                 }
                 Some("-i") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-i {}", value);
+                    info!("-i {}", value);
                     assert_eq!(value, params.url.as_str());
                 }
                 Some("-acodec") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-acodec {}", value);
+                    info!("-acodec {}", value);
                     assert_eq!(value, params.audio_codec.as_str());
                 }
                 Some("-ab") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-ab {}", value);
+                    info!("-ab {}", value);
                 }
                 Some("-f") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-f {}", value);
+                    info!("-f {}", value);
                     assert_eq!(value, "mp3");
                 }
                 Some("-bufsize") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-bufsize {}", value);
+                    info!("-bufsize {}", value);
                 }
                 Some("-maxrate") => {
                     let value = args.next().unwrap().to_str().unwrap();
-                    println!("-maxrate {}", value);
+                    info!("-maxrate {}", value);
                 }
                 Some("pipe:stdout") => {
-                    println!("pipe:stdout");
+                    info!("pipe:stdout");
                 }
                 Some(x) => panic!("ffmpeg run with uknown option: {x}"),
                 None => panic!("ffmpeg run with no options"),
             }
         }
-        println!();
     }
 
     #[test]
@@ -188,21 +184,21 @@ mod test {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
         let duration = 60;
-        let stream_url = path_to_mp3.as_os_str().to_str().unwrap();
-        println!("{stream_url}");
+        let stream_url = Url::parse(path_to_mp3.as_os_str().to_str().unwrap()).unwrap();
+        info!("{stream_url}");
         let params = FfmpegParameters {
             seek_time: 25,
-            url: stream_url.to_string(),
+            url: stream_url,
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let mut transcoder = Transcoder::new(stream_url, &params);
+        let mut transcoder = Transcoder::new(&params);
         match transcoder.ffmpeg_command.output() {
             Ok(x) => {
                 let out = x.stderr.as_slice();
                 let out = String::from_utf8_lossy(out);
-                println!("command run sucessfully \nOutput: {out}");
+                info!("command run sucessfully \nOutput: {out}");
                 let regex = Regex::new("time=00:00:02.19").unwrap();
                 assert!(regex.is_match(out.to_string().as_str()));
             }
@@ -214,20 +210,19 @@ mod test {
     fn test_transcoding_generator() {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
-        let duration = 60;
-        let stream_url = path_to_mp3.as_os_str().to_str().unwrap();
-        println!("{stream_url}");
+        let stream_url = Url::parse(path_to_mp3.as_os_str().to_str().unwrap()).unwrap();
+        info!("{stream_url}");
         let params = FfmpegParameters {
             seek_time: 25,
-            url: stream_url.to_string(),
+            url: stream_url,
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(stream_url, &params);
+        let transcoder = Transcoder::new(&params);
         let mut gen = transcoder.get_transcode_stream();
         let mut read_counts = 0;
-        println!("!!printing buffer!!");
+        info!("!!printing buffer!!");
         loop {
             let state = gen.resume();
             match state {

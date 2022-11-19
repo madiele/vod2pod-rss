@@ -12,9 +12,11 @@
 use std::borrow::BorrowMut;
 
 use eyre::eyre;
+use log::warn;
 use regex::Regex;
 use reqwest::Url;
 use rss::{ Channel, Enclosure };
+use serde_json::error;
 
 pub struct RssTranscodizer {
     url: String,
@@ -42,7 +44,7 @@ impl RssTranscodizer {
             let enclosure = match &item.enclosure {
                 Some(x) => x.clone(),
                 None => {
-                    println!(
+                    warn!(
                         "item has no media, skipping: ({})",
                         serde_json::to_string(&item).unwrap_or_default()
                     );
@@ -53,7 +55,7 @@ impl RssTranscodizer {
             let media_url = match Url::parse(enclosure.url()) {
                 Ok(x) => x,
                 Err(_) => {
-                    println!("item has an invalid url");
+                    warn!("item has an invalid url");
                     continue;
                 }
             };
@@ -66,7 +68,7 @@ impl RssTranscodizer {
             let duration_data = match DurationString::new(&duration_str) {
                 Ok(x) => x,
                 Err(e) => {
-                    println!("failed to parse duration for {media_url}:\n{e}");
+                    warn!("failed to parse duration for {media_url}:\n{e}");
                     continue;
                 }
             };
@@ -78,7 +80,8 @@ impl RssTranscodizer {
             transcode_service_url
                 .query_pairs_mut()
                 .append_pair("url", media_url.as_str())
-                .append_pair("bitrate", bitarate.to_string().as_str());
+                .append_pair("bitrate", bitarate.to_string().as_str())
+                .append_pair("duration", duration_secs.to_string().as_str());
 
             item.set_enclosure(Enclosure {
                 length: (bitarate * 1024 * duration_secs).to_string(),
