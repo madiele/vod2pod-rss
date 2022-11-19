@@ -1,18 +1,15 @@
 use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
-
-
-
-use std::{
-    path::PathBuf,
-    collections::HashMap,
+use std::{ path::PathBuf, collections::HashMap };
+use vod_to_podcast_rss::{
+    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec },
+    rss_transcodizer::RssTranscodizer,
 };
-use vod_to_podcast_rss::{transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer};
 
 async fn index() -> HttpResponse {
     HttpResponse::Ok().body("server works")
 }
 //TODO: should not be here, move in another module
-async fn start_streaming_to_client() -> HttpResponse {
+async fn test_transcode() -> HttpResponse {
     println!("starting stream");
     let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path_to_mp3.push("src/transcoder/test.mp3");
@@ -30,7 +27,7 @@ async fn start_streaming_to_client() -> HttpResponse {
     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
 }
 
-async fn transcodize_RSS(
+async fn transcodize_rss(
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>
 ) -> HttpResponse {
@@ -41,7 +38,7 @@ async fn transcodize_RSS(
         return HttpResponse::BadRequest().finish();
     };
 
-        let transcode_service_url = req.url_for("transcode_mp3", &[""]).unwrap();
+    let transcode_service_url = req.url_for("transcode_mp3", &[""]).unwrap();
 
     //TODO cache with lifetime 1 minute
     let rss_transcodizer = RssTranscodizer::new(url.clone(), transcode_service_url);
@@ -50,8 +47,8 @@ async fn transcodize_RSS(
         Err(e) => {
             println!("could not translate rss");
             println!("{e}");
-            return HttpResponse::Conflict().finish()
-        },
+            return HttpResponse::Conflict().finish();
+        }
     };
     HttpResponse::Ok().content_type("application/xml").body(body)
 }
@@ -72,8 +69,8 @@ async fn main() -> std::io::Result<()> {
                     .guard(guard::Get())
                     .to(transcode)
             )
-            .route("/test_transcode.mp3", web::get().to(start_streaming_to_client))
-            .route("/transcodize_rss", web::get().to(transcodize_RSS))
+            .route("/test_transcode.mp3", web::get().to(test_transcode))
+            .route("/transcodize_rss", web::get().to(transcodize_rss))
     })
         .bind(("127.0.0.1", 8080))?
         .run().await

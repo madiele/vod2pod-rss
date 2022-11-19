@@ -43,10 +43,7 @@ pub struct Transcoder<'a> {
 }
 
 impl<'a> Transcoder<'a> {
-    pub fn new(
-        stream_url: &'a str,
-        ffmpeg_paramenters: &FfmpegParameters
-    ) -> Self {
+    pub fn new(stream_url: &'a str, ffmpeg_paramenters: &FfmpegParameters) -> Self {
         Self {
             stream_url,
             ffmpeg_command: Self::get_ffmpeg_command(ffmpeg_paramenters),
@@ -115,7 +112,6 @@ impl<'a> Transcoder<'a> {
         }
         Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
     }
-
 }
 
 #[cfg(test)]
