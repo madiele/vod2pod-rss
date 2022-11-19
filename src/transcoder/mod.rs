@@ -183,8 +183,9 @@ mod test {
     fn check_ffmpeg_runs() {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
-        let duration = 60;
-        let stream_url = Url::parse(path_to_mp3.as_os_str().to_str().unwrap()).unwrap();
+        let protocol = "file://";
+        let path = path_to_mp3.as_os_str().to_str().unwrap();
+        let stream_url = Url::parse(&format!("{protocol}{path}")).unwrap();
         info!("{stream_url}");
         let params = FfmpegParameters {
             seek_time: 25,
@@ -210,7 +211,9 @@ mod test {
     fn test_transcoding_generator() {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
-        let stream_url = Url::parse(path_to_mp3.as_os_str().to_str().unwrap()).unwrap();
+        let protocol = "file://";
+        let path = path_to_mp3.as_os_str().to_str().unwrap();
+        let stream_url = Url::parse(&format!("{protocol}{path}")).unwrap();
         info!("{stream_url}");
         let params = FfmpegParameters {
             seek_time: 25,
