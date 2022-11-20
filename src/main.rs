@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_resp::de;
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
-use std::{ path::PathBuf, collections::HashMap, io::{ Cursor, Read } };
+use std::{ collections::HashMap, io::{ Cursor } };
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec },
     rss_transcodizer::RssTranscodizer,
@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
                     .guard(guard::Get())
                     .to(transcode)
             )
-            .route("/test_transcode.mp3", web::get().to(test_transcode))
+            //.route("/test_transcode.mp3", web::get().to(test_transcode))
             .route("/transcodize_rss", web::get().to(transcodize_rss))
     })
         .bind(("127.0.0.1", 8080))?
@@ -44,7 +44,7 @@ async fn main() -> std::io::Result<()> {
 
 #[async_trait]
 trait RedisActorExtensions {
-    async fn sendAndRecString<M>(&self, msg: M) -> String
+    async fn send_and_rec_string<M>(&self, msg: M) -> Option<String>
         where M: Message + Send + 'static, M::Result: Send;
 }
 
@@ -55,41 +55,39 @@ impl RedisActorExtensions for web::Data<Addr<RedisActor>> {
     /// # Panics
     ///
     /// Panics if .
-    async fn sendAndRecString<M>(&self, msg: M) -> String
+    async fn send_and_rec_string<M>(&self, msg: M) -> Option<String>
         where M: Message + Send + 'static, M::Result: Send
     {
         if let Ok(Ok(RespValue::BulkString(x))) = self.send(Command(resp_array!["INFO"])).await {
-            x.intoString()
+            Some(x.intoString())
         } else {
-            panic!();
+            None
         }
     }
 }
 
 async fn index(redis: web::Data<Addr<RedisActor>>) -> HttpResponse {
-    let value = redis.sendAndRecString(Command(resp_array!["INFO"])).await;
-    info!("{value}");
     HttpResponse::Ok().body("server works")
 }
 
 //TODO: make into integration test
-async fn test_transcode() -> HttpResponse {
-    info!("starting stream");
-    let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path_to_mp3.push("src/transcoder/test.mp3");
-    let stream_url = path_to_mp3.as_os_str().to_str().unwrap().parse().unwrap();
-    info!("{stream_url}");
-    let params = FfmpegParameters {
-        seek_time: 0,
-        url: stream_url,
-        max_rate_kbit: 64,
-        audio_codec: FFMPEGAudioCodec::Libmp3lame,
-        bitrate_kbit: 64,
-    };
-    let transcoder = Transcoder::new(&params);
-    let stream = transcoder.get_transcode_stream();
-    HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
-}
+// async fn test_transcode() -> HttpResponse {
+//     info!("starting stream");
+//     let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+//     path_to_mp3.push("src/transcoder/test.mp3");
+//     let stream_url = path_to_mp3.as_os_str().to_str().unwrap().parse().unwrap();
+//     info!("{stream_url}");
+//     let params = FfmpegParameters {
+//         seek_time: 0,
+//         url: stream_url,
+//         max_rate_kbit: 64,
+//         audio_codec: FFMPEGAudioCodec::Libmp3lame,
+//         bitrate_kbit: 64,
+//     };
+//     let transcoder = Transcoder::new(&params);
+//     let stream = transcoder.get_transcode_stream();
+//     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
+// }
 
 async fn transcodize_rss(
     req: HttpRequest,
@@ -198,7 +196,7 @@ async fn transcode(
     //TODO use same uuid to kill old transcode, store pid of ffmpeg processes in redis, if new request with same uuid kill the old one
     //TODO add a timeout to the ffmpeg process if it gets stuck
     let transcoder = Transcoder::new(&ffmpeg_paramenters);
-    let stream = transcoder.get_transcode_stream();
+    let stream = transcoder.get_transcode_stream(redis);
 
     (
         if ffmpeg_paramenters.seek_time == 0 {

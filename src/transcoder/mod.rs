@@ -1,13 +1,14 @@
 use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error, time::Duration };
 
+use actix::Addr;
+use actix_redis::RedisActor;
 use actix_rt::time::sleep;
-use actix_web::web::Bytes;
+use actix_web::web::{ Bytes, Data };
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
-use log::{debug, error, warn};
+use log::{ debug, error, warn };
 use reqwest::Url;
 use serde::Serialize;
-
 
 #[derive(Serialize)]
 pub enum FFMPEGAudioCodec {
@@ -61,19 +62,27 @@ impl Transcoder {
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
-            .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit ).as_str()])
-            .args(["-f", "mp3"])
+            .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str()])
+            .args(["-f", "mp3"]) 
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["pipe:stdout"]);
-        debug!("running ffmpeg with command:\n{}", serde_json::to_string_pretty(ffmpeg_paramenters).unwrap());
+        debug!(
+            "running ffmpeg with command:\n{}",
+            serde_json::to_string_pretty(ffmpeg_paramenters).unwrap()
+        );
         command
     }
 
     pub fn get_transcode_stream(
-        self
+        self,
+        redis: Data<Addr<RedisActor>>
     ) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
-        async fn generetor_coroutine(mut command: Command, co: Co<Result<Bytes, std::io::Error>>) {
+        async fn generetor_coroutine(
+            redis: Data<Addr<RedisActor>>,
+            mut command: Command,
+            co: Co<Result<Bytes, std::io::Error>>
+        ) {
             let mut child = command
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
@@ -111,22 +120,22 @@ impl Transcoder {
                 }
             }
         }
-        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
+        Gen::new(|co| generetor_coroutine(redis, self.ffmpeg_command, co))
     }
 }
-
 
 #[cfg(test)]
 mod test {
     use std::path::PathBuf;
     use log::info;
+    use mockall::mock;
     use regex::Regex;
     use super::*;
 
     #[test]
     fn check_ffmpeg_command() {
         let duration = 60;
-        let stream_url= Url::parse("http://url.mp3").unwrap();
+        let stream_url = Url::parse("http://url.mp3").unwrap();
         let params = FfmpegParameters {
             seek_time: 30,
             url: stream_url,
@@ -229,7 +238,8 @@ mod test {
             bitrate_kbit: 3,
         };
         let transcoder = Transcoder::new(&params);
-        let mut gen = transcoder.get_transcode_stream();
+        let redis = RedisActor::start("localhost");
+        let mut gen = transcoder.get_transcode_stream(Data::new(redis));
         let mut read_counts = 0;
         info!("!!printing buffer!!");
         loop {
