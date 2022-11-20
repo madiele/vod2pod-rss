@@ -1,7 +1,8 @@
-use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
+use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest, route };
 use log::{ error, info, debug };
 use regex::{ Regex, Match };
 use reqwest::Url;
+use serde::{Serialize, Deserialize};
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
 use std::{ path::PathBuf, collections::HashMap };
@@ -32,6 +33,7 @@ async fn test_transcode() -> HttpResponse {
     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
 }
 
+
 async fn transcodize_rss(
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>
@@ -60,47 +62,23 @@ async fn transcodize_rss(
     HttpResponse::Ok().content_type("application/xml").body(body)
 }
 
+#[derive(Deserialize)]
+struct TranscodizeQuery {
+    url: Url,
+    bitrate: u32,
+    duration: u32,
+    UUID: Uuid
+}
+
 const DEFAULT_BITRATE: &str = "64";
 const DEFAULT_DURATION: &str = "-1";
-async fn transcode(req: HttpRequest, query: web::Query<HashMap<String, String>>) -> HttpResponse {
-    let empty_string = "".to_string();
-    let stream_url = match ({ Url::parse(query.get("url").unwrap_or(&empty_string)) }) {
-        Ok(x) => x,
-        Err(e) => {
-            error!("can't parse URL");
-            return HttpResponse::BadRequest().body("can't parse URL");
-        }
-    };
+async fn transcode(req: HttpRequest, query: web::Query<TranscodizeQuery>) -> HttpResponse {
+    let stream_url = &query.url;
+    let bitrate = query.bitrate;
+    let duration_secs = query.duration;
+    let uuid= query.UUID;
 
-    let bitrate = match query.get("bitrate").unwrap_or(&DEFAULT_BITRATE.to_string()).parse() {
-        Ok(x) => x,
-        Err(_) => {
-            error!("can't parse bitrate");
-            return HttpResponse::BadRequest().body("can't parse bitrate");
-        }
-    };
-
-    let duration_secs: u32 = match
-        query.get("duration").unwrap_or(&DEFAULT_DURATION.to_string()).parse()
-    {
-        Ok(x) => x,
-        Err(_) => {
-            error!("can't parse duration");
-            return HttpResponse::BadRequest().body("can't parse duration");
-        }
-    };
-
-    let uuid: Uuid = match
-        query.get("UUID").unwrap_or(&DEFAULT_DURATION.to_string()).parse()
-    {
-        Ok(x) => x,
-        Err(_) => {
-            error!("can't parse UUID");
-            return HttpResponse::BadRequest().body("can't parse duration");
-        }
-    };
-
-    let bytes_count: u32 = ((duration_secs * bitrate) / 8) * 1024;
+    let bytes_count= ((duration_secs * bitrate) / 8) * 1024;
     // content-range parsing
     //Content-Range: bytes 200-1000/67589
     let default_content_range = format!("0-");
@@ -136,7 +114,7 @@ async fn transcode(req: HttpRequest, query: web::Query<HashMap<String, String>>)
     debug!("choosen seek_time: {seek}");
     let ffmpeg_paramenters = FfmpegParameters {
         seek_time: seek.floor() as _,
-        url: stream_url,
+        url: stream_url.clone(),
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
@@ -180,7 +158,6 @@ async fn main() -> std::io::Result<()> {
             .route("/transcodize_rss", web::get().to(transcodize_rss))
     })
         .bind(("127.0.0.1", 8080))?
-            .workers(20)
         .run().await
 }
 
