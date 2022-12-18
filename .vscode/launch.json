@@ -8,6 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug unit tests in library 'vod_to_podcast_rss'",
+            "preLaunchTask": "dev enviroment",
             "cargo": {
                 "args": [
                     "test",
@@ -27,6 +28,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug executable 'app'",
+            "preLaunchTask": "dev enviroment",
             "cargo": {
                 "args": [
                     "build",
@@ -45,6 +47,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug unit tests in executable 'app'",
+            "preLaunchTask": "dev enviroment",
             "cargo": {
                 "args": [
                     "test",
@@ -64,6 +67,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug integration test 'health_test'",
+            "preLaunchTask": "dev enviroment",
             "cargo": {
                 "args": [
                     "test",
