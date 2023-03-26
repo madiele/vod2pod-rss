@@ -1,0 +1,16 @@
+#to run use: docker-compose run nvim
+version: "3"
+
+services:
+  nvim:
+    build:
+      context: https://github.com/madiele/neovim-rust.git
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/repo/
+      - nvim_user:/root/
+    command: git config --global --add safe.directory /repo
+    command: bash
+
+volumes:
+  nvim_user:
