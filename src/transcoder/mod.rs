@@ -1,7 +1,10 @@
-use std::{ process::{ Command, Stdio }, io::{ Read }, error::Error, time::Duration };
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{ error::Error, time::Duration };
+use std::{io::Read, process::{ Command, Stdio }};
 
 use actix::Addr;
-use actix_redis::RedisActor;
+use actix_redis::RespValue::{BulkString, Array};
+use actix_redis::{RedisActor, resp_array};
 use actix_rt::time::sleep;
 use actix_web::web::{ Bytes, Data };
 use futures::Future;
@@ -9,6 +12,8 @@ use genawaiter::sync::{ Gen, Co };
 use log::{ debug, error, warn };
 use reqwest::Url;
 use serde::Serialize;
+
+const PID_TABLE: &str = "active_transcodes";
 
 #[derive(Serialize)]
 pub enum FFMPEGAudioCodec {
@@ -63,9 +68,10 @@ impl Transcoder {
             .args(["-i", ffmpeg_paramenters.url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
             .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str()])
-            .args(["-f", "mp3"]) 
+            .args(["-f", "mp3"])
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
+            .args(["-timeout", "300"])
             .args(["pipe:stdout"]);
         debug!(
             "running ffmpeg with command:\n{}",
@@ -88,6 +94,9 @@ impl Transcoder {
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("failed to run commnad");
+            let pid =  child.id().to_string();
+            _ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
+            kill_stalled_transcodes(&redis).await;
 
             let mut out = child.stdout.take().expect("failed to open stdout");
             let mut total_bytes_read: usize = 0;
@@ -101,6 +110,7 @@ impl Transcoder {
                             break;
                         }
                         total_bytes_read += read_bytes;
+                        _ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
                         co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
                     Err(e) => {
@@ -122,13 +132,53 @@ impl Transcoder {
         }
         Gen::new(|co| generetor_coroutine(redis, self.ffmpeg_command, co))
     }
+
+
 }
+
+async fn kill_stalled_transcodes(redis: &Data<Addr<RedisActor>>) {
+    if let Ok(Ok(Array(pids))) = redis.send(actix_redis::Command(resp_array!["HGETALL", PID_TABLE])).await {
+        let transcode_keys = pids.iter().filter_map(|v| {
+            if let BulkString(item) = v {
+                return Some(String::from_utf8(item.to_vec()).unwrap())
+            } else {
+                return None
+            }
+        }).collect::<Vec<String>>();
+
+        debug!("running transcodes: {:?}", &transcode_keys.join(", "));
+
+        for key in transcode_keys {
+            if let Ok(Ok(BulkString(res))) = redis.send(actix_redis::Command(resp_array!["GET", &key])).await {
+                let epoch_string = String::from_utf8(res.to_vec()).unwrap();
+
+                let epoch_last_transcode_activity: u32 = epoch_string.trim().parse().unwrap();
+                let epoch_now: u32 = get_epoch().parse().unwrap();
+
+                if epoch_now - epoch_last_transcode_activity > 600 {
+                    let pid_str = key.trim_start_matches("pid__");
+                    match std::process::Command::new("kill")
+                        .arg("-9")
+                        .arg(format!("{}", pid_str))
+                        .spawn() {
+                            Ok(_) => {
+                                _ = redis.send(actix_redis::Command(resp_array!["HDEL", PID_TABLE, pid_str])).await;
+                                debug!("Transcode with PID {} killed successfully", pid_str);
+                            },
+                            Err(e) => debug!("Error killing process with PID {}: {:?}", pid_str, e),
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn get_epoch() -> String { format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()) }
 
 #[cfg(test)]
 mod test {
     use std::path::PathBuf;
     use log::info;
-    use mockall::mock;
     use regex::Regex;
     use super::*;
 

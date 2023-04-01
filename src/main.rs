@@ -1,15 +1,16 @@
-use actix::{ Addr, Message };
+use actix::Addr;
 use actix_redis::{ RedisActor, Command, resp_array, RespValue };
 use actix_web::{ HttpServer, web::{ self, Buf }, App, HttpResponse, guard, HttpRequest };
 use async_trait::async_trait;
-use log::{ error, info, debug };
+use log::{ error, debug };
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_resp::de;
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
-use std::{ collections::HashMap, io::{ Cursor } };
+use std::io::Cursor;
+use std::collections::HashMap;
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec },
     rss_transcodizer::RssTranscodizer,
@@ -44,22 +45,20 @@ async fn main() -> std::io::Result<()> {
 
 #[async_trait]
 trait RedisActorExtensions {
-    async fn send_and_rec_string<M>(&self, msg: M) -> Option<String>
-        where M: Message + Send + 'static, M::Result: Send;
-}
-
-#[async_trait]
-impl RedisActorExtensions for web::Data<Addr<RedisActor>> {
     /// example redis.sendAndRecString(Command(resp_array!["INFO"])).await
     ///
     /// # Panics
     ///
     /// Panics if .
-    async fn send_and_rec_string<M>(&self, msg: M) -> Option<String>
-        where M: Message + Send + 'static, M::Result: Send
+    async fn send_and_rec_string(&self, msg: actix_redis::Command) -> Option<String>;
+}
+
+#[async_trait]
+impl RedisActorExtensions for web::Data<Addr<RedisActor>> {
+    async fn send_and_rec_string(&self, msg: actix_redis::Command) -> Option<String>
     {
-        if let Ok(Ok(RespValue::BulkString(x))) = self.send(Command(resp_array!["INFO"])).await {
-            Some(x.intoString())
+        if let Ok(Ok(RespValue::BulkString(x))) = self.send(msg).await {
+            Some(x.into_string())
         } else {
             None
         }
@@ -90,6 +89,7 @@ async fn index(redis: web::Data<Addr<RedisActor>>) -> HttpResponse {
 // }
 
 async fn transcodize_rss(
+    redis: web::Data<Addr<RedisActor>>,
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>
 ) -> HttpResponse {
@@ -103,7 +103,7 @@ async fn transcodize_rss(
     let transcode_service_url = req.url_for("transcode_mp3", &[""]).unwrap();
 
     //TODO cache with lifetime 1 minute
-    let rss_transcodizer = RssTranscodizer::new(url.clone(), transcode_service_url);
+    let rss_transcodizer = RssTranscodizer::new(url.to_string(), transcode_service_url);
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,
@@ -122,7 +122,7 @@ struct TranscodizeQuery {
     url: Url,
     bitrate: u32,
     duration: u32,
-    UUID: Uuid,
+    uuid: Uuid,
 }
 
 async fn transcode(
@@ -133,7 +133,7 @@ async fn transcode(
     let stream_url = &query.url;
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
-    let uuid = &query.UUID;
+    let uuid = &query.uuid;
     let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
 
     if let Ok(Ok(res)) = redis.send(Command(resp_array!["INFO"])).await {
@@ -213,11 +213,11 @@ async fn transcode(
 }
 
 trait IntoString {
-    fn intoString(&self) -> String;
+    fn into_string(&self) -> String;
 }
 
 impl IntoString for Vec<u8> {
-    fn intoString(&self) -> String {
+    fn into_string(&self) -> String {
         let mut result = String::with_capacity(self.len());
         let mut cursor = Cursor::new(self);
         while cursor.has_remaining() {

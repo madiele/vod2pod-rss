@@ -41,3 +41,4 @@ redis = { version = "0.22", features = ["tokio-comp"] }
 
 [dev-dependencies]
 mockall = "0.11.3"
+warp = "0.3.3"
