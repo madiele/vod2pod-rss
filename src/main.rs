@@ -117,6 +117,7 @@ async fn transcodize_rss(
     HttpResponse::Ok().content_type("application/xml").body(body)
 }
 
+
 #[derive(Deserialize)]
 struct TranscodizeQuery {
     url: Url,
@@ -193,8 +194,6 @@ async fn transcode(
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
-    //TODO use same uuid to kill old transcode, store pid of ffmpeg processes in redis, if new request with same uuid kill the old one
-    //TODO add a timeout to the ffmpeg process if it gets stuck
     let transcoder = Transcoder::new(&ffmpeg_paramenters);
     let stream = transcoder.get_transcode_stream(redis);
 
@@ -204,8 +203,7 @@ async fn transcode(
         } else {
             HttpResponse::PartialContent()
         }
-    )
-        .insert_header(("Accept-Ranges", "bytes"))
+    ).insert_header(("Accept-Ranges", "bytes"))
         .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
         .content_type("audio/mpeg")
         .no_chunking((bytes_count - start).into())

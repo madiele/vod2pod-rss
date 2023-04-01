@@ -15,6 +15,7 @@ use serde::Serialize;
 
 const PID_TABLE: &str = "active_transcodes";
 
+
 #[derive(Serialize)]
 pub enum FFMPEGAudioCodec {
     Libmp3lame,
@@ -55,8 +56,16 @@ pub struct Transcoder {
 
 impl Transcoder {
     pub fn new(ffmpeg_paramenters: &FfmpegParameters) -> Self {
+        let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
+        let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
+            Self::get_youtube_dl_command(ffmpeg_paramenters)
+        } else {
+            Self::get_ffmpeg_command(ffmpeg_paramenters)
+        };
+
+
         Self {
-            ffmpeg_command: Self::get_ffmpeg_command(ffmpeg_paramenters),
+            ffmpeg_command,
         }
     }
 
@@ -73,12 +82,41 @@ impl Transcoder {
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["-timeout", "300"])
             .args(["pipe:stdout"]);
+        let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
         debug!(
-            "running ffmpeg with command:\n{}",
-            serde_json::to_string_pretty(ffmpeg_paramenters).unwrap()
+            "running ffmpeg with command:\n{} {}",
+            command_ref.get_program().to_string_lossy(),
+            args.join(" ")
         );
         command
     }
+
+    //TODO: pipe the output to ffmpeg again as this outputs variable bitrate anyway
+    fn get_youtube_dl_command(youtube_dl_parameters: &FfmpegParameters) -> Command {
+        let mut command = Command::new("yt-dlp");
+
+        let command_ref = &mut command;
+        let url_with_timestamp = format!("{}&t={}s",
+            youtube_dl_parameters.url.as_str(),
+            youtube_dl_parameters.seek_time.to_string().as_str());
+        command_ref
+            .args(["-x"])
+            .args(["--audio-format", "mp3"])
+            .args(["--audio-quality", format!("{}k", youtube_dl_parameters.bitrate_kbit).as_str()])
+            .args(["--extract-audio"])
+            .args(["-f", "ba"])
+            .args(["--output", "-"])
+            .arg(url_with_timestamp)
+            .stdout(Stdio::piped());
+        let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
+        debug!(
+            "running yt-dlp with command:\n{} {}",
+            command_ref.get_program().to_string_lossy(),
+            args.join(" ")
+        );
+        command
+    }
+
 
     pub fn get_transcode_stream(
         self,
@@ -149,7 +187,7 @@ async fn kill_stalled_transcodes(redis: &Data<Addr<RedisActor>>) {
         debug!("running transcodes: {:?}", &transcode_keys.join(", "));
 
         for key in transcode_keys {
-            if let Ok(Ok(BulkString(res))) = redis.send(actix_redis::Command(resp_array!["GET", &key])).await {
+            if let Ok(Ok(BulkString(res))) = redis.send(actix_redis::Command(resp_array!["HGET", PID_TABLE, &key])).await {
                 let epoch_string = String::from_utf8(res.to_vec()).unwrap();
 
                 let epoch_last_transcode_activity: u32 = epoch_string.trim().parse().unwrap();
