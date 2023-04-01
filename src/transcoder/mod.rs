@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{ error::Error, time::Duration };
 use std::{io::Read, process::{ Command, Stdio }};
@@ -54,11 +55,34 @@ pub struct Transcoder {
     ffmpeg_command: Command,
 }
 
+fn get_youtube_stream_url(url: &Url) -> Option<Url> {
+    debug!("getting stream_url for yt video: {}", url);
+    let output = Command::new("yt-dlp")
+        .arg("-x")
+        .arg("--get-url")
+        .arg(url.as_str())
+        .output();
+
+    if let Ok(x) = output {
+        let raw_url = std::str::from_utf8(&x.stdout).unwrap();
+        Some(Url::from_str(raw_url).unwrap())
+    } else {
+        error!("could not get youtube stream url");
+        None
+    }
+
+}
+
 impl Transcoder {
     pub fn new(ffmpeg_paramenters: &FfmpegParameters) -> Self {
         let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
         let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
-            Self::get_youtube_dl_command(ffmpeg_paramenters)
+            Self::get_ffmpeg_command(&FfmpegParameters {
+                seek_time: ffmpeg_paramenters.seek_time,
+                url: get_youtube_stream_url(&ffmpeg_paramenters.url).unwrap(),
+                audio_codec: FFMPEGAudioCodec::Libmp3lame,
+                bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
+                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit })
         } else {
             Self::get_ffmpeg_command(ffmpeg_paramenters)
         };
