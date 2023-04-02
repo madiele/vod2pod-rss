@@ -39,6 +39,10 @@ async fn main() -> std::io::Result<()> {
             )
             //.route("/test_transcode.mp3", web::get().to(test_transcode))
             .route("/transcodize_rss", web::get().to(transcodize_rss))
+            .route("transcode_media/to_mp3", web::head().to(|| async move {
+                debug!("HEAD request");
+                HttpResponse::Ok()
+            }))
     })
         .bind(("0.0.0.0", 8080))?
         .run().await

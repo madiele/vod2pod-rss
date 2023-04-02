@@ -13,12 +13,10 @@ use std::time::Duration;
 
 use eyre::eyre;
 use log::{warn, debug};
-use mime::Mime;
 use reqwest::Url;
 use rss::{GuidBuilder, Guid};
 use rss::{ Enclosure, ItemBuilder, Item, extension::itunes::ITunesItemExtensionBuilder };
 use feed_rs::parser;
-use uuid::Uuid;
 
 use std::process::Command;
 use std::str;
@@ -115,12 +113,8 @@ impl RssTranscodizer {
                 item_builder.title(Some(x.content.clone()));
             }
 
-            let found_url: Option<Url> = match item.links.first() {
-                Some(x) => {
-                    debug!("enclosure found: {:?}", x);
-                    Some(Url::parse(&x.href.to_string()).unwrap())
-                },
-                None => {
+            let found_url: Option<Url> = { //FIX: when I stop sucking at rust
+                    debug!("searching for stream url: {:?}", item.media);
                     let mut media_links = Vec::new();
                     for x in item.media.iter() {
                         let mut found_url: Option<Url> = None;
@@ -139,12 +133,12 @@ impl RssTranscodizer {
                         }
                     }
                     let first_link = media_links.first();
-                    let res: Option<Url> = match first_link {
+                    let url: Option<Url> = match first_link {
                         Some(x) => Some(x.clone()),
                         _ => None,
                     };
-                    res
-                }
+                    debug!("stream url found: {:?}", url);
+                    url
             };
 
             let media_url: Url = match found_url {
@@ -153,8 +147,17 @@ impl RssTranscodizer {
                     x
                 },
                 _ => {
-                    warn!("item has an invalid url");
-                    return None
+                    let url_link = item.links.iter().find(|x| {
+                        debug!("pondering on link {:?}", x);
+                        let regex = regex::Regex::new("^(https?://)?(www\\.youtube\\.com|youtu\\.be)/.+$").unwrap();
+                        regex.is_match(x.href.as_str())
+                    });
+                    if let Some(url) = url_link {
+                        debug!("media url found inside links: {:?}", url_link);
+                        Url::parse(url.href.to_string().as_str()).unwrap()
+                    } else {
+                        return Some(item_builder.build());
+                    }
                 }
             };
 
