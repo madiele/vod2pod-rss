@@ -2,6 +2,7 @@ use actix::Addr;
 use actix_redis::{ RedisActor, Command, resp_array, RespValue };
 use actix_web::{ HttpServer, web::{ self, Buf }, App, HttpResponse, guard, HttpRequest };
 use async_trait::async_trait;
+use cached::{proc_macro::io_cached, AsyncRedisCache};
 use log::{ error, debug };
 use regex::Regex;
 use reqwest::Url;
@@ -9,11 +10,9 @@ use serde::Deserialize;
 use serde_resp::de;
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
-use std::{io::Cursor, process::Child};
-use std::collections::HashMap;
+use std::{io::Cursor, process::Child, collections::HashMap};
 use vod_to_podcast_rss::{
-    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec },
-    rss_transcodizer::RssTranscodizer,
+    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer,
 };
 
 
@@ -92,7 +91,6 @@ async fn index(redis: web::Data<Addr<RedisActor>>) -> HttpResponse {
 //     let stream = transcoder.get_transcode_stream();
 //     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
 // }
-
 async fn transcodize_rss(
     redis: web::Data<Addr<RedisActor>>,
     req: HttpRequest,
