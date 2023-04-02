@@ -1,11 +1,10 @@
+use std::process::{Child, ExitStatus};
 use std::str::FromStr;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{ error::Error, time::Duration };
 use std::{io::Read, process::{ Command, Stdio }};
 
 use actix::Addr;
-use actix_redis::RespValue::{BulkString, Array};
-use actix_redis::{RedisActor, resp_array};
+use actix_redis::RedisActor;
 use actix_rt::time::sleep;
 use actix_web::web::{ Bytes, Data };
 use futures::Future;
@@ -14,7 +13,8 @@ use log::{ debug, error, warn };
 use reqwest::Url;
 use serde::Serialize;
 
-const PID_TABLE: &str = "active_transcodes";
+//const PID_TABLE: &str = "active_transcodes";
+static mut RUNNING_CHILDS: Vec<Child> = Vec::new();
 
 
 #[derive(Serialize)]
@@ -115,39 +115,13 @@ impl Transcoder {
         command
     }
 
-    //TODO: pipe the output to ffmpeg again as this outputs variable bitrate anyway
-    fn get_youtube_dl_command(youtube_dl_parameters: &FfmpegParameters) -> Command {
-        let mut command = Command::new("yt-dlp");
-
-        let command_ref = &mut command;
-        let url_with_timestamp = format!("{}&t={}s",
-            youtube_dl_parameters.url.as_str(),
-            youtube_dl_parameters.seek_time.to_string().as_str());
-        command_ref
-            .args(["-x"])
-            .args(["--audio-format", "mp3"])
-            .args(["--audio-quality", format!("{}k", youtube_dl_parameters.bitrate_kbit).as_str()])
-            .args(["--extract-audio"])
-            .args(["-f", "ba"])
-            .args(["--output", "-"])
-            .arg(url_with_timestamp)
-            .stdout(Stdio::piped());
-        let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
-        debug!(
-            "running yt-dlp with command:\n{} {}",
-            command_ref.get_program().to_string_lossy(),
-            args.join(" ")
-        );
-        command
-    }
-
-
     pub fn get_transcode_stream(
         self,
         redis: Data<Addr<RedisActor>>
     ) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
+
         async fn generetor_coroutine(
-            redis: Data<Addr<RedisActor>>,
+            _redis: Data<Addr<RedisActor>>,
             mut command: Command,
             co: Co<Result<Bytes, std::io::Error>>
         ) {
@@ -156,23 +130,39 @@ impl Transcoder {
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("failed to run commnad");
-            let pid =  child.id().to_string();
-            _ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
-            kill_stalled_transcodes(&redis).await;
+            //let pid = child.id().to_string();
+            //_ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
+            //kill_stalled_transcodes(&redis).await;
 
             let mut out = child.stdout.take().expect("failed to open stdout");
+
+            //reap all zombie childs
+            unsafe {
+                let _statuses: Vec<ExitStatus> = RUNNING_CHILDS.iter_mut().filter_map(|child: &mut Child| {
+                    if let Ok(Some(status)) = child.try_wait() {
+                        RUNNING_CHILDS.retain(|x| x.id() != child.id());
+                        debug!("child {} reaped with {status}", child.id());
+                        Some(status)
+                    } else {
+                        None
+                    }
+                }).collect();
+                RUNNING_CHILDS.push(child);
+            }
+
             let mut total_bytes_read: usize = 0;
             let mut buff: [u8; 1024] = [0; 1024];
             let mut tries = 0;
             loop {
                 match out.read(&mut buff) {
                     Ok(read_bytes) => {
+
                         if read_bytes == 0 {
                             debug!("reached EOF; read {total_bytes_read} bytes");
                             break;
                         }
                         total_bytes_read += read_bytes;
-                        _ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
+                        //_ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
                         co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
                     Err(e) => {
@@ -186,7 +176,9 @@ impl Transcoder {
                                 sleep(Duration::from_secs(1)).await;
                                 tries += 1;
                             }
-                            _ => co.yield_(Err(e)).await,
+                            _ => {
+                                co.yield_(Err(e)).await
+                            },
                         }
                     }
                 }
@@ -198,44 +190,44 @@ impl Transcoder {
 
 }
 
-async fn kill_stalled_transcodes(redis: &Data<Addr<RedisActor>>) {
-    if let Ok(Ok(Array(pids))) = redis.send(actix_redis::Command(resp_array!["HGETALL", PID_TABLE])).await {
-        let transcode_keys = pids.iter().filter_map(|v| {
-            if let BulkString(item) = v {
-                return Some(String::from_utf8(item.to_vec()).unwrap())
-            } else {
-                return None
-            }
-        }).collect::<Vec<String>>();
+//async fn kill_stalled_transcodes(redis: &Data<Addr<RedisActor>>) {
+//    if let Ok(Ok(Array(pids))) = redis.send(actix_redis::Command(resp_array!["HGETALL", PID_TABLE])).await {
+//        let transcode_keys = pids.iter().filter_map(|v| {
+//            if let BulkString(item) = v {
+//                return Some(String::from_utf8(item.to_vec()).unwrap())
+//            } else {
+//                return None
+//            }
+//        }).collect::<Vec<String>>();
+//
+//        debug!("running transcodes: {:?}", &transcode_keys.join(", "));
+//
+//        for key in transcode_keys {
+//            if let Ok(Ok(BulkString(res))) = redis.send(actix_redis::Command(resp_array!["HGET", PID_TABLE, &key])).await {
+//                let epoch_string = String::from_utf8(res.to_vec()).unwrap();
+//
+//                let epoch_last_transcode_activity: u32 = epoch_string.trim().parse().unwrap();
+//                let epoch_now: u32 = get_epoch().parse().unwrap();
+//
+//                if epoch_now - epoch_last_transcode_activity > 600 {
+//                    let pid_str = key.trim_start_matches("pid__");
+//                    match std::process::Command::new("kill")
+//                        .arg("-17")
+//                        .arg(format!("{}", pid_str))
+//                        .spawn() {
+//                            Ok(_) => {
+//                                _ = redis.send(actix_redis::Command(resp_array!["HDEL", PID_TABLE, pid_str])).await;
+//                                debug!("Transcode with PID {} killed successfully", pid_str);
+//                            },
+//                            Err(e) => debug!("Error killing process with PID {}: {:?}", pid_str, e),
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
 
-        debug!("running transcodes: {:?}", &transcode_keys.join(", "));
-
-        for key in transcode_keys {
-            if let Ok(Ok(BulkString(res))) = redis.send(actix_redis::Command(resp_array!["HGET", PID_TABLE, &key])).await {
-                let epoch_string = String::from_utf8(res.to_vec()).unwrap();
-
-                let epoch_last_transcode_activity: u32 = epoch_string.trim().parse().unwrap();
-                let epoch_now: u32 = get_epoch().parse().unwrap();
-
-                if epoch_now - epoch_last_transcode_activity > 600 {
-                    let pid_str = key.trim_start_matches("pid__");
-                    match std::process::Command::new("kill")
-                        .arg("-9")
-                        .arg(format!("{}", pid_str))
-                        .spawn() {
-                            Ok(_) => {
-                                _ = redis.send(actix_redis::Command(resp_array!["HDEL", PID_TABLE, pid_str])).await;
-                                debug!("Transcode with PID {} killed successfully", pid_str);
-                            },
-                            Err(e) => debug!("Error killing process with PID {}: {:?}", pid_str, e),
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn get_epoch() -> String { format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()) }
+//fn get_epoch() -> String { format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()) }
 
 #[cfg(test)]
 mod test {

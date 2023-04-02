@@ -9,12 +9,13 @@ use serde::Deserialize;
 use serde_resp::de;
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
-use std::io::Cursor;
+use std::{io::Cursor, process::Child};
 use std::collections::HashMap;
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec },
     rss_transcodizer::RssTranscodizer,
 };
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -134,7 +135,6 @@ async fn transcode(
     let stream_url = &query.url;
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
-    let uuid = &query.uuid;
     let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
 
     if let Ok(Ok(res)) = redis.send(Command(resp_array!["INFO"])).await {

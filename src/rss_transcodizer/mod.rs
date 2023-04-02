@@ -136,8 +136,12 @@ impl RssTranscodizer {
             };
 
             if let Some(x) = &media_element.description {
-
                 item_builder.description(Some(x.content.clone()));
+            }
+
+            if let Some(x) = item.updated {
+
+                item_builder.pub_date(Some(x.to_rfc3339()));
             }
 
             if let Some(x) = &media_element.thumbnails.first() {
