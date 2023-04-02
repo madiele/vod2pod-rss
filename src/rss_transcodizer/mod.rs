@@ -63,14 +63,6 @@ impl RssTranscodizer {
         let rss_body = (async { reqwest::get(&self.url).await?.bytes().await }).await?;
         let generation_uuid  = uuid::Uuid::new_v4().to_string();
 
-        //RSS parsing
-        //let mut rss = match Channel::read_from(&rss_body[..]) {
-        //    Ok(x) => x,
-        //    Err(e) => {
-        //        return Err(eyre!("could not parse rss, reason: {e}"));
-        //    }
-        //};
-
         let feed = match parser::parse(&rss_body[..]) {
             Ok(x) => {
                 debug!("parsed feed");
@@ -256,8 +248,20 @@ mod test {
             _ => (),
         };
 
+        if transcodized_rss_parsed.items().len() == 0 {
+            return Err("no items found".to_string());
+        }
+
         for i in transcodized_rss_parsed.items().iter() {
             let pretty_item = serde_json::to_string(&i).unwrap();
+
+            if i.itunes_ext().is_none() {
+                return Err(format!("missing itunes extensions {:?}", pretty_item));
+            }
+
+            if i.itunes_ext().unwrap().duration().is_none() {
+                return Err(format!("missing duration {:?}", pretty_item));
+            }
 
             if i.guid().is_none() {
                 return Err(format!("missing guid for item {:?}", pretty_item));
