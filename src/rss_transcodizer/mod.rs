@@ -14,8 +14,10 @@ use std::time::Duration;
 use eyre::eyre;
 use log::{warn, debug};
 use reqwest::Url;
+use rss::{GuidBuilder, Guid};
 use rss::{ Enclosure, ItemBuilder, Item, extension::itunes::ITunesItemExtensionBuilder };
 use feed_rs::parser;
+use uuid::Uuid;
 
 use std::process::Command;
 use std::str;
@@ -70,7 +72,10 @@ impl RssTranscodizer {
         //};
 
         let feed = match parser::parse(&rss_body[..]) {
-            Ok(x) => x,
+            Ok(x) => {
+                debug!("parsed feed");
+                x
+            },
             Err(e) => {
                 return Err(eyre!("could not parse rss, reason: {e}"));
             }
@@ -78,14 +83,17 @@ impl RssTranscodizer {
 
         let mut feed_builder = rss::ChannelBuilder::default();
         if let Some(x) = feed.title {
+            debug!("Title found: {}", x.content);
             feed_builder.title(x.content);
         }
 
         if let Some(x) = feed.description {
+            debug!("Description found: {}", x.content);
             feed_builder.description(x.content);
         }
 
         if let Some(x) = feed.logo {
+            debug!("image found, logo branch: x={:?}", x);
             let mut img_buider = rss::ImageBuilder::default();
             img_buider.url(x.uri);
             img_buider.link(x.title.unwrap_or_default());
@@ -93,6 +101,7 @@ impl RssTranscodizer {
             feed_builder.image(Some(img_buider.build()));
         } else {
             if let Some(x) = feed.icon {
+                debug!("image found, icon branch: x={:?}", x);
                 let mut img_buider = rss::ImageBuilder::default();
                 img_buider.url(x.uri);
                 img_buider.link(x.title.unwrap_or_default());
@@ -108,11 +117,15 @@ impl RssTranscodizer {
             let mut item_builder = ItemBuilder::default();
 
             if let Some(x) = &item.title {
+                debug!("item title: {}", x.content);
                 item_builder.title(Some(x.content.clone()));
             }
 
             let enclosure = match item.links.first() {
-                Some(x) => x,
+                Some(x) => {
+                    debug!("enclosure found: {:?}", x);
+                    x
+                },
                 None => {
                     warn!( "item has no media, skipping");
                     return None
@@ -120,7 +133,10 @@ impl RssTranscodizer {
             };
 
             let media_url = match Url::parse(&enclosure.href) {
-                Ok(x) => x,
+                Ok(x) => {
+                    debug!("media url found: {:?}", x);
+                    x
+                },
                 Err(_) => {
                     warn!("item has an invalid url");
                     return None
@@ -136,15 +152,17 @@ impl RssTranscodizer {
             };
 
             if let Some(x) = &media_element.description {
+                debug!("Description found: {:?}", x.content);
                 item_builder.description(Some(x.content.clone()));
             }
 
             if let Some(x) = item.updated {
-
+                debug!("Updated date found: {:?}", x.to_rfc3339());
                 item_builder.pub_date(Some(x.to_rfc3339()));
             }
 
             if let Some(x) = &media_element.thumbnails.first() {
+                debug!("Thumbnail image found: {:?}", x.image.uri);
                 let mut itunes_builder = ITunesItemExtensionBuilder::default();
                 itunes_builder.image(Some(x.image.uri.clone()));
                 item_builder.itunes_ext(Some(itunes_builder.build()));
@@ -165,7 +183,6 @@ impl RssTranscodizer {
             };
 
             let duration_secs = duration.as_secs();
-
             let mut transcode_service_url = self.transcode_service_url.clone();
             let bitrate = 64; //TODO: refactor
             transcode_service_url
@@ -181,8 +198,15 @@ impl RssTranscodizer {
                 mime_type: "audio/mpeg".to_string(),
             };
 
+
+
+            debug!("setting enclosure to: \nlength: {}, url: {}, mime_type: {}", enclosure.length, enclosure.url, enclosure.mime_type);
+
+            let guid = generate_guid(&item.id);
+            item_builder.guid(Some(guid));
             item_builder.enclosure(Some(enclosure));
 
+            debug!("item parsing completed!\n------------------------------\n------------------------------");
             Some(item_builder.build())
         }).collect();
 
@@ -192,6 +216,15 @@ impl RssTranscodizer {
     }
 }
 
+fn generate_guid(url: &str) -> Guid {
+    let digest: md5::Digest = md5::compute(url);
+    let md5_bytes_from_digest = digest.0;
+    let uuid_for_item: uuid::Builder = uuid::Builder::from_md5_bytes(md5_bytes_from_digest);
+    let uuid = uuid_for_item.as_uuid().clone();
+    let mut guid_builder = GuidBuilder::default();
+    guid_builder.permalink(true).value(uuid.to_string());
+    guid_builder.build()
+}
 
 
 #[cfg(test)]
@@ -226,20 +259,16 @@ mod test {
         for i in transcodized_rss_parsed.items().iter() {
             let pretty_item = serde_json::to_string(&i).unwrap();
 
+            if i.guid().is_none() {
+                return Err(format!("missing guid for item {:?}", pretty_item));
+            }
+
             if i.enclosure.is_none() {
                 return Err(format!("missing enclosure for item {:?}", pretty_item));
             }
 
-            if i.itunes_ext.is_none() {
-                return Err(format!("missing iTunes extension for item {:?}", pretty_item));
-            }
-
             if i.title.is_none() {
                 return Err(format!("missing title for item {:?}", pretty_item));
-            }
-
-            if i.link.is_none() {
-                return Err(format!("missing link for item {:?}", pretty_item));
             }
 
             if i.description.is_none() {
@@ -249,58 +278,60 @@ mod test {
         return Ok(())
     }
 
-    async fn stop_server(handle: ServerHandle) {
+    async fn stop_test(handle: ServerHandle) {
         handle.stop(false).await
     }
 
     #[actix_web::test]
     async fn rss_podcast_feed() -> Result<(), String> {
-        let handle = start_fake_server("podcast".to_string() , 9872).await;
+        let handle = startup_test("podcast".to_string() , 9872).await;
 
         let rss_url = "http://127.0.0.1:9872/feed.rss".to_string();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url);
 
-        stop_server(handle).await;
-
         let res = validate_must_have_props(rss_transcodizer).await;
+
+        stop_test(handle).await;
+
         res
     }
 
     #[actix_web::test]
     async fn rss_twitch_feed() -> Result<(), String> {
-        let handle = start_fake_server("twitch".to_string(), 9871).await;
+        let handle = startup_test("twitch".to_string(), 9871).await;
 
         let rss_url = "http://127.0.0.1:9871/feed.rss".to_string();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9871/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url);
 
-        stop_server(handle).await;
 
         let res = validate_must_have_props(rss_transcodizer).await;
+
+        stop_test(handle).await;
 
         res
     }
 
     #[actix_web::test]
     async fn rss_youtube_feed() -> Result<(), String> {
-        let handle = start_fake_server("youtube".to_string(), 9870).await;
+        let handle = startup_test("youtube".to_string(), 9870).await;
 
         let rss_url = "http://127.0.0.1:9870/feed.rss".to_string();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url);
 
-        stop_server(handle).await;
-
         let res = validate_must_have_props(rss_transcodizer).await;
+
+        stop_test(handle).await;
 
         res
     }
 
-    async fn start_fake_server(type_test: String, port: u16) -> ServerHandle {
+    async fn startup_test(type_test: String, port: u16) -> ServerHandle {
         let feed_type = Data::new(type_test);
         let fake_server = HttpServer::new(move || {
             App::new()

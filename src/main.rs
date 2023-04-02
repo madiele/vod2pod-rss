@@ -40,7 +40,7 @@ async fn main() -> std::io::Result<()> {
             //.route("/test_transcode.mp3", web::get().to(test_transcode))
             .route("/transcodize_rss", web::get().to(transcodize_rss))
     })
-        .bind(("127.0.0.1", 8080))?
+        .bind(("0.0.0.0", 8080))?
         .run().await
 }
 
