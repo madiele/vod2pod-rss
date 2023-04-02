@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use eyre::eyre;
 use log::{warn, debug};
+use mime::Mime;
 use reqwest::Url;
 use rss::{GuidBuilder, Guid};
 use rss::{ Enclosure, ItemBuilder, Item, extension::itunes::ITunesItemExtensionBuilder };
@@ -114,23 +115,44 @@ impl RssTranscodizer {
                 item_builder.title(Some(x.content.clone()));
             }
 
-            let enclosure = match item.links.first() {
+            let found_url: Option<Url> = match item.links.first() {
                 Some(x) => {
                     debug!("enclosure found: {:?}", x);
-                    x
+                    Some(Url::parse(&x.href.to_string()).unwrap())
                 },
                 None => {
-                    warn!( "item has no media, skipping");
-                    return None
+                    let mut media_links = Vec::new();
+                    for x in item.media.iter() {
+                        let mut found_url: Option<Url> = None;
+                        for y in x.content.iter() {
+                            let content_t = y.content_type.clone();
+                            match content_t.unwrap().to_string() == "audio/mpeg".to_string() {
+                                true => {
+                                    found_url = y.url.clone();
+                                    break;
+                                }
+                                false => (),
+                            }
+                        }
+                        if let Some(url) = found_url {
+                            media_links.push(url);
+                        }
+                    }
+                    let first_link = media_links.first();
+                    let res: Option<Url> = match first_link {
+                        Some(x) => Some(x.clone()),
+                        _ => None,
+                    };
+                    res
                 }
             };
 
-            let media_url = match Url::parse(&enclosure.href) {
-                Ok(x) => {
+            let media_url: Url = match found_url {
+                Some(x) => {
                     debug!("media url found: {:?}", x);
                     x
                 },
-                Err(_) => {
+                _ => {
                     warn!("item has an invalid url");
                     return None
                 }
@@ -148,6 +170,14 @@ impl RssTranscodizer {
                 debug!("Description found: {:?}", x.content);
                 item_builder.description(Some(x.content.clone()));
             }
+            else if let Some(x) = &item.content {
+                debug!("Description found: {:?}", x);
+                item_builder.description(Some(x.body.clone().unwrap_or_default()));
+            }
+            else if let Some(x) = &item.summary {
+                debug!("Description found: {:?}", x);
+                item_builder.description(Some(x.content.to_string().clone()));
+            };
 
             if let Some(x) = item.published {
                 debug!("Published date found: {:?}", x.to_rfc2822());
