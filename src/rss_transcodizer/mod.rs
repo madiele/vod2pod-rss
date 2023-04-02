@@ -115,6 +115,7 @@ impl RssTranscodizer {
         let feed_items: Vec<Item> = feed.entries.iter().filter_map(|item| {
 
             let mut item_builder = ItemBuilder::default();
+            let mut itunes_builder = ITunesItemExtensionBuilder::default();
 
             if let Some(x) = &item.title {
                 debug!("item title: {}", x.content);
@@ -156,16 +157,14 @@ impl RssTranscodizer {
                 item_builder.description(Some(x.content.clone()));
             }
 
-            if let Some(x) = item.updated {
-                debug!("Updated date found: {:?}", x.to_rfc3339());
-                item_builder.pub_date(Some(x.to_rfc3339()));
+            if let Some(x) = item.published {
+                debug!("Published date found: {:?}", x.to_rfc2822());
+                item_builder.pub_date(Some(x.to_rfc2822()));
             }
 
             if let Some(x) = &media_element.thumbnails.first() {
                 debug!("Thumbnail image found: {:?}", x.image.uri);
-                let mut itunes_builder = ITunesItemExtensionBuilder::default();
                 itunes_builder.image(Some(x.image.uri.clone()));
-                item_builder.itunes_ext(Some(itunes_builder.build()));
             }
 
             let duration = match media_element.duration {
@@ -183,6 +182,8 @@ impl RssTranscodizer {
             };
 
             let duration_secs = duration.as_secs();
+            let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
+            itunes_builder.duration(Some(duration_string));
             let mut transcode_service_url = self.transcode_service_url.clone();
             let bitrate = 64; //TODO: refactor
             transcode_service_url
@@ -198,14 +199,13 @@ impl RssTranscodizer {
                 mime_type: "audio/mpeg".to_string(),
             };
 
-
-
             debug!("setting enclosure to: \nlength: {}, url: {}, mime_type: {}", enclosure.length, enclosure.url, enclosure.mime_type);
 
             let guid = generate_guid(&item.id);
             item_builder.guid(Some(guid));
             item_builder.enclosure(Some(enclosure));
 
+            item_builder.itunes_ext(Some(itunes_builder.build()));
             debug!("item parsing completed!\n------------------------------\n------------------------------");
             Some(item_builder.build())
         }).collect();
