@@ -1,14 +1,3 @@
-//this module will take an existing RSS and output a new RSS with the enclosure replaced by the trascode URL
-//usage example
-//GET /rss?url=https://website.com/url/to/feed.rss
-//media will have original url replaced by
-//GET /transcode/UUID?url=https://website.com/url/to/media.mp3
-//GET /transcode/UUID?url=https://website.com/url/to/media.mp4
-//GET /transcode/UUID?url=https://website.com/url/to/media.m3u8 (this will require some trickery to get the correct duration)
-//in the frist version those calls will use the duration field in the RSS with the constant bitrate of the transcoder to generate
-//a correct byte range
-//in future version they will try to get the first secs of the original to get the bitrate and original byte range
-
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -56,13 +45,25 @@ async fn get_youtube_video_duration(url: String) -> eyre::Result<u64> {
 }
 
 fn parse_duration(duration_str: &str) -> Result<Duration, String> {
-    let duration_parts: Vec<&str> = duration_str.split(':').collect();
+    let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
 
-    let hours: u64 = duration_parts[0].parse().map_err(|_| "Invalid format".to_string())?;
-    let minutes: u64 = duration_parts[1].parse().map_err(|_| "Invalid format".to_string())?;
-    let seconds: u64 = duration_parts[2].parse().map_err(|_| "Invalid format".to_string())?;
+    let seconds = match duration_parts.get(0) {
+        Some(sec_str) => sec_str.parse().map_err(|_| "Invalid format".to_string())?,
+        None => 0,
+    };
 
-    Ok(Duration::from_secs(hours * 3600 + minutes * 60 + seconds))
+    let minutes = match duration_parts.get(1) {
+        Some(min_str) => min_str.parse().map_err(|_| "Invalid format".to_string())?,
+        None => 0,
+    };
+
+    let hours= match duration_parts.get(2) {
+        Some(hour_str) => hour_str.parse().map_err(|_| "Invalid format".to_string())?,
+        None => 0,
+    };
+
+    let duration_secs= hours * 3600 + minutes * 60 + seconds;
+    Ok(Duration::from_secs(duration_secs))
 }
 
 pub struct RssTranscodizer {
@@ -274,10 +275,11 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         let generation_uuid  = uuid::Uuid::new_v4().to_string();
         transcode_service_url
             .query_pairs_mut()
-            .append_pair("url", media_url.as_str())
             .append_pair("bitrate", bitrate.to_string().as_str())
             .append_pair("uuid", generation_uuid.as_str())
-            .append_pair("duration", duration_secs.to_string().as_str());
+            .append_pair("duration", duration_secs.to_string().as_str())
+            .append_pair("url", media_url.as_str())
+            .append_pair("ext", ".mp3"); //this should allways be last, some players refuse to play urls not ending in .mp3
 
         let enclosure = Enclosure {
             length: (bitrate * 1024 * duration_secs).to_string(),
