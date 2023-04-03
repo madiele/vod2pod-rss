@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  vod-to-podcast:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_URL=redis:6379
+
+  redis:
+    image: "redis:6.2"
+    ports:
+      - "6379:6379"

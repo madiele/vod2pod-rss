@@ -31,7 +31,7 @@ use std::str;
     create = r##" {
     AsyncRedisCache::new("cached_yt_video_duration=", 9999999)
         .set_refresh(true)
-        .set_connection_string("redis://127.0.0.1:6379/")
+        .set_connection_string("redis://redis:6379/")
         .build()
         .await
         .expect("youtube_duration cache")
@@ -104,7 +104,7 @@ impl Display for TranscodeParams {
     create = r##" {
         AsyncRedisCache::new("cached_transcodizer=", 600)
             .set_refresh(true)
-            .set_connection_string("redis://127.0.0.1:6379/")
+            .set_connection_string("redis://redis:6379/")
             .build()
             .await
             .expect("rss_transcodizer cache")
