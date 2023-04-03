@@ -56,13 +56,22 @@ async fn get_youtube_video_duration(url: String) -> eyre::Result<u64> {
 }
 
 fn parse_duration(duration_str: &str) -> Result<Duration, String> {
-    let duration_parts: Vec<&str> = duration_str.split(':').collect();
+    let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
 
-    let hours: u64 = duration_parts[0].parse().map_err(|_| "Invalid format".to_string())?;
-    let minutes: u64 = duration_parts[1].parse().map_err(|_| "Invalid format".to_string())?;
-    let seconds: u64 = duration_parts[2].parse().map_err(|_| "Invalid format".to_string())?;
+    let seconds = if let Some(sec_str) = duration_parts.get(0) {
+        sec_str.parse().map_err(|_| "Invalid format".to_string())?
+    } else { 0 };
 
-    Ok(Duration::from_secs(hours * 3600 + minutes * 60 + seconds))
+    let minutes = if let Some(min_str) = duration_parts.get(1) {
+        min_str.parse().map_err(|_| "Invalid format".to_string())?
+    } else { 0 };
+
+    let hours= if let Some(hour_str) = duration_parts.get(2) {
+        hour_str.parse().map_err(|_| "Invalid format".to_string())?
+    } else { 0 };
+
+    let duration_secs= hours * 3600 + minutes * 60 + seconds;
+    Ok(Duration::from_secs(duration_secs))
 }
 
 pub struct RssTranscodizer {
