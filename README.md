@@ -8,3 +8,5 @@ example usage:
 http://192.168.1.105:8080/transcodize_rss?url=https://www.youtube.com/feeds/videos.xml?channel_id=UCcmxOGYGF51T1XsqQLewGtQ
 
 give the link to a podcast player and enjoy
+
+before the first real realease expect breaking changes to the urls
