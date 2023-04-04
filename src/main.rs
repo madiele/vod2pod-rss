@@ -2,7 +2,6 @@ use actix::Addr;
 use actix_redis::{ RedisActor, Command, resp_array, RespValue };
 use actix_web::{ HttpServer, web::{ self, Buf }, App, HttpResponse, guard, HttpRequest };
 use async_trait::async_trait;
-use cached::{proc_macro::io_cached, AsyncRedisCache};
 use log::{ error, debug };
 use regex::Regex;
 use reqwest::Url;
@@ -10,7 +9,7 @@ use serde::Deserialize;
 use serde_resp::de;
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
-use std::{io::Cursor, process::Child, collections::HashMap};
+use std::{io::Cursor, collections::HashMap};
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer,
 };
@@ -191,20 +190,26 @@ async fn transcode(
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
-    let transcoder = Transcoder::new(&ffmpeg_paramenters);
-    let stream = transcoder.get_transcode_stream(redis);
+    match Transcoder::new(&ffmpeg_paramenters).await {
+        Ok(transcoder) => {
+            let stream = transcoder.get_transcode_stream(redis);
 
-    (
-        if ffmpeg_paramenters.seek_time == 0 {
-            HttpResponse::Ok()
-        } else {
-            HttpResponse::PartialContent()
+            (
+                if ffmpeg_paramenters.seek_time == 0 {
+                    HttpResponse::Ok()
+                } else {
+                    HttpResponse::PartialContent()
+                }
+            ).insert_header(("Accept-Ranges", "bytes"))
+                .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
+                .content_type("audio/mpeg")
+                .no_chunking((bytes_count - start).into())
+                .streaming(stream)
         }
-    ).insert_header(("Accept-Ranges", "bytes"))
-        .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
-        .content_type("audio/mpeg")
-        .no_chunking((bytes_count - start).into())
-        .streaming(stream)
+        Err(e) => {
+            HttpResponse::ServiceUnavailable().body(e.to_string())
+        },
+    }
 }
 
 trait IntoString {

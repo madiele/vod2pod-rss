@@ -1,12 +1,15 @@
-use std::process::{Child, ExitStatus};
+use std::process::Child;
+use std::process::ExitStatus;
 use std::str::FromStr;
 use std::{ error::Error, time::Duration };
 use std::{io::Read, process::{ Command, Stdio }};
 
 use actix::Addr;
 use actix_redis::RedisActor;
+use cached::AsyncRedisCache;
 use actix_rt::time::sleep;
 use actix_web::web::{ Bytes, Data };
+use cached::proc_macro::io_cached;
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
 use log::{ debug, error, warn };
@@ -55,31 +58,42 @@ pub struct Transcoder {
     ffmpeg_command: Command,
 }
 
-fn get_youtube_stream_url(url: &Url) -> Option<Url> {
+#[io_cached(
+    map_error = r##"|e| eyre::Error::new(e)"##,
+    type = "AsyncRedisCache<Url, Url>",
+    create = r##" {
+    AsyncRedisCache::new("cached_yt_stream_url=", 18000)
+        .set_refresh(true)
+        .set_connection_string("redis://redis:6379/")
+        .build()
+        .await
+        .expect("youtube_duration cache")
+} "##
+)]
+async fn get_youtube_stream_url(url: Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
-    let output = Command::new("yt-dlp")
+    let output = tokio::process::Command::new("yt-dlp")
         .arg("-x")
         .arg("--get-url")
         .arg(url.as_str())
-        .output();
+        .output().await;
 
     if let Ok(x) = output {
         let raw_url = std::str::from_utf8(&x.stdout).unwrap();
-        Some(Url::from_str(raw_url).unwrap())
+        Ok(Url::from_str(raw_url).unwrap())
     } else {
-        error!("could not get youtube stream url");
-        None
+        Err(eyre::eyre!("could not get youtube stream url"))
     }
 
 }
 
 impl Transcoder {
-    pub fn new(ffmpeg_paramenters: &FfmpegParameters) -> Self {
+    pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
         let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
         let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
             Self::get_ffmpeg_command(&FfmpegParameters {
                 seek_time: ffmpeg_paramenters.seek_time,
-                url: get_youtube_stream_url(&ffmpeg_paramenters.url).unwrap(),
+                url: get_youtube_stream_url(ffmpeg_paramenters.url.clone()).await?,
                 audio_codec: FFMPEGAudioCodec::Libmp3lame,
                 bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
                 max_rate_kbit: ffmpeg_paramenters.max_rate_kbit })
@@ -88,9 +102,7 @@ impl Transcoder {
         };
 
 
-        Self {
-            ffmpeg_command,
-        }
+        Ok(Self { ffmpeg_command })
     }
 
     fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
@@ -236,9 +248,8 @@ mod test {
     use regex::Regex;
     use super::*;
 
-    #[test]
-    fn check_ffmpeg_command() {
-        let duration = 60;
+    #[tokio::test]
+    async fn check_ffmpeg_command() {
         let stream_url = Url::parse("http://url.mp3").unwrap();
         let params = FfmpegParameters {
             seek_time: 30,
@@ -247,7 +258,7 @@ mod test {
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(&params);
+        let transcoder = Transcoder::new(&params).await.unwrap();
         let ppath = transcoder.ffmpeg_command.get_program();
         if let Some(x) = ppath.to_str() {
             info!("{} ", x);
@@ -298,8 +309,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn check_ffmpeg_runs() {
+    #[tokio::test]
+    async fn check_ffmpeg_runs() {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
         let protocol = "file://";
@@ -313,7 +324,7 @@ mod test {
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let mut transcoder = Transcoder::new(&params);
+        let mut transcoder = Transcoder::new(&params).await.unwrap();
         match transcoder.ffmpeg_command.output() {
             Ok(x) => {
                 let out = x.stderr.as_slice();
@@ -326,8 +337,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_transcoding_generator() {
+    #[tokio::test]
+    async fn test_transcoding_generator() {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
         let protocol = "file://";
@@ -341,7 +352,7 @@ mod test {
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(&params);
+        let transcoder = Transcoder::new(&params).await.unwrap();
         let redis = RedisActor::start("localhost");
         let mut gen = transcoder.get_transcode_stream(Data::new(redis));
         let mut read_counts = 0;
