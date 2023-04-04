@@ -1,14 +1,13 @@
 use actix::Addr;
-use actix_redis::{ RedisActor, Command, resp_array, RespValue };
+use actix_redis::{ RedisActor, RespValue };
 use actix_web::{ HttpServer, web::{ self, Buf }, App, HttpResponse, guard, HttpRequest };
 use async_trait::async_trait;
-use log::{ error, debug };
+use log::{ error, debug, info };
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_resp::de;
 use simple_logger::SimpleLogger;
-use uuid::Uuid;
 use std::{io::Cursor, collections::HashMap};
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer,
@@ -19,14 +18,12 @@ use vod_to_podcast_rss::{
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Debug).init().unwrap();
 
-    let redis_url = match std::env::var_os("REDIS_URL") {
-        Some(x) => x.into_string().unwrap(),
-        None => "localhost:6379".to_string(),
-    };
-    let redis = RedisActor::start(redis_url.as_str());
+    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+    let redis_actor = RedisActor::start(format!("{redis_address}:{redis_port}"));
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(redis.clone()))
+            .app_data(web::Data::new(redis_actor.clone()))
             .route("/", web::get().to(index))
             .service(
                 web
@@ -63,30 +60,11 @@ impl RedisActorExtensions for web::Data<Addr<RedisActor>> {
     }
 }
 
-async fn index(redis: web::Data<Addr<RedisActor>>) -> HttpResponse {
+async fn index() -> HttpResponse {
     HttpResponse::Ok().body("server works")
 }
 
-//TODO: make into integration test
-// async fn test_transcode() -> HttpResponse {
-//     info!("starting stream");
-//     let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-//     path_to_mp3.push("src/transcoder/test.mp3");
-//     let stream_url = path_to_mp3.as_os_str().to_str().unwrap().parse().unwrap();
-//     info!("{stream_url}");
-//     let params = FfmpegParameters {
-//         seek_time: 0,
-//         url: stream_url,
-//         max_rate_kbit: 64,
-//         audio_codec: FFMPEGAudioCodec::Libmp3lame,
-//         bitrate_kbit: 64,
-//     };
-//     let transcoder = Transcoder::new(&params);
-//     let stream = transcoder.get_transcode_stream();
-//     HttpResponse::Ok().content_type("audio/mpeg").no_chunking(327175).streaming(stream)
-// }
 async fn transcodize_rss(
-    redis: web::Data<Addr<RedisActor>>,
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>
 ) -> HttpResponse {
@@ -120,7 +98,6 @@ struct TranscodizeQuery {
     url: Url,
     bitrate: u32,
     duration: u32,
-    uuid: Uuid,
 }
 
 async fn transcode(
@@ -132,22 +109,7 @@ async fn transcode(
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
     let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
-
-    if let Ok(Ok(res)) = redis.send(Command(resp_array!["INFO"])).await {
-        let b = match res {
-            RespValue::Nil => todo!(),
-            RespValue::Array(_) => todo!(),
-            RespValue::BulkString(x) => x,
-            RespValue::Error(_) => todo!(),
-            RespValue::Integer(_) => todo!(),
-            RespValue::SimpleString(_) => todo!(),
-        };
-        let buff = &mut Cursor::new(b);
-        let pars: Result<String, _> = de::from_buf_reader(buff);
-        debug!("redis res: {}", pars.unwrap());
-    } else {
-        debug!("redis is down");
-    }
+    info!("processing transcode at {bitrate}k for {stream_url}");
 
     // Range header parsing
     const DEFAULT_CONTENT_RANGE: &str = "0-";
@@ -155,14 +117,12 @@ async fn transcode(
         Some(x) => x.to_str().unwrap(),
         None => DEFAULT_CONTENT_RANGE,
     };
+
     debug!("received content range {content_range_str}");
 
     let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?").unwrap();
-    let captures = match re.captures_iter(content_range_str).next() {
-        Some(x) => x,
-        None => {
-            return HttpResponse::InternalServerError().body("content range regex failed");
-        }
+    let captures = if let Some(x) = re.captures_iter(content_range_str).next() {x} else {
+        return HttpResponse::BadRequest().body("content range regex failed");
     };
 
     let mut start = 0;
@@ -194,13 +154,11 @@ async fn transcode(
         Ok(transcoder) => {
             let stream = transcoder.get_transcode_stream(redis);
 
-            (
-                if ffmpeg_paramenters.seek_time == 0 {
-                    HttpResponse::Ok()
-                } else {
-                    HttpResponse::PartialContent()
-                }
-            ).insert_header(("Accept-Ranges", "bytes"))
+            let mut response_builder = match ffmpeg_paramenters.seek_time {
+                0 => HttpResponse::Ok(),
+                _ => HttpResponse::PartialContent(),
+            };
+            response_builder.insert_header(("Accept-Ranges", "bytes"))
                 .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
                 .content_type("audio/mpeg")
                 .no_chunking((bytes_count - start).into())
@@ -233,6 +191,4 @@ impl IntoString for Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn test_example() {}
 }

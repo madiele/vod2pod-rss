@@ -16,24 +16,26 @@ use std::str;
 
 #[io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
-    type = "AsyncRedisCache<String, u64>",
+    type = "AsyncRedisCache<Url, u64>",
     create = r##" {
-    AsyncRedisCache::new("cached_yt_video_duration=", 9999999)
-        .set_refresh(true)
-        .set_connection_string("redis://redis:6379/")
-        .build()
-        .await
-        .expect("youtube_duration cache")
+        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+
+        AsyncRedisCache::new("cached_yt_video_duration=", 9999999)
+            .set_refresh(false)
+            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
+            .build()
+            .await
+            .expect("youtube_duration cache")
 } "##
 )]
-async fn get_youtube_video_duration(url: String) -> eyre::Result<u64> {
+async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
     debug!("getting duration for yt video: {}", url);
     let output = Command::new("yt-dlp")
         .arg("--get-duration")
-        .arg(url)
+        .arg(url.to_string())
         .output()
     .await;
-
     if let Ok(x) = output {
         let duration_str = str::from_utf8(&x.stdout).unwrap().trim().to_string();
         Ok(parse_duration(&duration_str).unwrap_or_default().as_secs())
@@ -103,9 +105,12 @@ impl Display for TranscodeParams {
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<TranscodeParams, String>",
     create = r##" {
+        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+
         AsyncRedisCache::new("cached_transcodizer=", 600)
-            .set_refresh(true)
-            .set_connection_string("redis://redis:6379/")
+            .set_refresh(false)
+            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
             .build()
             .await
             .expect("rss_transcodizer cache")
@@ -257,7 +262,7 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
                 debug!("runnign regex on url: {}", media_url.as_str());
                 let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
                 if youtube_regex.is_match(media_url.as_str()) {
-                    let duration = get_youtube_video_duration(media_url.as_str().to_string()).await.unwrap();
+                    let duration = get_youtube_video_duration(&media_url).await.unwrap();
                     debug!("duration of {duration} extracted");
                     Duration::from_secs(duration)
                 } else {
@@ -271,7 +276,10 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
         itunes_builder.duration(Some(duration_string));
         let mut transcode_service_url = transcode_service_url;
-        let bitrate = 64; //TODO: refactor
+        let bitrate: u64 = std::env::var("BITRATE")
+            .unwrap_or_else(|_| "128".to_string())
+            .parse()
+            .expect("BITRATE must be a number");
         let generation_uuid  = uuid::Uuid::new_v4().to_string();
         transcode_service_url
             .query_pairs_mut()
@@ -327,9 +335,6 @@ fn generate_guid(url: &str) -> Guid {
 
 #[cfg(test)]
 mod test {
-
-    use std::sync::Mutex;
-
     use actix_web::{HttpServer, App, web::{self, Data}, HttpResponse, http::header::ContentType, rt, dev::ServerHandle};
     use rss::Channel;
 

@@ -62,15 +62,18 @@ pub struct Transcoder {
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<Url, Url>",
     create = r##" {
-    AsyncRedisCache::new("cached_yt_stream_url=", 18000)
-        .set_refresh(true)
-        .set_connection_string("redis://redis:6379/")
-        .build()
-        .await
-        .expect("youtube_duration cache")
+        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+
+        AsyncRedisCache::new("cached_yt_stream_url=", 18000)
+            .set_refresh(false)
+            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
+            .build()
+            .await
+            .expect("get_youtube_stream_url cache")
 } "##
 )]
-async fn get_youtube_stream_url(url: Url) -> eyre::Result<Url> {
+async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let output = tokio::process::Command::new("yt-dlp")
         .arg("-x")
@@ -93,7 +96,7 @@ impl Transcoder {
         let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
             Self::get_ffmpeg_command(&FfmpegParameters {
                 seek_time: ffmpeg_paramenters.seek_time,
-                url: get_youtube_stream_url(ffmpeg_paramenters.url.clone()).await?,
+                url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
                 audio_codec: FFMPEGAudioCodec::Libmp3lame,
                 bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
                 max_rate_kbit: ffmpeg_paramenters.max_rate_kbit })
@@ -142,9 +145,6 @@ impl Transcoder {
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("failed to run commnad");
-            //let pid = child.id().to_string();
-            //_ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
-            //kill_stalled_transcodes(&redis).await;
 
             let mut out = child.stdout.take().expect("failed to open stdout");
 
@@ -174,7 +174,6 @@ impl Transcoder {
                             break;
                         }
                         total_bytes_read += read_bytes;
-                        //_ = redis.send(actix_redis::Command(resp_array!["HSET", PID_TABLE, &pid, get_epoch()])).await;
                         co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
                     Err(e) => {
