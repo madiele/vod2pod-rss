@@ -21,6 +21,8 @@ async fn main() -> std::io::Result<()> {
     let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
     let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
     let redis_actor = RedisActor::start(format!("{redis_address}:{redis_port}"));
+
+    flush_redis_on_new_version().await.unwrap();
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(redis_actor.clone()))
@@ -38,13 +40,35 @@ async fn main() -> std::io::Result<()> {
         .run().await
 }
 
+async fn flush_redis_on_new_version() -> eyre::Result<()> {
+    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+    let app_version = env!("CARGO_PKG_VERSION");
+    info!("app version {app_version}");
+
+    let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
+    let mut con = client.get_tokio_connection().await.unwrap();
+
+    let cached_version : Option<String> = redis::cmd("GET").arg("version").query_async(&mut con).await?;
+    debug!("cached app version {:?}", cached_version);
+
+    if let Some(ref cached_version) = cached_version {
+        if cached_version != app_version {
+            info!("detected version change ({cached_version} != {app_version}) flushing redis DB");
+            let _ : () = redis::cmd("FLUSHDB").query_async(&mut con).await?;
+        }
+    }
+
+
+    let _ : () = redis::cmd("SET").arg("version").arg(app_version).query_async(&mut con).await?;
+    debug!("set cached app version to {app_version}");
+
+    Ok(())
+}
+
 #[async_trait]
 trait RedisActorExtensions {
     /// example redis.sendAndRecString(Command(resp_array!["INFO"])).await
-    ///
-    /// # Panics
-    ///
-    /// Panics if .
     async fn send_and_rec_string(&self, msg: actix_redis::Command) -> Option<String>;
 }
 
