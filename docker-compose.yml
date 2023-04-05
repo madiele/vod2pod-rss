@@ -5,6 +5,7 @@ services:
     build: .
     depends_on:
       - redis
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -15,4 +16,10 @@ services:
 
   redis:
     image: "redis:6.2"
-    command: redis-server --save 20 1 --loglevel debug
+    command: redis-server --save 20 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
