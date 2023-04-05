@@ -1,7 +1,4 @@
-use actix::Addr;
-use actix_redis::{ RedisActor, RespValue };
 use actix_web::{ HttpServer, web::{ self, Buf }, App, HttpResponse, guard, HttpRequest };
-use async_trait::async_trait;
 use log::{ error, debug, info };
 use regex::Regex;
 use reqwest::Url;
@@ -18,14 +15,9 @@ use vod_to_podcast_rss::{
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
-    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-    let redis_actor = RedisActor::start(format!("{redis_address}:{redis_port}"));
-
     flush_redis_on_new_version().await.unwrap();
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(redis_actor.clone()))
             .route("/", web::get().to(index))
             .service(
                 web
@@ -64,24 +56,6 @@ async fn flush_redis_on_new_version() -> eyre::Result<()> {
     debug!("set cached app version to {app_version}");
 
     Ok(())
-}
-
-#[async_trait]
-trait RedisActorExtensions {
-    /// example redis.sendAndRecString(Command(resp_array!["INFO"])).await
-    async fn send_and_rec_string(&self, msg: actix_redis::Command) -> Option<String>;
-}
-
-#[async_trait]
-impl RedisActorExtensions for web::Data<Addr<RedisActor>> {
-    async fn send_and_rec_string(&self, msg: actix_redis::Command) -> Option<String>
-    {
-        if let Ok(Ok(RespValue::BulkString(x))) = self.send(msg).await {
-            Some(x.into_string())
-        } else {
-            None
-        }
-    }
 }
 
 async fn index() -> HttpResponse {
@@ -127,7 +101,6 @@ struct TranscodizeQuery {
 async fn transcode(
     req: HttpRequest,
     query: web::Query<TranscodizeQuery>,
-    redis: web::Data<Addr<RedisActor>>
 ) -> HttpResponse {
     let stream_url = &query.url;
     let bitrate = query.bitrate;
@@ -176,7 +149,7 @@ async fn transcode(
 
     match Transcoder::new(&ffmpeg_paramenters).await {
         Ok(transcoder) => {
-            let stream = transcoder.get_transcode_stream(redis);
+            let stream = transcoder.get_transcode_stream();
 
             let mut response_builder = match ffmpeg_paramenters.seek_time {
                 0 => HttpResponse::Ok(),

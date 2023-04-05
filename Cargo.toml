@@ -15,7 +15,6 @@ path = "src/main.rs"
 actix-rt = "2.8.0"
 actix-web = "4.3.1"
 actix = "0.13"
-actix-redis = "0.12"
 async-trait = "0.1.68"
 url = { version="*", features = ["serde"]}
 futures = "0.3.28"

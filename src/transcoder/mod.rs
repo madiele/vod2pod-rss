@@ -4,11 +4,9 @@ use std::str::FromStr;
 use std::{ error::Error, time::Duration };
 use std::{io::Read, process::{ Command, Stdio }};
 
-use actix::Addr;
-use actix_redis::RedisActor;
 use cached::AsyncRedisCache;
 use actix_rt::time::sleep;
-use actix_web::web::{ Bytes, Data };
+use actix_web::web::Bytes;
 use cached::proc_macro::io_cached;
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
@@ -132,11 +130,9 @@ impl Transcoder {
 
     pub fn get_transcode_stream(
         self,
-        redis: Data<Addr<RedisActor>>
     ) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
 
         async fn generetor_coroutine(
-            _redis: Data<Addr<RedisActor>>,
             mut command: Command,
             co: Co<Result<Bytes, std::io::Error>>
         ) {
@@ -195,50 +191,11 @@ impl Transcoder {
                 }
             }
         }
-        Gen::new(|co| generetor_coroutine(redis, self.ffmpeg_command, co))
+        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
     }
 
 
 }
-
-//async fn kill_stalled_transcodes(redis: &Data<Addr<RedisActor>>) {
-//    if let Ok(Ok(Array(pids))) = redis.send(actix_redis::Command(resp_array!["HGETALL", PID_TABLE])).await {
-//        let transcode_keys = pids.iter().filter_map(|v| {
-//            if let BulkString(item) = v {
-//                return Some(String::from_utf8(item.to_vec()).unwrap())
-//            } else {
-//                return None
-//            }
-//        }).collect::<Vec<String>>();
-//
-//        debug!("running transcodes: {:?}", &transcode_keys.join(", "));
-//
-//        for key in transcode_keys {
-//            if let Ok(Ok(BulkString(res))) = redis.send(actix_redis::Command(resp_array!["HGET", PID_TABLE, &key])).await {
-//                let epoch_string = String::from_utf8(res.to_vec()).unwrap();
-//
-//                let epoch_last_transcode_activity: u32 = epoch_string.trim().parse().unwrap();
-//                let epoch_now: u32 = get_epoch().parse().unwrap();
-//
-//                if epoch_now - epoch_last_transcode_activity > 600 {
-//                    let pid_str = key.trim_start_matches("pid__");
-//                    match std::process::Command::new("kill")
-//                        .arg("-17")
-//                        .arg(format!("{}", pid_str))
-//                        .spawn() {
-//                            Ok(_) => {
-//                                _ = redis.send(actix_redis::Command(resp_array!["HDEL", PID_TABLE, pid_str])).await;
-//                                debug!("Transcode with PID {} killed successfully", pid_str);
-//                            },
-//                            Err(e) => debug!("Error killing process with PID {}: {:?}", pid_str, e),
-//                    }
-//                }
-//            }
-//        }
-//    }
-//}
-
-//fn get_epoch() -> String { format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()) }
 
 #[cfg(test)]
 mod test {
@@ -352,8 +309,7 @@ mod test {
             bitrate_kbit: 3,
         };
         let transcoder = Transcoder::new(&params).await.unwrap();
-        let redis = RedisActor::start("localhost");
-        let mut gen = transcoder.get_transcode_stream(Data::new(redis));
+        let mut gen = transcoder.get_transcode_stream();
         let mut read_counts = 0;
         info!("!!printing buffer!!");
         loop {
