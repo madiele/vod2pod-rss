@@ -6,10 +6,17 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - REDIS_URL=redis:6379
+      - REDIS_URL=redis
+      - REDIS_PORT=6378
+      - BITRATE=128
       - RUST_LOG=INFO
 
   redis:
     image: "redis:6.2"
     ports:
       - "6379:6379"
+    volumes:
+      - cache:/data
+volumes:
+  cache:
+    driver: local

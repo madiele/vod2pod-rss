@@ -11,6 +11,18 @@ services:
       - nvim_user:/root/
     command: git config --global --add safe.directory /repo
     command: bash
+    environment:
+      - REDIS_URL=redis
+      - REDIS_PORT=6378
+      - BITRATE=64
+      - RUST_LOG=DEBUG
+  vod-to-podcast:
+    build: .
+    ports:
+      - "8080:8080"
+
+  redis:
+    image: "redis:6.2"
 
 volumes:
   nvim_user:
