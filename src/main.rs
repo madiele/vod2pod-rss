@@ -1,11 +1,10 @@
-use actix_web::{ HttpServer, web::{ self, Buf }, App, HttpResponse, guard, HttpRequest };
+use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
 use log::{ error, debug, info };
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
-use serde_resp::de;
 use simple_logger::SimpleLogger;
-use std::{io::Cursor, collections::HashMap};
+use std::collections::HashMap;
 use vod_to_podcast_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer,
 };
@@ -164,25 +163,6 @@ async fn transcode(
         Err(e) => {
             HttpResponse::ServiceUnavailable().body(e.to_string())
         },
-    }
-}
-
-trait IntoString {
-    fn into_string(&self) -> String;
-}
-
-impl IntoString for Vec<u8> {
-    fn into_string(&self) -> String {
-        let mut result = String::with_capacity(self.len());
-        let mut cursor = Cursor::new(self);
-        while cursor.has_remaining() {
-            if cursor.position() != 0 {
-                result.push_str("\n");
-            }
-            let line: Result<String, _> = de::from_buf_reader(&mut cursor);
-            result.push_str(line.unwrap().as_str());
-        }
-        result
     }
 }
 
