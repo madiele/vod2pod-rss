@@ -16,7 +16,7 @@ use vod_to_podcast_rss::{
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    SimpleLogger::new().with_level(log::LevelFilter::Debug).init().unwrap();
+    SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
     let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
     let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
