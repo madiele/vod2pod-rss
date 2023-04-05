@@ -3,20 +3,16 @@ version: "3.9"
 services:
   vod-to-podcast:
     build: .
+    depends_on:
+      - redis
     ports:
       - "8080:8080"
     environment:
       - REDIS_ADDRESS=redis
-      - REDIS_PORT=6378
+      - REDIS_PORT=6379
       - BITRATE=128
       - RUST_LOG=INFO
 
   redis:
     image: "redis:6.2"
-    ports:
-      - "6379:6379"
-    volumes:
-      - cache:/data
-volumes:
-  cache:
-    driver: local
+    command: redis-server --save 20 1 --loglevel debug
