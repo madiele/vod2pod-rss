@@ -97,6 +97,24 @@ struct TranscodizeQuery {
     duration: u32,
 }
 
+fn get_start_and_end(content_range_str: &str, bytes_count: u32) -> eyre::Result<(u32, u32)> {
+    let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?")?;
+    let captures = if let Some(x) = re.captures_iter(content_range_str).next() { x } else {
+        return Err(eyre::eyre!("content range regex failed"));
+    };
+
+    let mut start = 0;
+    if let Some(x) = captures.name("start") {
+        start = x.as_str().parse()?;
+    }
+    let mut end = bytes_count - 1;
+    if let Some(x) = captures.name("end") {
+        end = x.as_str().parse()?;
+    }
+
+    Ok((start, end))
+}
+
 async fn transcode(
     req: HttpRequest,
     query: web::Query<TranscodizeQuery>,
@@ -110,25 +128,17 @@ async fn transcode(
     // Range header parsing
     const DEFAULT_CONTENT_RANGE: &str = "0-";
     let content_range_str = match req.headers().get("Range") {
-        Some(x) => x.to_str().unwrap(),
+        Some(x) => x.to_str().unwrap_or_default(),
         None => DEFAULT_CONTENT_RANGE,
     };
 
     debug!("received content range {content_range_str}");
 
-    let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?").unwrap();
-    let captures = if let Some(x) = re.captures_iter(content_range_str).next() {x} else {
-        return HttpResponse::BadRequest().body("content range regex failed");
-    };
 
-    let mut start = 0;
-    if let Some(x) = captures.name("start") {
-        start = x.as_str().parse().unwrap();
-    }
-    let mut end = bytes_count - 1;
-    if let Some(x) = captures.name("end") {
-        end = x.as_str().parse().unwrap();
-    }
+    let (start, end) = match get_start_and_end(content_range_str, bytes_count) {
+        Ok((start, end)) => (start, end),
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+    };
 
     debug!("requested content-range: bytes {start}-{end}/{bytes_count}");
 

@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use cached::AsyncRedisCache;
 use cached::proc_macro::io_cached;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use eyre::eyre;
 use feed_rs::model::Entry;
 use log::{warn, debug};
@@ -308,8 +310,6 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         Some(item_builder.build())
     }
 
-    use futures::stream::FuturesUnordered;
-    use futures::StreamExt;
 
     let futures = FuturesUnordered::new();
     for entry in feed.entries.iter() {
@@ -468,5 +468,26 @@ mod test {
         let handle = fake_server.handle();
         rt::spawn(fake_server);
         handle
+    }
+
+    #[test]
+    fn test_parse_duration_hhmmss() {
+        assert_eq!(parse_duration("01:02:03").unwrap(), Duration::from_secs(3723));
+    }
+
+    #[test]
+    fn test_parse_duration_mmss() {
+        assert_eq!(parse_duration("30:45").unwrap(), Duration::from_secs(1845));
+    }
+
+    #[test]
+    fn test_parse_duration_ss() {
+        assert_eq!(parse_duration("15").unwrap(), Duration::from_secs(15));
+        assert_eq!(parse_duration("45").unwrap(), Duration::from_secs(45));
+    }
+
+    #[test]
+    fn test_parse_duration_wrong_format() {
+        assert_eq!(parse_duration("invalid").unwrap_err(), "Invalid format".to_string());
     }
 }
