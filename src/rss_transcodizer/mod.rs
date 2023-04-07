@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use cached::AsyncRedisCache;
 use cached::proc_macro::io_cached;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use eyre::eyre;
 use feed_rs::model::Entry;
 use log::{warn, debug};
@@ -14,7 +16,8 @@ use tokio::process::Command;
 
 use std::str;
 
-#[io_cached(
+#[cfg_attr(not(test),
+io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<Url, u64>",
     create = r##" {
@@ -28,7 +31,7 @@ use std::str;
             .await
             .expect("youtube_duration cache")
 } "##
-)]
+))]
 async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
     debug!("getting duration for yt video: {}", url);
     let output = Command::new("yt-dlp")
@@ -101,7 +104,8 @@ impl Display for TranscodeParams {
     }
 }
 
-#[io_cached(
+#[cfg_attr(not(test),
+    io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<TranscodeParams, String>",
     create = r##" {
@@ -115,7 +119,7 @@ impl Display for TranscodeParams {
             .await
             .expect("rss_transcodizer cache")
     } "##
-)]
+))]
 async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     let transcode_service_url = Url::parse(&input.transcode_service_url_str).unwrap();
     let rss_body = (async { reqwest::get(&input.url).await?.bytes().await }).await?;
@@ -306,8 +310,6 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         Some(item_builder.build())
     }
 
-    use futures::stream::FuturesUnordered;
-    use futures::StreamExt;
 
     let futures = FuturesUnordered::new();
     for entry in feed.entries.iter() {
@@ -466,5 +468,26 @@ mod test {
         let handle = fake_server.handle();
         rt::spawn(fake_server);
         handle
+    }
+
+    #[test]
+    fn test_parse_duration_hhmmss() {
+        assert_eq!(parse_duration("01:02:03").unwrap(), Duration::from_secs(3723));
+    }
+
+    #[test]
+    fn test_parse_duration_mmss() {
+        assert_eq!(parse_duration("30:45").unwrap(), Duration::from_secs(1845));
+    }
+
+    #[test]
+    fn test_parse_duration_ss() {
+        assert_eq!(parse_duration("15").unwrap(), Duration::from_secs(15));
+        assert_eq!(parse_duration("45").unwrap(), Duration::from_secs(45));
+    }
+
+    #[test]
+    fn test_parse_duration_wrong_format() {
+        assert_eq!(parse_duration("invalid").unwrap_err(), "Invalid format".to_string());
     }
 }
