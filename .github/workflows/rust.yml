@@ -19,6 +19,6 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: install ffmpeg
-      run: apt-get install ffmpeg
+      run: sudo apt-get install ffmpeg
     - name: Run tests
       run: cargo test --verbose
