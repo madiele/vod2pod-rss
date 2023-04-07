@@ -259,6 +259,10 @@ mod test {
                 Some("pipe:stdout") => {
                     info!("pipe:stdout");
                 }
+                Some("-timeout") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    info!("-timeout {}", value);
+                }
                 Some(x) => panic!("ffmpeg run with uknown option: {x}"),
                 None => panic!("ffmpeg run with no options"),
             }

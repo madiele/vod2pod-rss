@@ -14,7 +14,8 @@ use tokio::process::Command;
 
 use std::str;
 
-#[io_cached(
+#[cfg_attr(not(test),
+io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<Url, u64>",
     create = r##" {
@@ -28,7 +29,7 @@ use std::str;
             .await
             .expect("youtube_duration cache")
 } "##
-)]
+))]
 async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
     debug!("getting duration for yt video: {}", url);
     let output = Command::new("yt-dlp")
@@ -101,7 +102,8 @@ impl Display for TranscodeParams {
     }
 }
 
-#[io_cached(
+#[cfg_attr(not(test),
+    io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<TranscodeParams, String>",
     create = r##" {
@@ -115,7 +117,7 @@ impl Display for TranscodeParams {
             .await
             .expect("rss_transcodizer cache")
     } "##
-)]
+))]
 async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     let transcode_service_url = Url::parse(&input.transcode_service_url_str).unwrap();
     let rss_body = (async { reqwest::get(&input.url).await?.bytes().await }).await?;
