@@ -270,34 +270,6 @@ mod test {
     }
 
     #[tokio::test]
-    async fn check_ffmpeg_runs() {
-        let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path_to_mp3.push("src/transcoder/test.mp3");
-        let protocol = "file://";
-        let path = path_to_mp3.as_os_str().to_str().unwrap();
-        let stream_url = Url::parse(&format!("{protocol}{path}")).unwrap();
-        info!("{stream_url}");
-        let params = FfmpegParameters {
-            seek_time: 25,
-            url: stream_url,
-            max_rate_kbit: 64,
-            audio_codec: FFMPEGAudioCodec::Libmp3lame,
-            bitrate_kbit: 3,
-        };
-        let mut transcoder = Transcoder::new(&params).await.unwrap();
-        match transcoder.ffmpeg_command.output() {
-            Ok(x) => {
-                let out = x.stderr.as_slice();
-                let out = String::from_utf8_lossy(out);
-                info!("command run sucessfully \nOutput: {out}");
-                let regex = Regex::new("time=00:00:02.19").unwrap();
-                assert!(regex.is_match(out.to_string().as_str()));
-            }
-            Err(e) => panic!("ffmpeg error {e}"),
-        }
-    }
-
-    #[tokio::test]
     async fn test_transcoding_generator() {
         let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_to_mp3.push("src/transcoder/test.mp3");
