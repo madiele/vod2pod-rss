@@ -74,8 +74,7 @@ async fn transcodize_rss(
 
     let transcode_service_url = req.url_for("transcode_mp3", &[""]).unwrap();
 
-    //TODO cache with lifetime 1 minute
-    let rss_transcodizer = RssTranscodizer::new(url.to_string(), transcode_service_url);
+    let rss_transcodizer = RssTranscodizer::new(url.to_string(), transcode_service_url).await;
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,

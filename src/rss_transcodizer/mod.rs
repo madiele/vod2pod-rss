@@ -16,6 +16,8 @@ use tokio::process::Command;
 
 use std::str;
 
+use crate::feed_url::ConvertableToFeed;
+
 #[cfg_attr(not(test),
 io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
@@ -72,14 +74,15 @@ fn parse_duration(duration_str: &str) -> Result<Duration, String> {
 }
 
 pub struct RssTranscodizer {
-    url: String,
+    feed_url: Url,
     transcode_service_url: Url,
 }
 
 
 impl RssTranscodizer {
-    pub fn new(url: String, transcode_service_url: Url) -> Self {
-        Self { url, transcode_service_url }
+    pub async fn new(raw_url: impl ConvertableToFeed + Into<Url>, transcode_service_url: Url) -> Self {
+
+        Self { feed_url: raw_url.get_feed_url().await, transcode_service_url }
     }
 
 
@@ -87,7 +90,7 @@ impl RssTranscodizer {
 
         cached_transcodize(TranscodeParams {
             transcode_service_url_str: self.transcode_service_url.clone().to_string(),
-            url: self.url.clone()
+            feed_url: self.feed_url.to_owned()
         }).await
     }
 }
@@ -95,12 +98,12 @@ impl RssTranscodizer {
 #[derive(Clone, Hash)]
 struct TranscodeParams {
     transcode_service_url_str: String,
-    url: String
+    feed_url: Url
 }
 
 impl Display for TranscodeParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", &self.transcode_service_url_str, &self.url)
+        write!(f, "{}_{}", &self.transcode_service_url_str, &self.feed_url)
     }
 }
 
@@ -122,7 +125,7 @@ impl Display for TranscodeParams {
 ))]
 async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     let transcode_service_url = Url::parse(&input.transcode_service_url_str).unwrap();
-    let rss_body = (async { reqwest::get(&input.url).await?.bytes().await }).await?;
+    let rss_body = (async { reqwest::get(&input.feed_url).await?.bytes().await }).await?;
     let feed = match parser::parse(&rss_body[..]) {
         Ok(x) => {
             debug!("parsed feed");
@@ -406,7 +409,7 @@ mod test {
         let rss_url = "http://127.0.0.1:9872/feed.rss".to_string();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url);
+        let rss_transcodizer = RssTranscodizer::new(Url::parse(rss_url.as_str()).unwrap(), transcode_service_url).await;
 
         let res = validate_must_have_props(rss_transcodizer).await;
 
@@ -422,7 +425,7 @@ mod test {
         let rss_url = "http://127.0.0.1:9871/feed.rss".to_string();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9871/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url);
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url).await;
 
 
         let res = validate_must_have_props(rss_transcodizer).await;
@@ -439,7 +442,7 @@ mod test {
         let rss_url = "http://127.0.0.1:9870/feed.rss".to_string();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url);
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url).await;
 
         let res = validate_must_have_props(rss_transcodizer).await;
 
