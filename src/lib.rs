@@ -1,5 +1,6 @@
 pub mod transcoder;
 pub mod rss_transcodizer;
+pub mod url_convert;
 
 use actix_web::dev::Server;
 use actix_web::HttpResponse;
