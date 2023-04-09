@@ -14,6 +14,7 @@ services:
       - BITRATE=128
       - RUST_LOG=INFO
       - TWITCH_TO_PODCAST_URL=ttprss
+      - TRANSCODE=true
 
   redis:
     image: "redis:6.2"
