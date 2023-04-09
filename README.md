@@ -39,11 +39,11 @@ Just add the link to your podcast client.
 (only if you use twitch) before doing anything be sure to get your SECRET and CLIENT ID from twitch
 https://dev.twitch.tv/console
 
-precompiled images are [here](https://hub.docker.com/r/madiele/vod-to-podcast/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker-compose will do it automatically but it's slow)
+precompiled images are [here](https://hub.docker.com/r/madiele/vod-to-podcast/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker compose will do it automatically but it's slow)
 
 images for raspberry pis 64bit are included
 
-### use [docker-compose](https://docs.docker.com/compose/install/) with precompiled image (easiest)
+### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image (easiest)
 
 `git clone https://github.com/madiele/VoDToPodcastRSS.git`
 
@@ -56,13 +56,13 @@ edit `docker-compose.yml` with your PORT, SECRET and CLIENT_ID
 
 save and
 
-`sudo docker-compose up -d`
+`sudo docker compose up -d`
 
 #### when you want to update:
 
 run this inside the folder with `docker-compose.yml`
 
-`sudo docker-compose pull && sudo docker-compose up -d`
+`sudo docker compose pull && sudo docker compose up -d`
 
 then run this to delete the old version form your system (note: this will also delete any other unused image you have)
 
@@ -100,4 +100,4 @@ You can set the following environment variables:
 # Contributing
 
 Pull requests for small features and bugs are welcome. For major changes, please open an issue first to discuss what you would like to change.
-to run locally you will need to install ffmpeg and yt-dlp, for redis just use `sudo docker-compose -f docker-compose.dev_enviroment.yml up -d` on the root folder of the project, set enviroment variables using `export RUST_LOG=DEBUG"` you can see all the envs you need to set in the docker-compose.yml file, feel free to get in contact if you need help!
+to run locally you will need to install ffmpeg and yt-dlp, for redis just use `sudo docker compose -f docker compose.dev_enviroment.yml up -d` on the root folder of the project, set enviroment variables using `export RUST_LOG=DEBUG"` you can see all the envs you need to set in the docker-compose.yml file, feel free to get in contact if you need help!
