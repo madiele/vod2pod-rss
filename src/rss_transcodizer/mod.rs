@@ -420,7 +420,7 @@ mod test {
     async fn rss_twitch_feed() -> Result<(), String> {
         let handle = startup_test("twitch".to_string(), 9871).await;
 
-        let rss_url = Url::parse("http://127.0.0.1:9872/feed.rss").unwrap();
+        let rss_url = Url::parse("http://127.0.0.1:9871/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9871/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url).await;
@@ -437,7 +437,7 @@ mod test {
     async fn rss_youtube_feed() -> Result<(), String> {
         let handle = startup_test("youtube".to_string(), 9870).await;
 
-        let rss_url = Url::parse("http://127.0.0.1:9872/feed.rss").unwrap();
+        let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url).await;
