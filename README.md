@@ -39,7 +39,7 @@ Just add the link to your podcast client.
 (only if you use twitch) before doing anything be sure to get your SECRET and CLIENT ID from twitch
 https://dev.twitch.tv/console
 
-precompiled images are [here](https://hub.docker.com/r/madiele/vod-to-podcast/) for linux machines with arm64, amd64. (arm/v7, i386 architectures will be added if requested in an issue)
+precompiled images are [here](https://hub.docker.com/r/madiele/vod-to-podcast/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker-compose will do it automatically but it's slow)
 
 images for raspberry pis 64bit are included
 
