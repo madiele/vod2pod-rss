@@ -78,4 +78,4 @@ You can set the following environment variables:
 # Contributing
 
 Pull requests for small features and bugs are welcome. For major changes, please open an issue first to discuss what you would like to change.
-to run locally you will need to install ffmpeg and yt-dlp, for redis just use `sudo docker compose -f docker compose.dev_enviroment.yml up -d` on the root folder of the project, set enviroment variables using `export RUST_LOG=DEBUG"` you can see all the envs you need to set in the docker-compose.yml file, feel free to get in contact if you need help!
+to run locally you will need to install ffmpeg and yt-dlp, for redis just use `sudo docker compose -f docker compose.dev_enviroment.yml up -d` on the root folder of the project, set enviroment variables using `export RUST_LOG=DEBUG` you can see all the envs you need to set in the docker-compose.yml file, feel free to get in contact if you need help!
