@@ -65,6 +65,12 @@ async fn transcodize_rss(
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>
 ) -> HttpResponse {
+
+    let should_transcode = match std::env::var("TRANSCODE") {
+        Ok(value) => !value.eq_ignore_ascii_case("false"),
+        Err(_) => true,
+    };
+
     let url = if let Some(x) = query.get("url") {
         x
     } else {
@@ -84,7 +90,7 @@ async fn transcodize_rss(
         Err(e) => {error!("fail when trying to convert channel {e}"); return HttpResponse::BadRequest().body(e.to_string())},
     };
 
-    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url).await;
+    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url, should_transcode).await;
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,
@@ -133,6 +139,12 @@ async fn transcode(
     let duration_secs = query.duration;
     let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
     info!("processing transcode at {bitrate}k for {stream_url}");
+
+    if let Ok(value) = std::env::var("TRANSCODE") {
+        if value.eq_ignore_ascii_case("false") {
+            return HttpResponse::Forbidden().finish();
+        }
+    }
 
     // Range header parsing
     const DEFAULT_CONTENT_RANGE: &str = "0-";
