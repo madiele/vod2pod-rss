@@ -201,7 +201,6 @@ impl Transcoder {
 mod test {
     use std::path::PathBuf;
     use log::info;
-    use regex::Regex;
     use super::*;
 
     #[tokio::test]
