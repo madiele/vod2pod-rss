@@ -13,6 +13,7 @@ services:
       - REDIS_PORT=6379
       - BITRATE=128
       - RUST_LOG=INFO
+      - TWITCH_TO_PODCAST_URL=ttprss
 
   redis:
     image: "redis:6.2"
@@ -23,3 +24,15 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  ttprss:
+    build:
+        context: https://github.com/madiele/TwitchToPodcastRSS.git
+    image: madiele/twitch_to_podcast_rss
+    restart: unless-stopped
+    container_name: twitchToPodcastRSS
+    environment:
+        - TZ=Europe/London
+        - TWITCH_SECRET=<YOUR_SECRET>
+        - TWITCH_CLIENT_ID=<YOUR_CLIENT_ID>
+        - TRANSCODE=False
