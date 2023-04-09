@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   vod-to-podcast:
-    build: .
+    build:
+        context: https://github.com/madiele/VoDToPodcastRSS.git
+    image: madiele/vod-to-podcast
     depends_on:
       - redis
     restart: unless-stopped
