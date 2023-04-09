@@ -74,7 +74,12 @@ async fn transcodize_rss(
 
     let transcode_service_url = req.url_for("transcode_mp3", &[""]).unwrap();
 
-    let rss_transcodizer = RssTranscodizer::new(url.to_string(), transcode_service_url).await;
+    let parsed_url = match Url::parse(url) {
+        Ok(x) => x,
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+    };
+
+    let rss_transcodizer = RssTranscodizer::new(parsed_url, transcode_service_url).await;
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,
