@@ -20,5 +20,7 @@ jobs:
       run: cargo build --verbose
     - name: install ffmpeg
       run: sudo apt-get install ffmpeg
+    - name: install yt-dlp
+      run: python3 -m pip install -U yt-dlp
     - name: Run tests
       run: cargo test --verbose

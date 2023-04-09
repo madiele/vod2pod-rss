@@ -6,7 +6,7 @@ use serde::Deserialize;
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
 use vod_to_podcast_rss::{
-    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer,
+    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert,
 };
 
 
@@ -79,7 +79,12 @@ async fn transcodize_rss(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    let rss_transcodizer = RssTranscodizer::new(parsed_url, transcode_service_url).await;
+    let converted_url = match url_convert::from(parsed_url).to_feed_url().await {
+        Ok(x) => x,
+        Err(e) => {error!("fail when trying to convert channel {e}"); return HttpResponse::BadRequest().body(e.to_string())},
+    };
+
+    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url).await;
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,

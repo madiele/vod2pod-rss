@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::info;
 use reqwest::Url;
 use tokio::process::Command;
 use cached::{proc_macro::io_cached, AsyncRedisCache};
@@ -25,11 +26,13 @@ struct TwitchUrl {
 #[async_trait]
 impl ConvertableToFeed for TwitchUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
+        info!("trying to convert twitch channel url {}", self.url);
         let username = self.url.path_segments().ok_or_else(|| eyre::eyre!("Unable to get path segments"))?.last().ok_or_else(|| eyre::eyre!("Unable to get last path segment"))?;
-        let mut url = Url::parse(&format!("{}{}", std::env::var("TWITCH_TO_PODCAST_URL")?, "/vod/")).map_err(|err| eyre::eyre!(err))?;
-        url.path_segments_mut().map_err(|_| eyre::eyre!("Unable to get mutable path segments"))?.push(username);
-        url.query_pairs_mut().append_pair("transcode", "false");
-        Ok(url)
+        let mut feed_url = Url::parse(&format!("{}{}", std::env::var("TWITCH_TO_PODCAST_URL")?, "/vod/")).map_err(|err| eyre::eyre!(err))?;
+        feed_url.path_segments_mut().map_err(|_| eyre::eyre!("Unable to get mutable path segments"))?.push(username);
+        feed_url.query_pairs_mut().append_pair("transcode", "false");
+        info!("converted to {feed_url}");
+        Ok(feed_url)
     }
 
     fn is(&self) -> &str { "TwitchUrl" }
@@ -57,6 +60,7 @@ io_cached(
 } "##
 ))]
 async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
+    info!("conversion not in cache, using yt-dlp for conversion...");
     let output = Command::new("yt-dlp")
         .arg("--playlist-items")
         .arg("0")
@@ -72,10 +76,12 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
 #[async_trait]
 impl ConvertableToFeed for YoutubeUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
+        info!("trying to convert youtube channel url {}", self.url);
         let url_with_channel_id = find_yt_channel_url_with_c_id(&self.url).await?;
         let channel_id = url_with_channel_id.path_segments().unwrap().last().unwrap();
         let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml")?;
         feed_url.query_pairs_mut().append_pair("channel_id", channel_id);
+        info!("converted to {feed_url}");
         Ok(feed_url)
     }
     fn is(&self) -> &str { "YoutubeUrl" }
@@ -88,6 +94,7 @@ struct GenericUrl {
 #[async_trait]
 impl ConvertableToFeed for GenericUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
+        info!("generic feed detected no need for conversion");
         Ok(self.url.to_owned())
     }
 
