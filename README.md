@@ -82,7 +82,7 @@ edit with PORT,SECRET and CLIENT_ID
 
 `git clone https://github.com/madiele/VoDToPodcastRSS.git`
 
-`cd TwitchToPodcastRSS`
+`cd VoDToPodcastRSS`
 
 `docker build -t VoDToPodcastRSS .`
 
