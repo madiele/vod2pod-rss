@@ -290,7 +290,7 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         itunes_builder.duration(Some(duration_string));
         let mut transcode_service_url = transcode_service_url;
         let bitrate: u64 = std::env::var("BITRATE")
-            .unwrap_or_else(|_| "128".to_string())
+            .unwrap_or_else(|_| "192".to_string())
             .parse()
             .expect("BITRATE must be a number");
         let generation_uuid  = uuid::Uuid::new_v4().to_string();

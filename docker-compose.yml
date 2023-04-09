@@ -7,14 +7,15 @@ services:
       - redis
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "80:8080"
     environment:
-      - REDIS_ADDRESS=redis
-      - REDIS_PORT=6379
-      - BITRATE=128
-      - RUST_LOG=INFO
-      - TWITCH_TO_PODCAST_URL=ttprss
-      - TRANSCODE=true
+      - TZ=Europe/London #set if you want the logs to have you timezone
+      - BITRATE=192 #bitrate in kilobits of the mp3 transcode
+      - TRANSCODE=true #put to false if you only need feed generation
+      - RUST_LOG=INFO #set to DEBUG if you are having problems than open a github issue with the logs, use "sudo docker compose logs" to print them
+      - TWITCH_TO_PODCAST_URL=ttprss #don't edit this
+      - REDIS_ADDRESS=redis #don't edit this
+      - REDIS_PORT=6379 #don't edit this
 
   redis:
     image: "redis:6.2"
