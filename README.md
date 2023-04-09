@@ -68,28 +68,6 @@ then run this to delete the old version form your system (note: this will also d
 
 `sudo docker system prune`
 
-### pull the precompiled image from hub.docker.com
-  
-  `docker pull madiele/vod-to-podcas:latest`
-
-edit with PORT,SECRET and CLIENT_ID
-
-  `sudo docker run -d --restart always -p <PORT>:80 -e TWITCH_SECRET="<YOUR_SECRET>" -e TWITCH_CLIENT_ID="<YOUR_CLIENT_ID>" madiele/vod-to-podcas:latest`
-  
-  to update kill and delete the running container and run the same commands
-
-### build it yourself (this will take a while)
-
-`git clone https://github.com/madiele/VoDToPodcastRSS.git`
-
-`cd VoDToPodcastRSS`
-
-`docker build -t VoDToPodcastRSS .`
-
-edit with PORT,SECRET and CLIENT_ID
-
-`sudo docker run -d --restart always -p <PORT>:80 -e TWITCH_SECRET="<YOUR_SECRET>" -e TWITCH_CLIENT_ID="<YOUR_CLIENT_ID>" VoDToPodcastRSS`
-
 ## Configuration
 
 You can set the following environment variables:
