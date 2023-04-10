@@ -1,7 +1,0 @@
-application_port: 8888
-database:
-  host: "localhost"
-  port: 5432
-  username: "postgres"
-  password: "postgres"
-  database_name: "VoDToPodcastRSS_dev"
