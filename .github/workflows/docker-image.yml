@@ -64,7 +64,7 @@ jobs:
             file: ./Dockerfile
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}
-            platforms: linux/amd64,linux/arm64,linux/arm/v7
+            platforms: linux/amd64,linux/arm64
   push_to_Docker_Hub_arm_v7:
       needs: cargo_version_bump
       runs-on: ubuntu-latest
