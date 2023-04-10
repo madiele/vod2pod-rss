@@ -66,5 +66,5 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:$VERSION
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{VERSION}}
             platforms: linux/amd64,linux/arm64
