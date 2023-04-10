@@ -33,9 +33,9 @@ jobs:
           git push origin HEAD --follow-tags
           git fetch
           git checkout main
-          git merge release
+          git merge stable
           git push origin HEAD --follow-tags
-          git checkout release
+          git checkout stable
 
   push_to_Docker_Hub:
       # The type of runner that the job will run on
