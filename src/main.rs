@@ -17,6 +17,9 @@ async fn main() -> std::io::Result<()> {
     if !root.starts_with('/') {
         root.insert(0, '/');
     }
+    if !root.ends_with('/') {
+        root.push('/');
+    }
 
     flush_redis_on_new_version().await.unwrap();
     HttpServer::new(move || {
@@ -26,7 +29,7 @@ async fn main() -> std::io::Result<()> {
                     .name("transcode_mp3")
                     .guard(guard::Get())
                     .to(transcode))
-                .route("/transcodize_rss", web::get().to(transcodize_rss))
+                .route("transcodize_rss", web::get().to(transcodize_rss))
                 .route("", web::get().to(index))
             )
     })
