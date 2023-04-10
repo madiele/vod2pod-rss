@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 name: deploy to dockerhub
-# Controls when the action will run. 
+# Controls when the action will run.
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
@@ -10,6 +10,32 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  cargo_version_bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Bump patch version
+        run: |
+          # Get the current version
+          VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+          # Bump the minor version
+          NEW_VERSION=$(echo $VERSION | awk -F "." '{print $1"."$2"."($3+1)}')
+          echo "NEW_VERSION=${NEW_VERSION}" >> $GITHUB_ENV
+          # Replace the old version with the new version
+          sed -i "s/^version = \"$VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+        shell: bash
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a v$NEW_VERSION -m "Bump minor version to $NEW_VERSION"
+          git commit -a -m "Bump minor version to $NEW_VERSION"
+          git push origin HEAD --follow-tags
+          git checkout main
+          git merge release
+          git push origin HEAD --follow-tags
+          git checkout release
+
   push_to_Docker_Hub:
       # The type of runner that the job will run on
       runs-on: ubuntu-latest
@@ -18,6 +44,11 @@ jobs:
       steps:
         - name: checkout repo
           uses: actions/checkout@v3
+        - name: Bump patch version
+          run: |
+            # Get the current version
+            VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v2
         - name: Set up Docker Buildx
@@ -33,5 +64,5 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${VERSION}
             platforms: linux/amd64,linux/arm64

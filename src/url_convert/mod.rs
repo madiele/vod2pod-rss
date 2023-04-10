@@ -81,6 +81,9 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
 impl ConvertableToFeed for YoutubeUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
         info!("trying to convert youtube channel url {}", self.url);
+        if self.url.to_string().contains("feeds/videos.xml") {
+            return Ok(self.url.to_owned());
+        }
         let url_with_channel_id = find_yt_channel_url_with_c_id(&self.url).await?;
         let channel_id = url_with_channel_id.path_segments().unwrap().last().unwrap();
         let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml")?;
@@ -139,6 +142,16 @@ mod tests {
     #[tokio::test]
     async fn test_youtube_to_feed() {
         let url = "https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw";
+        println!("{:?}", url);
+        let channel = YoutubeUrl { url: Url::parse(url).unwrap() };
+        let feed_url = channel.to_feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+    }
+
+    #[tokio::test]
+    async fn test_youtube_to_feed_already_atom_feed() {
+        let url = "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw";
         println!("{:?}", url);
         let channel = YoutubeUrl { url: Url::parse(url).unwrap() };
         let feed_url = channel.to_feed_url().await.unwrap();
