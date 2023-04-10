@@ -19,23 +19,95 @@
         }
     </style>
 </head>
+
 <body>
-<div class="container">
+  <div class="container">
     <h1 class="text-center mb-4">VoDToPodcastRSS</h1>
     <div class="input-group mb-3">
-        <input type="text" class="form-control" id="channelUrl" placeholder="Enter YouTube or Twitch channel URL" aria-describedby="generateButton">
-        <button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()">Generate RSS</button>
+      <input type="text" class="form-control" id="channelUrl" placeholder="Enter YouTube or Twitch channel URL" aria-describedby="generateButton">
+      <button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()">Generate RSS</button>
     </div>
     <div class="input-group mb-3">
-        <input type="text" class="form-control" id="rssUrl" placeholder="Generated RSS URL" readonly>
-<button class="btn btn-secondary" type="button" id="copyButton" onclick="copyToClipboard()" style="width: 100px;">Copy URL</button>
+      <input type="text" class="form-control" id="rssUrl" placeholder="Generated RSS URL" readonly>
+      <button class="btn btn-secondary" type="button" id="copyButton" onclick="copyToClipboard()" style="width: 100px;">Copy URL</button>
     </div>
+    <div class="rss-preview-container" style="display: none;">
+      <h2 class="text-center mb-4">RSS Feed Preview</h2>
+      <div id="rssPreviewContent"></div>
+    </div>
+  </div>
+  <script>
+    async function generateRSSURL() {
+      const channelUrl = document.getElementById("channelUrl").value;
+      const rssUrl = `${window.location.origin}/transcodize_rss?url=${channelUrl}`;
+      document.getElementById("rssUrl").value = rssUrl;
+      await displayRSSPreview(rssUrl);
+    }
+
+    async function displayRSSPreview(url) {
+
+      const rssPreviewContainer = document.querySelector('.rss-preview-container');
+      const rssPreviewContent = document.getElementById('rssPreviewContent');
+
+      // Show loading screen
+      rssPreviewContent.innerHTML = '<div class="loading-screen">Loading preview...</div>';
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        rssPreviewContent.innerHTML = `
+<div class="alert alert-danger" role="alert">
+  Error: ${response.status} ${response.statusText}
 </div>
-<script>
-    function generateRSSURL() {
-        const channelUrl = document.getElementById("channelUrl").value;
-        const rssUrl = `${window.location.origin}/transcodize_rss?url=${channelUrl}`;
-        document.getElementById("rssUrl").value = rssUrl;
+<pre>${await response.text()}</pre>`;
+      rssPreviewContainer.style.display = 'block';
+        return;
+      } else {
+        const xmlText = await response.text();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        rssPreviewContent.innerHTML = '';
+      }
+
+      const items = xmlDoc.getElementsByTagName("item");
+
+      for (let i = 0; i < items.length; i++) {
+        const title = items[i].getElementsByTagName("title")[0] ? items[i].getElementsByTagName("title")[0].textContent : "No Title";
+        const link = items[i].getElementsByTagName("enclosure")[0] ? items[i].getElementsByTagName("enclosure")[0].attributes.getNamedItem("url").value : "#";
+
+        const itemDiv = document.createElement('div');
+        itemDiv.classList.add('rss-item');
+        itemDiv.style.display = 'flex';
+        itemDiv.style.justifyContent = 'space-between';
+        itemDiv.style.alignItems = 'center';
+
+        const mediaElement = document.createElement('audio');
+        mediaElement.src = link;
+        mediaElement.autoplay = false;
+        itemDiv.appendChild(mediaElement);
+
+        const itemTitle = document.createElement('h3');
+        itemTitle.textContent = title;
+
+        const itemButton = document.createElement('button');
+        itemButton.classList.add('btn', 'btn-primary');
+        itemButton.innerHTML = "&#9658;"; // play emoji
+        itemButton.onclick = () => {
+          const mediaElement = itemDiv.getElementsByTagName('audio')[0];
+          if (mediaElement.paused) {
+            mediaElement.play();
+            itemButton.innerHTML = "&#10074;&#10074;"; // pause emoji
+          } else {
+            mediaElement.pause();
+            itemButton.innerHTML = "&#9658;"; // play emoji
+          }
+        };
+
+        itemDiv.appendChild(itemTitle);
+        itemDiv.appendChild(itemButton);
+        rssPreviewContent.appendChild(itemDiv);
+      }
+
+      rssPreviewContainer.style.display = 'block';
     }
 
     function copyToClipboard() {
@@ -50,6 +122,7 @@
         button.innerHTML = 'Copy URL';
       }, 2000);
     }
-</script>
+  </script>
 </body>
+
 </html>
