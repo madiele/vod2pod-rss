@@ -22,7 +22,9 @@ This is a passion project, and mostly made for personal use, but if you want to 
 
 # Usage
 
-When you host this, just add `/transcodize_rss?url=channel_url` to your server path, and an RSS will be generated. Replace `channel_url` with the URL of the YouTube or Twitch channel you want to convert into a podcast.
+Just go to the root of the server es: `myserver.com` and paste the channel you want to convert to podcast and copy the generated link.
+
+you can also build the url manually just add `/transcodize_rss?url=channel_url` to your server path, and an RSS will be generated. Replace `channel_url` with the URL of the YouTube or Twitch channel you want to convert into a podcast.
 
 Example youtube: `myserver.com/transcodize_rss?url=https://www.youtube.com/c/channelname`
 

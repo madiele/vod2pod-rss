@@ -29,7 +29,7 @@ services:
       timeout: 3s
       retries: 5
 
-  ttprss: # you can remove this section and save some storaga if you don't need twitch
+  ttprss: # you can remove this section and save some storage if you don't need twitch
     build:
         context: https://github.com/madiele/TwitchToPodcastRSS.git
     image: madiele/twitch_to_podcast_rss
