@@ -31,6 +31,7 @@ jobs:
           git tag -a v$NEW_VERSION -m "Bump minor version to $NEW_VERSION"
           git commit -a -m "Bump minor version to $NEW_VERSION"
           git push origin HEAD --follow-tags
+          git fetch
           git checkout origin/main
           git merge release
           git push origin HEAD --follow-tags
