@@ -39,4 +39,4 @@ services:
         - TZ=Europe/London
         - TWITCH_SECRET=<YOUR_SECRET>
         - TWITCH_CLIENT_ID=<YOUR_CLIENT_ID>
-        - TRANSCODE=False
+        - TRANSCODE=False #keep this to false, the vod-to-podcast is what really matters
