@@ -13,7 +13,7 @@ jobs:
   cargo_version_bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Bump patch version
         run: |
           # Get the current version
@@ -28,8 +28,8 @@ jobs:
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a v$NEW_VERSION -m "Bump minor version to $NEW_VERSION"
-          git commit -a -m "Bump minor version to $NEW_VERSION"
+          git tag -a v$NEW_VERSION -m "Bump patch version to $NEW_VERSION"
+          git commit -a -m "Bump patch version to $NEW_VERSION"
           git push origin HEAD --follow-tags
           git fetch --unshallow
           git checkout main

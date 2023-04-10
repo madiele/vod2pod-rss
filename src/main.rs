@@ -57,8 +57,9 @@ async fn flush_redis_on_new_version() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn index() -> HttpResponse {
-    HttpResponse::Ok().body("server works")
+async fn index(_req: HttpRequest) -> HttpResponse {
+    let html = std::fs::read_to_string("./templates/index.html").unwrap();
+    HttpResponse::Ok().content_type("text/html").body(html)
 }
 
 async fn transcodize_rss(
