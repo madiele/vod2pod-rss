@@ -13,7 +13,7 @@ jobs:
   cargo_version_bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Bump patch version
         run: |
           # Get the current version
