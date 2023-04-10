@@ -32,7 +32,7 @@ jobs:
           git commit -a -m "Bump minor version to $NEW_VERSION"
           git push origin HEAD --follow-tags
           git fetch
-          git checkout main
+          git checkout main --unshallow
           git merge stable
           git push origin HEAD --follow-tags
           git checkout stable
