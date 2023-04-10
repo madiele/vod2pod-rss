@@ -30,4 +30,4 @@ jobs:
             git config --local user.name "GitHub Action"
             git tag -a v$NEW_VERSION -m "Bump minor version to $NEW_VERSION"
             git commit -a -m "Bump minor version to $NEW_VERSION"
-            git push origin HEAD:master --follow-tags
+            git push origin HEAD --follow-tags
