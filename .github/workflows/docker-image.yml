@@ -31,13 +31,14 @@ jobs:
           git tag -a v$NEW_VERSION -m "Bump minor version to $NEW_VERSION"
           git commit -a -m "Bump minor version to $NEW_VERSION"
           git push origin HEAD --follow-tags
-          git fetch
-          git checkout main --unshallow
+          git fetch --unshallow
+          git checkout main
           git merge stable
           git push origin HEAD --follow-tags
           git checkout stable
 
   push_to_Docker_Hub:
+      needs: cargo_version_bump
       # The type of runner that the job will run on
       runs-on: ubuntu-latest
       # build docker image and push to docker hub
@@ -65,5 +66,5 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${VERSION}
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:$VERSION
             platforms: linux/amd64,linux/arm64
