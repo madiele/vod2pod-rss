@@ -14,7 +14,7 @@ RUN cargo fetch
 RUN cargo build --release
 
 #----------
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg python3 curl libpcre2-dev ca-certificates && \
@@ -25,7 +25,8 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
     chmod a+rx /usr/local/bin/yt-dlp
 
 COPY --from=builder /usr/src/app/target/release/app /usr/local/bin/vod_to_podcast
-COPY --from=builder /lib /lib
+
+COPY templates/ ./templates/
 
 EXPOSE 8080
 
