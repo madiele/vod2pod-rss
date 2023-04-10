@@ -44,6 +44,11 @@ jobs:
       steps:
         - name: checkout repo
           uses: actions/checkout@v3
+        - name: Bump patch version
+          run: |
+            # Get the current version
+            VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v2
         - name: Set up Docker Buildx
@@ -59,5 +64,5 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${VERSION}
             platforms: linux/amd64,linux/arm64
