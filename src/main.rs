@@ -13,19 +13,22 @@ use vod_to_podcast_rss::{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
+    let mut root = std::env::var("SUBFOLDER").unwrap_or("/".to_string());
+    if !root.starts_with('/') {
+        root.insert(0, '/');
+    }
 
     flush_redis_on_new_version().await.unwrap();
     HttpServer::new(move || {
         App::new()
-            .route("/", web::get().to(index))
-            .service(
-                web
-                    ::resource("transcode_media/to_mp3")
+            .service(web::scope(&root)
+                .service(web::resource("transcode_media/to_mp3")
                     .name("transcode_mp3")
                     .guard(guard::Get())
-                    .to(transcode)
+                    .to(transcode))
+                .route("/transcodize_rss", web::get().to(transcodize_rss))
+                .route("", web::get().to(index))
             )
-            .route("/transcodize_rss", web::get().to(transcodize_rss))
     })
         .bind(("0.0.0.0", 8080))?
         .run().await

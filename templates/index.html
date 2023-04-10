@@ -46,7 +46,7 @@
   <script>
     async function generateRSSURL() {
       const channelUrl = document.getElementById("channelUrl").value;
-      const rssUrl = `${window.location.origin}/transcodize_rss?url=${channelUrl}`;
+      const rssUrl = `${window.location.href}/transcodize_rss?url=${channelUrl}`;
       document.getElementById("rssUrl").value = rssUrl;
       await displayRSSPreview(rssUrl);
     }
@@ -68,12 +68,11 @@
 <pre>${await response.text()}</pre>`;
         rssPreviewContainer.style.display = 'block';
         return;
-      } else {
-        const xmlText = await response.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        rssPreviewContent.innerHTML = '';
       }
+      const xmlText = await response.text();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+      rssPreviewContent.innerHTML = '';
 
       const items = xmlDoc.getElementsByTagName("item");
 
@@ -87,10 +86,6 @@
         itemDiv.style.justifyContent = 'space-between';
         itemDiv.style.alignItems = 'center';
 
-        const mediaElement = document.createElement('audio');
-        mediaElement.src = link;
-        mediaElement.autoplay = false;
-        itemDiv.appendChild(mediaElement);
 
         const itemTitle = document.createElement('h3');
         itemTitle.textContent = title;
@@ -99,7 +94,15 @@
         itemButton.classList.add('btn', 'btn-primary');
         itemButton.innerHTML = "&#9658;"; // play emoji
         itemButton.onclick = () => {
-          const mediaElement = itemDiv.getElementsByTagName('audio')[0];
+          var mediaElement;
+          if (itemDiv.getElementsByTagName('audio').length === 0) {
+            mediaElement = document.createElement('audio');
+            mediaElement.src = link;
+            mediaElement.autoplay = false;
+            itemDiv.appendChild(mediaElement);
+          } else {
+            mediaElement = itemDiv.getElementsByTagName('audio')[0];
+          }
           if (mediaElement.paused) {
             mediaElement.play();
             itemButton.innerHTML = "&#10074;&#10074;"; // pause emoji
