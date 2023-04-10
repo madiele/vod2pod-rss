@@ -1,7 +1,9 @@
 use std::fmt::Display;
 use std::time::Duration;
 
+#[allow(unused_imports)]
 use cached::AsyncRedisCache;
+#[allow(unused_imports)]
 use cached::proc_macro::io_cached;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;

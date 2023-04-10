@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use log::info;
 use reqwest::Url;
 use tokio::process::Command;
-use cached::{proc_macro::io_cached, AsyncRedisCache};
+#[allow(unused_imports)]
+use cached::AsyncRedisCache;
+#[allow(unused_imports)]
+use cached::proc_macro::io_cached;
 
 pub fn from(url: Url) -> Box<dyn ConvertableToFeed> {
     let url = url.to_owned();
@@ -16,7 +19,6 @@ pub fn from(url: Url) -> Box<dyn ConvertableToFeed> {
 #[async_trait]
 pub trait ConvertableToFeed {
     async fn to_feed_url(&self) -> eyre::Result<Url>;
-    fn is(&self) -> &str; //usefull for testing
 }
 
 struct TwitchUrl {
@@ -28,14 +30,16 @@ impl ConvertableToFeed for TwitchUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
         info!("trying to convert twitch channel url {}", self.url);
         let username = self.url.path_segments().ok_or_else(|| eyre::eyre!("Unable to get path segments"))?.last().ok_or_else(|| eyre::eyre!("Unable to get last path segment"))?;
-        let mut feed_url = Url::parse(&format!("{}{}", std::env::var("TWITCH_TO_PODCAST_URL")?, "/vod/")).map_err(|err| eyre::eyre!(err))?;
+        let mut ttprss_url = std::env::var("TWITCH_TO_PODCAST_URL")?;
+        if !ttprss_url.starts_with("http://") && !ttprss_url.starts_with("https://") {
+            ttprss_url = format!("http://{}", ttprss_url);
+        }
+        let mut feed_url = Url::parse(&format!("{}{}", ttprss_url, "/vod")).map_err(|err| eyre::eyre!(err))?;
         feed_url.path_segments_mut().map_err(|_| eyre::eyre!("Unable to get mutable path segments"))?.push(username);
         feed_url.query_pairs_mut().append_pair("transcode", "false");
         info!("converted to {feed_url}");
         Ok(feed_url)
     }
-
-    fn is(&self) -> &str { "TwitchUrl" }
 }
 
 
@@ -84,7 +88,6 @@ impl ConvertableToFeed for YoutubeUrl {
         info!("converted to {feed_url}");
         Ok(feed_url)
     }
-    fn is(&self) -> &str { "YoutubeUrl" }
 }
 
 struct GenericUrl {
@@ -97,44 +100,58 @@ impl ConvertableToFeed for GenericUrl {
         info!("generic feed detected no need for conversion");
         Ok(self.url.to_owned())
     }
-
-    fn is(&self) -> &str { "GenericUrl" }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_twitch_url_conversion() {
-        let url = Url::parse("https://www.twitch.tv/example").unwrap();
-        let convertable = from(url);
-        assert!(convertable.is() == "TwitchUrl");
+    #[tokio::test]
+    async fn test_twitch_to_feed() {
+        std::env::set_var("TWITCH_TO_PODCAST_URL", "ttprss");
+        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+        println!("{:?}", url);
+        let feed_url = from(url).to_feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
     }
 
-    #[test]
-    fn test_youtube_url_conversion() {
-        let url = Url::parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ").unwrap();
-        let convertable = from(url);
-        assert!(convertable.is() == "YoutubeUrl");
+    #[tokio::test]
+    async fn test_http_ttprss_twitch_to_feed() {
+        std::env::set_var("TWITCH_TO_PODCAST_URL", "http://ttprss");
+        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+        println!("{:?}", url);
+        let feed_url = from(url).to_feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+    }
 
-        let url = Url::parse("https://youtu.be/dQw4w9WgXcQ").unwrap();
-        let convertable = from(url);
-        assert!(convertable.is() == "YoutubeUrl");
+    #[tokio::test]
+    async fn test_ssl_ttprss_twitch_to_feed() {
+        std::env::set_var("TWITCH_TO_PODCAST_URL", "https://ttprss");
+        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+        println!("{:?}", url);
+        let feed_url = from(url).to_feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "https://ttprss/vod/andersonjph?transcode=false");
     }
 
     #[tokio::test]
     async fn test_youtube_to_feed() {
         let url = "https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw";
+        println!("{:?}", url);
         let channel = YoutubeUrl { url: Url::parse(url).unwrap() };
         let feed_url = channel.to_feed_url().await.unwrap();
+        println!("{:?}", feed_url);
         assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
     }
 
-    #[test]
-    fn test_generic_url_conversion() {
-        let url = Url::parse("https://example.com").unwrap();
-        let convertable = from(url);
-        assert!(convertable.is() == "GenericUrl");
+    #[tokio::test]
+    async fn test_generic_to_feed() {
+        let url = Url::parse("https://feeds.simplecast.com/aU_RzZ7j").unwrap();
+        println!("{:?}", url);
+        let feed_url = from(url).to_feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "https://feeds.simplecast.com/aU_RzZ7j");
     }
 }

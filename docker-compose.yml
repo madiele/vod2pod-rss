@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   vod-to-podcast:
-    build: .
+    build:
+        context: https://github.com/madiele/VoDToPodcastRSS.git
+    image: madiele/vod-to-podcast
     depends_on:
       - redis
     restart: unless-stopped
@@ -27,7 +29,7 @@ services:
       timeout: 3s
       retries: 5
 
-  ttprss:
+  ttprss: # you can remove this section and save some storaga if you don't need twitch
     build:
         context: https://github.com/madiele/TwitchToPodcastRSS.git
     image: madiele/twitch_to_podcast_rss
@@ -37,4 +39,4 @@ services:
         - TZ=Europe/London
         - TWITCH_SECRET=<YOUR_SECRET>
         - TWITCH_CLIENT_ID=<YOUR_CLIENT_ID>
-        - TRANSCODE=False
+        - TRANSCODE=False #keep this to false, the vod-to-podcast is what really matters
