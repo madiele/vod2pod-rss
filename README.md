@@ -73,6 +73,7 @@ You can set the following environment variables:
 
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
 - `BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
+- `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
 
 ## Donations
 
