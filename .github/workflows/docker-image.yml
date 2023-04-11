@@ -106,7 +106,7 @@ jobs:
             sudo systemctl restart docker
         - name: checkout repo
           uses: actions/checkout@v3
-        - name: Bump patch version
+        - name: get version
           run: |
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
@@ -128,18 +128,23 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-armv7
             platforms: linux/arm/v7
-  merge_into_latest:
+  merge_tags:
       needs: [push_to_Docker_Hub_arm64, push_to_Docker_Hub_arm_v7, push_to_Docker_Hub_amd64]
       runs-on: ubuntu-latest
       steps:
+        - name: checkout repo
+          uses: actions/checkout@v3
+        - name: get version
+          run: |
+            # Get the current version
+            VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
         - name: Login to DockerHub
           uses: docker/login-action@v2
           with:
             username: ${{ secrets.DOCKERHUB_USERNAME }}
             password: ${{ secrets.DOCKERHUB_TOKEN }}
-        - name: Create and push manifest images
-          uses: Noelware/docker-manifest-action@v0.3
-          with:
-            inputs: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest
-            images: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-arm64,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-amd64
-            push: true
+        - name: merge into latest
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-amd64
+        - name: merge into versio
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }} ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-amd64
