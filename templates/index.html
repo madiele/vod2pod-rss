@@ -12,10 +12,39 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #f8f9fa;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            transition: background-color 0.5s ease;
+        }
+        body.dark-mode {
+            background-color: #c9d1d9;
+            color: #0d1117;
         }
         .container {
             max-width: 480px;
+            background-color: #161b22;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .container.dark-mode {
+            background-color: #c9d1d9;
+            color: #0d1117;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .form-control {
+          background-color: #2d2d2d;
+          color: #fff;
+          border: 1px solid #555;
+        }
+        .form-control:focus {
+          background-color: #2d2d2d;
+          color: #fff;
+          border: 1px solid #555;
+        }
+        #rssUrl {
+          background-color: #2b2b2b;
+          color: rgba(217, 217, 217, 0.5);
         }
     </style>
 </head>
