@@ -46,7 +46,7 @@
   <script>
     async function generateRSSURL() {
       const channelUrl = document.getElementById("channelUrl").value;
-      const rssUrl = `${window.location.href}/transcodize_rss?url=${channelUrl}`;
+      const rssUrl = `${window.location.href}transcodize_rss?url=${channelUrl}`;
       document.getElementById("rssUrl").value = rssUrl;
       await displayRSSPreview(rssUrl);
     }

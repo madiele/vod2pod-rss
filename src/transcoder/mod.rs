@@ -10,6 +10,7 @@ use actix_web::web::Bytes;
 use cached::proc_macro::io_cached;
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
+use log::info;
 use log::{ debug, error, warn };
 use reqwest::Url;
 use serde::Serialize;
@@ -92,6 +93,7 @@ impl Transcoder {
     pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
         let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
         let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
+            info!("detected youtube url, need to find the stream url if not in cache");
             Self::get_ffmpeg_command(&FfmpegParameters {
                 seek_time: ffmpeg_paramenters.seek_time,
                 url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
@@ -107,6 +109,7 @@ impl Transcoder {
     }
 
     fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
+        debug!("generating ffmpeg command");
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
         command_ref
@@ -120,8 +123,8 @@ impl Transcoder {
             .args(["-timeout", "300"])
             .args(["pipe:stdout"]);
         let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
-        debug!(
-            "running ffmpeg with command:\n{} {}",
+        info!(
+            "generated ffmpeg command:\n{} {}",
             command_ref.get_program().to_string_lossy(),
             args.join(" ")
         );
@@ -146,6 +149,7 @@ impl Transcoder {
 
             //reap all zombie childs
             unsafe {
+                debug!("list of running childs:\n{:?}", RUNNING_CHILDS);
                 let _statuses: Vec<ExitStatus> = RUNNING_CHILDS.iter_mut().filter_map(|child: &mut Child| {
                     if let Ok(Some(status)) = child.try_wait() {
                         RUNNING_CHILDS.retain(|x| x.id() != child.id());
@@ -158,6 +162,7 @@ impl Transcoder {
                 RUNNING_CHILDS.push(child);
             }
 
+            info!("streaming to client");
             let mut total_bytes_read: usize = 0;
             let mut buff: [u8; 1024] = [0; 1024];
             let mut tries = 0;

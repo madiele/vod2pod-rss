@@ -1,5 +1,5 @@
-use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
-use log::{ error, debug, info };
+use actix_web::{ middleware, HttpServer, web, App, HttpResponse, guard, HttpRequest };
+use log::{ error, debug, info, warn };
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
@@ -13,23 +13,29 @@ use vod_to_podcast_rss::{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
-    let mut root = std::env::var("SUBFOLDER").unwrap_or("/".to_string());
+    let mut root = std::env::var("SUBFOLDER").unwrap_or("".to_string());
     if !root.starts_with('/') {
         root.insert(0, '/');
     }
-    if !root.ends_with('/') {
-        root.push('/');
+    while root.ends_with('/') {
+        root.pop();
     }
 
-    flush_redis_on_new_version().await.unwrap();
+    if let Err(err) = flush_redis_on_new_version().await {
+        panic!("Error interacting with Redis (redis is required): {:?}", err);
+    }
+
+    info!("starting server at http://0.0.0.0:8080{}", root);
     HttpServer::new(move || {
         App::new()
+            .wrap(middleware::NormalizePath::new(middleware::TrailingSlash::MergeOnly))
             .service(web::scope(&root)
                 .service(web::resource("transcode_media/to_mp3")
                     .name("transcode_mp3")
                     .guard(guard::Get())
                     .to(transcode))
                 .route("transcodize_rss", web::get().to(transcodize_rss))
+                .route("/", web::get().to(index))
                 .route("", web::get().to(index))
             )
     })
@@ -44,7 +50,7 @@ async fn flush_redis_on_new_version() -> eyre::Result<()> {
     info!("app version {app_version}");
 
     let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
-    let mut con = client.get_tokio_connection().await.unwrap();
+    let mut con = client.get_tokio_connection().await?;
 
     let cached_version : Option<String> = redis::cmd("GET").arg("version").query_async(&mut con).await?;
     debug!("cached app version {:?}", cached_version);
@@ -63,7 +69,11 @@ async fn flush_redis_on_new_version() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn index(_req: HttpRequest) -> HttpResponse {
+async fn index(req: HttpRequest) -> HttpResponse {
+    if let (Some(user_agent), Some(remote_addr), Some(referer)) = (req.headers().get("User-Agent"), req.connection_info().peer_addr(), req.headers().get("Referer")) {
+        info!("serving homepage - User-Agent: {}, Remote Address: {}, Referer: {}", user_agent.to_str().unwrap(), remote_addr.to_string(), referer.to_str().unwrap());
+    }
+
     let html = std::fs::read_to_string("./templates/index.html").unwrap();
     HttpResponse::Ok().content_type("text/html").body(html)
 }
