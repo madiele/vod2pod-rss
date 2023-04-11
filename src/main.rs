@@ -1,4 +1,4 @@
-use actix_web::{ HttpServer, web, App, HttpResponse, guard, HttpRequest };
+use actix_web::{ middleware, HttpServer, web, App, HttpResponse, guard, HttpRequest };
 use log::{ error, debug, info, warn };
 use regex::Regex;
 use reqwest::Url;
@@ -13,7 +13,7 @@ use vod_to_podcast_rss::{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
-    let mut root = std::env::var("SUBFOLDER").unwrap_or("/".to_string());
+    let mut root = std::env::var("SUBFOLDER").unwrap_or("".to_string());
     if !root.starts_with('/') {
         root.insert(0, '/');
     }
@@ -22,11 +22,13 @@ async fn main() -> std::io::Result<()> {
     }
 
     if let Err(err) = flush_redis_on_new_version().await {
-        warn!("Error occurred while flushing Redis: {:?}", err);
+        panic!("Error interacting with Redis (redis is required): {:?}", err);
     }
+
     info!("starting server at http://0.0.0.0:8080{}", root);
     HttpServer::new(move || {
         App::new()
+            .wrap(middleware::NormalizePath::new(middleware::TrailingSlash::MergeOnly))
             .service(web::scope(&root)
                 .service(web::resource("transcode_media/to_mp3")
                     .name("transcode_mp3")
