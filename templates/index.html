@@ -58,6 +58,7 @@
 
       // Show loading screen
       rssPreviewContent.innerHTML = '<div class="loading-screen">Loading preview...</div>';
+      rssPreviewContainer.style.display = 'block';
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -66,7 +67,6 @@
   Error: ${response.status} ${response.statusText}
 </div>
 <pre>${await response.text()}</pre>`;
-        rssPreviewContainer.style.display = 'block';
         return;
       }
       const xmlText = await response.text();
@@ -97,17 +97,24 @@
           var mediaElement;
           if (itemDiv.getElementsByTagName('audio').length === 0) {
             mediaElement = document.createElement('audio');
-            mediaElement.src = link;
             mediaElement.autoplay = false;
             itemDiv.appendChild(mediaElement);
           } else {
             mediaElement = itemDiv.getElementsByTagName('audio')[0];
           }
           if (mediaElement.paused) {
+            var playtime = Math.round(mediaElement.currentTime);
+            mediaElement.src = link + "#t=" + playtime;
+            mediaElement.load();
             mediaElement.play();
             itemButton.innerHTML = "&#10074;&#10074;"; // pause emoji
           } else {
             mediaElement.pause();
+            var tmp_src = mediaElement.src;
+            var playtime = mediaElement.currentTime;
+            mediaElement.src = '';
+            mediaElement.load();
+            mediaElement.currentTime = playtime;
             itemButton.innerHTML = "&#9658;"; // play emoji
           }
         };
@@ -116,8 +123,6 @@
         itemDiv.appendChild(itemButton);
         rssPreviewContent.appendChild(itemDiv);
       }
-
-      rssPreviewContainer.style.display = 'block';
     }
 
     function copyToClipboard() {

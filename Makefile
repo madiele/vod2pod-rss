@@ -6,3 +6,6 @@ test-watch:
 
 run:
 	RUST_LOG=info cargo run
+
+hot-reload:
+	cargo watch -x run
