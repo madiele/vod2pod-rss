@@ -2,7 +2,7 @@
 
 Converts a YouTube or Twitch channel into a full-blown podcast.
 
-<a label="example of it working with podcast addict" href="url"><img src="https://user-images.githubusercontent.com/4585690/129647659-b3bec66b-4cbb-408c-840c-9596f0c32dc2.jpg" align="left" height="400" ></a>
+<a label="example of it working with podcast addict" href="url"><img src="https://user-images.githubusercontent.com/4585690/231301791-2f838fb3-4f6e-4382-bac4-c968bfe98c08.png" align="left" height="350" ></a>
 
 ## Features:
 
@@ -13,16 +13,13 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 ## Known issues:
 
 - First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
-
-## Donations
-
-This is a passion project, and mostly made for personal use, but if you want to gift a pizza margherita, feel free!
-
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/madiele)
+- Youtube channel avatar is missing (https://github.com/madiele/VoDToPodcastRSS/issues/26)
 
 # Usage
 
+<a label="frontend" href="url"><img src="https://user-images.githubusercontent.com/4585690/231298488-c561974a-d4db-49ab-a971-de30054e1711.png" align="right" height="250" ></a>
 Just go to the root of the server es: `myserver.com` and paste the channel you want to convert to podcast and copy the generated link.
+
 
 you can also build the url manually just add `/transcodize_rss?url=channel_url` to your server path, and an RSS will be generated. Replace `channel_url` with the URL of the YouTube or Twitch channel you want to convert into a podcast.
 
@@ -76,6 +73,13 @@ You can set the following environment variables:
 
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
 - `BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
+- `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
+
+## Donations
+
+This is a passion project, and mostly made for personal use, but if you want to gift a pizza margherita, feel free!
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/madiele)
 
 # Contributing
 

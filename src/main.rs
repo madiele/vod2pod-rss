@@ -1,5 +1,5 @@
 use actix_web::{ middleware, HttpServer, web, App, HttpResponse, guard, HttpRequest };
-use log::{ error, debug, info, warn };
+use log::{ error, debug, info };
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;

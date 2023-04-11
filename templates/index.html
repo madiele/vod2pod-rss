@@ -12,10 +12,39 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #f8f9fa;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            transition: background-color 0.5s ease;
+        }
+        body.dark-mode {
+            background-color: #c9d1d9;
+            color: #0d1117;
         }
         .container {
             max-width: 480px;
+            background-color: #161b22;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .container.dark-mode {
+            background-color: #c9d1d9;
+            color: #0d1117;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .form-control {
+          background-color: #2d2d2d;
+          color: #fff;
+          border: 1px solid #555;
+        }
+        .form-control:focus {
+          background-color: #2d2d2d;
+          color: #fff;
+          border: 1px solid #555;
+        }
+        #rssUrl {
+          background-color: #2b2b2b;
+          color: rgba(217, 217, 217, 0.5);
         }
     </style>
 </head>
@@ -24,8 +53,8 @@
   <div class="container">
 <h1 class="text-center mb-4">VoDToPodcastRSS</h1>
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="channelUrl" placeholder="Enter YouTube or Twitch channel URL" aria-describedby="generateButton">
-      <button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()">Generate RSS</button>
+      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube or Twitch channel URL" aria-describedby="generateButton">
+<button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()" >Generate RSS</button>
     </div>
     <div class="input-group mb-3">
       <input type="text" class="form-control" id="rssUrl" placeholder="Generated RSS URL" readonly>
@@ -58,6 +87,7 @@
 
       // Show loading screen
       rssPreviewContent.innerHTML = '<div class="loading-screen">Loading preview...</div>';
+      rssPreviewContainer.style.display = 'block';
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -66,7 +96,6 @@
   Error: ${response.status} ${response.statusText}
 </div>
 <pre>${await response.text()}</pre>`;
-        rssPreviewContainer.style.display = 'block';
         return;
       }
       const xmlText = await response.text();
@@ -97,17 +126,24 @@
           var mediaElement;
           if (itemDiv.getElementsByTagName('audio').length === 0) {
             mediaElement = document.createElement('audio');
-            mediaElement.src = link;
             mediaElement.autoplay = false;
             itemDiv.appendChild(mediaElement);
           } else {
             mediaElement = itemDiv.getElementsByTagName('audio')[0];
           }
           if (mediaElement.paused) {
+            var playtime = Math.round(mediaElement.currentTime);
+            mediaElement.src = link + "#t=" + playtime;
+            mediaElement.load();
             mediaElement.play();
             itemButton.innerHTML = "&#10074;&#10074;"; // pause emoji
           } else {
             mediaElement.pause();
+            var tmp_src = mediaElement.src;
+            var playtime = mediaElement.currentTime;
+            mediaElement.src = '';
+            mediaElement.load();
+            mediaElement.currentTime = playtime;
             itemButton.innerHTML = "&#9658;"; // play emoji
           }
         };
@@ -116,8 +152,6 @@
         itemDiv.appendChild(itemButton);
         rssPreviewContent.appendChild(itemDiv);
       }
-
-      rssPreviewContainer.style.display = 'block';
     }
 
     function copyToClipboard() {
