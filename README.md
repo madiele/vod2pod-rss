@@ -1,4 +1,4 @@
-# vod2pod-rss [![tests](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml)
+# vod2pod-rss [![tests](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml)
 
 Converts a YouTube or Twitch channel into a full-blown podcast.
 
@@ -13,7 +13,7 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 ## Known issues:
 
 - First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
-- Youtube channel avatar is missing (https://github.com/madiele/VoDToPodcastRSS/issues/26)
+- Youtube channel avatar is missing (https://github.com/madiele/vod2pod-rss/issues/26)
 
 # Usage
 
@@ -44,9 +44,9 @@ images for raspberry pis 64bit are included
 
 ### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image (easiest)
 
-`git clone https://github.com/madiele/VoDToPodcastRSS.git`
+`git clone https://github.com/madiele/vod2pod-rss.git`
 
-`cd VoDToPodcastRSS`
+`cd vod2pod-rss`
 
 edit `docker-compose.yml` with your PORT, SECRET and CLIENT_ID
 (in the file you will find also optional parameters like bitrate)
