@@ -1,4 +1,4 @@
-# VoDToPodcastRSS [![tests](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml)
+# vod2pod-rss [![tests](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml)
 
 Converts a YouTube or Twitch channel into a full-blown podcast.
 
