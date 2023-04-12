@@ -9,6 +9,7 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 - Completely converts the VoDs into a proper podcast RSS that can be listened to directly inside the client.
 - The VoDs are not downloaded on the server, so no need for storage while self-hosting this app.
 - VoDs are transcoded to MP3 192k on the fly by default, tested to be working flawlessly even on a Raspberry Pi 3-4.
+- also work on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
 
 ## Known issues:
 
