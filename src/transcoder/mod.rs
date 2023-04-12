@@ -1,5 +1,3 @@
-use std::process::Child;
-use std::process::ExitStatus;
 use std::str::FromStr;
 use std::{ error::Error, time::Duration };
 use std::{io::Read, process::{ Command, Stdio }};
@@ -14,9 +12,9 @@ use log::info;
 use log::{ debug, error, warn };
 use reqwest::Url;
 use serde::Serialize;
-
-//const PID_TABLE: &str = "active_transcodes";
-static mut RUNNING_CHILDS: Vec<Child> = Vec::new();
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::channel;
 
 
 #[derive(Serialize)]
@@ -121,6 +119,8 @@ impl Transcoder {
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["-timeout", "300"])
+            .args(["-hide_banner"])
+            .args(["-loglevel", "error"])
             .args(["pipe:stdout"]);
         let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
         info!(
@@ -141,57 +141,102 @@ impl Transcoder {
         ) {
             let mut child = command
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()
                 .expect("failed to run commnad");
 
+            let mut err = child.stderr.take().expect("failed to open stderr");
             let mut out = child.stdout.take().expect("failed to open stdout");
 
-            //reap all zombie childs
-            unsafe {
-                debug!("list of running childs:\n{:?}", RUNNING_CHILDS);
-                let _statuses: Vec<ExitStatus> = RUNNING_CHILDS.iter_mut().filter_map(|child: &mut Child| {
-                    if let Ok(Some(status)) = child.try_wait() {
-                        RUNNING_CHILDS.retain(|x| x.id() != child.id());
-                        debug!("child {} reaped with {status}", child.id());
-                        Some(status)
-                    } else {
-                        None
-                    }
-                }).collect();
-                RUNNING_CHILDS.push(child);
-            }
+            let channel_size: usize = 10;
+            let (tx, mut rx): (Sender<Result<Bytes, std::io::Error>>,
+                                    Receiver<Result<Bytes, std::io::Error>>) = channel(channel_size);
 
-            info!("streaming to client");
-            let mut total_bytes_read: usize = 0;
-            let mut buff: [u8; 1024] = [0; 1024];
-            let mut tries = 0;
-            loop {
-                match out.read(&mut buff) {
-                    Ok(read_bytes) => {
+            let tx_stdout = tx.clone();
+            let tx_stderr = tx;
 
-                        if read_bytes == 0 {
-                            debug!("reached EOF; read {total_bytes_read} bytes");
+            //stderr thread
+            std::thread::spawn(move || {
+                loop {
+                    let mut buf = String::new();
+                    match err.read_to_string(&mut buf) {
+                        Ok(0) => {
+                            debug!("ffmpeg stderr closed");
+                            break;
+                        },
+                        Ok(_) => {
+                            error!("{}", buf);
+                            let _ = tx_stderr.blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, buf)));
+                        },
+                        Err(e) => {
+                            error!("failed to read from stderr: {}", e);
+                            let _ = tx_stderr.blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, e)));
                             break;
                         }
-                        total_bytes_read += read_bytes;
-                        co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
-                    Err(e) => {
-                        match e.kind() {
-                            std::io::ErrorKind::Interrupted => {
-                                if tries > 10 {
-                                    error!("read was interrupted too many times");
-                                    co.yield_(Err(e)).await;
-                                }
-                                warn!("read was interrupted, retrying in 1sec");
-                                sleep(Duration::from_secs(1)).await;
-                                tries += 1;
+                }
+            });
+
+            //stdout thread
+            std::thread::spawn(move || {
+                let mut buff: [u8; 1024] = [0; 1024];
+                let mut tries = 0;
+                loop {
+                    match out.read(&mut buff) {
+                        Ok(read_bytes) => {
+
+                            if read_bytes == 0 {
+                                info!("transcoded everything");
+                                _ = child.wait();
+                                break;
                             }
-                            _ => {
-                                co.yield_(Err(e)).await
-                            },
+                            if let Err(e) = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))) {
+                                debug!("{}", e);
+                                info!("connection to client dropped, stopping transcode");
+                                _ = child.kill();
+                                _ = child.wait();
+                                break;
+                            };
                         }
+                        Err(e) => {
+                            match e.kind() {
+                                std::io::ErrorKind::Interrupted => {
+                                    if tries > 10 {
+                                        error!("read was interrupted too many times");
+                                        if let Err(err) = tx_stdout.blocking_send(Err(e)) {
+                                            error!("unexpected error occured:");
+                                            error!("{}", err);
+                                            _ = child.kill();
+                                            _ = child.wait();
+                                            break;
+                                        };
+                                    }
+                                    warn!("read was interrupted, retrying in 1sec");
+                                    let _ = sleep(Duration::from_secs(1));
+                                    tries += 1;
+                                }
+                                _ => {
+                                    if let Err(err) = tx_stdout.blocking_send(Err(e)) {
+                                        error!("unexpected error occured:");
+                                        error!("{}", err);
+                                        _ = child.kill();
+                                        _ = child.wait();
+                                        break;
+                                    };
+                                },
+                            }
+                        }
+                    };
+                }
+            });
+
+
+            info!("streaming to client");
+            loop {
+                if let Some(x) = rx.recv().await {
+                    match x {
+                        Ok(bytes) => co.yield_(Ok(bytes)).await,
+                        Err(e) => { rx.close(); co.yield_(Err(e)).await },
                     }
                 }
             }
@@ -204,7 +249,6 @@ impl Transcoder {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
     use log::info;
     use super::*;
 
@@ -267,47 +311,16 @@ mod test {
                     let value = args.next().unwrap().to_str().unwrap();
                     info!("-timeout {}", value);
                 }
+                Some("-hide_banner") => {
+                    info!("-hide_banner");
+                }
+                Some("-loglevel") => {
+                    let value = args.next().unwrap().to_str().unwrap();
+                    info!("-loglevel {}", value);
+                }
                 Some(x) => panic!("ffmpeg run with uknown option: {x}"),
                 None => panic!("ffmpeg run with no options"),
             }
         }
-    }
-
-    #[tokio::test]
-    async fn test_transcoding_generator() {
-        let mut path_to_mp3 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path_to_mp3.push("src/transcoder/test.mp3");
-        let protocol = "file://";
-        let path = path_to_mp3.as_os_str().to_str().unwrap();
-        let stream_url = Url::parse(&format!("{protocol}{path}")).unwrap();
-        info!("{stream_url}");
-        let params = FfmpegParameters {
-            seek_time: 25,
-            url: stream_url,
-            max_rate_kbit: 64,
-            audio_codec: FFMPEGAudioCodec::Libmp3lame,
-            bitrate_kbit: 3,
-        };
-        let transcoder = Transcoder::new(&params).await.unwrap();
-        let mut gen = transcoder.get_transcode_stream();
-        let mut read_counts = 0;
-        info!("!!printing buffer!!");
-        loop {
-            let state = gen.resume();
-            match state {
-                genawaiter::GeneratorState::Yielded(x) => {
-                    let buff = x.unwrap();
-
-                    let out = &buff;
-                    let out = String::from_utf8_lossy(out);
-                    print!("{out}");
-                    read_counts += 1;
-                }
-                genawaiter::GeneratorState::Complete(_) => {
-                    break;
-                }
-            }
-        }
-        assert!(read_counts > 0);
     }
 }
