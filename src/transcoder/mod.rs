@@ -14,8 +14,10 @@ use log::info;
 use log::{ debug, error, warn };
 use reqwest::Url;
 use serde::Serialize;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::channel;
 
-//const PID_TABLE: &str = "active_transcodes";
 static mut RUNNING_CHILDS: Vec<Child> = Vec::new();
 
 
@@ -121,6 +123,8 @@ impl Transcoder {
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["-timeout", "300"])
+            .args(["-hide_banner"])
+            .args(["-loglevel", "error"])
             .args(["pipe:stdout"]);
         let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
         info!(
@@ -141,10 +145,11 @@ impl Transcoder {
         ) {
             let mut child = command
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()
                 .expect("failed to run commnad");
 
+            let mut err = child.stderr.take().expect("failed to open stderr");
             let mut out = child.stdout.take().expect("failed to open stdout");
 
             //reap all zombie childs
@@ -162,37 +167,82 @@ impl Transcoder {
                 RUNNING_CHILDS.push(child);
             }
 
-            info!("streaming to client");
-            let mut total_bytes_read: usize = 0;
-            let mut buff: [u8; 1024] = [0; 1024];
-            let mut tries = 0;
-            loop {
-                match out.read(&mut buff) {
-                    Ok(read_bytes) => {
+            let buffer: usize = 10;
+            let (tx, mut rx): (Sender<Result<Bytes, std::io::Error>>,
+                                    Receiver<Result<Bytes, std::io::Error>>) = channel(buffer);
 
-                        if read_bytes == 0 {
-                            debug!("reached EOF; read {total_bytes_read} bytes");
+            let tx_stdout = tx.clone();
+            let tx_stderr = tx;
+
+            std::thread::spawn(move || {
+                loop {
+                    let mut buf = String::new();
+                    match err.read_to_string(&mut buf) {
+                        Ok(0) => {
+                            debug!("streaming ended with no error!");
+                            break;
+                        },
+                        Ok(_) => {
+                            error!("{}", buf);
+                            let _ = tx_stderr.blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, buf)));
+                        },
+                        Err(e) => {
+                            error!("failed to read from stderr: {}", e);
+                            let _ = tx_stderr.blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, e)));
                             break;
                         }
-                        total_bytes_read += read_bytes;
-                        co.yield_(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))).await;
                     }
-                    Err(e) => {
-                        match e.kind() {
-                            std::io::ErrorKind::Interrupted => {
-                                if tries > 10 {
-                                    error!("read was interrupted too many times");
-                                    co.yield_(Err(e)).await;
-                                }
-                                warn!("read was interrupted, retrying in 1sec");
-                                sleep(Duration::from_secs(1)).await;
-                                tries += 1;
+                }
+            });
+
+            std::thread::spawn(move || {
+                let mut total_bytes_read: usize = 0;
+                let mut buff: [u8; 1024] = [0; 1024];
+                let mut tries = 0;
+                loop {
+                    match out.read(&mut buff) {
+                        Ok(read_bytes) => {
+
+                            if read_bytes == 0 {
+                                debug!("reached EOF; read {total_bytes_read} bytes");
+                                break;
                             }
-                            _ => {
-                                co.yield_(Err(e)).await
-                            },
+                            total_bytes_read += read_bytes;
+                            if let Err(e) = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))) {
+                                panic!("{}", e);
+                            };
                         }
-                    }
+                        Err(e) => {
+                            match e.kind() {
+                                std::io::ErrorKind::Interrupted => {
+                                    if tries > 10 {
+                                        error!("read was interrupted too many times");
+                                        let _ = tx_stdout.blocking_send(Err(e));
+                                        todo!();
+                                    }
+                                    warn!("read was interrupted, retrying in 1sec");
+                                    let _ = sleep(Duration::from_secs(1));
+                                    tries += 1;
+                                }
+                                _ => {
+                                    let _ = tx_stdout.blocking_send(Err(e));
+                                },
+                            }
+                        }
+                    };
+                }
+            });
+
+
+            info!("streaming to client");
+            loop {
+                if let Some(x) = rx.recv().await {
+                    match x {
+                    Ok(bytes) => co.yield_(Ok(bytes)).await,
+                    Err(e) => co.yield_(Err(e)).await,
+                }
+                } else {
+                    info!("Finished streaming.");
                 }
             }
         }
