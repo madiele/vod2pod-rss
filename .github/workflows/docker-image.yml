@@ -58,7 +58,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-amd64
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
             platforms: linux/amd64
   push_to_Docker_Hub_arm64:
       needs: cargo_version_bump
@@ -86,7 +86,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-arm64,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-arm64
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
             platforms: linux/arm64
   push_to_Docker_Hub_arm_v7:
       needs: cargo_version_bump
@@ -123,7 +123,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-armv7
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
             platforms: linux/arm/v7
   merge_tags:
       needs: [push_to_Docker_Hub_arm64, push_to_Docker_Hub_arm_v7, push_to_Docker_Hub_amd64]
@@ -142,6 +142,6 @@ jobs:
             username: ${{ secrets.DOCKERHUB_USERNAME }}
             password: ${{ secrets.DOCKERHUB_TOKEN }}
         - name: merge into latest
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:latest-amd64
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64
         - name: merge into versio
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }} ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod-to-podcast:${{ env.VERSION }}-amd64
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }} ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64

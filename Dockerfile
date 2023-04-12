@@ -24,10 +24,10 @@ RUN apt-get update && \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp
 
-COPY --from=builder /usr/src/app/target/release/app /usr/local/bin/vod_to_podcast
+COPY --from=builder /usr/src/app/target/release/app /usr/local/bin/vod2pod
 
 COPY templates/ ./templates/
 
 EXPOSE 8080
 
-CMD ["vod_to_podcast"]
+CMD ["vod2pod"]
