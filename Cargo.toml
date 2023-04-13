@@ -2,7 +2,7 @@
 authors = ["madiele92@gmail.com"]
 edition = "2021"
 name = "vod2pod-rss"
-version = "0.5.1"
+version = "0.5.2"
 
 [lib]
 path = "src/lib.rs"
