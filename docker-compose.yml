@@ -1,9 +1,9 @@
 version: "3.9"
 
 services:
-  vod-to-podcast:
+  vod2pod:
     build:
-        context: https://github.com/madiele/VoDToPodcastRSS.git
+        context: https://github.com/madiele/vod2pod-rss.git
     image: madiele/vod-to-podcast
     depends_on:
       - redis

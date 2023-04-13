@@ -1,4 +1,4 @@
-# VoDToPodcastRSS [![tests](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/VoDToPodcastRSS/actions/workflows/docker-image.yml)
+# vod2pod-rss [![tests](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml)
 
 Converts a YouTube or Twitch channel into a full-blown podcast.
 
@@ -9,11 +9,12 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 - Completely converts the VoDs into a proper podcast RSS that can be listened to directly inside the client.
 - The VoDs are not downloaded on the server, so no need for storage while self-hosting this app.
 - VoDs are transcoded to MP3 192k on the fly by default, tested to be working flawlessly even on a Raspberry Pi 3-4.
+- also work on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
 
 ## Known issues:
 
 - First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
-- Youtube channel avatar is missing (https://github.com/madiele/VoDToPodcastRSS/issues/26)
+- Youtube channel avatar is missing (https://github.com/madiele/vod2pod-rss/issues/26)
 
 # Usage
 
@@ -44,9 +45,9 @@ images for raspberry pis 64bit are included
 
 ### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image (easiest)
 
-`git clone https://github.com/madiele/VoDToPodcastRSS.git`
+`git clone https://github.com/madiele/vod2pod-rss.git`
 
-`cd VoDToPodcastRSS`
+`cd vod2pod-rss`
 
 edit `docker-compose.yml` with your PORT, SECRET and CLIENT_ID
 (in the file you will find also optional parameters like bitrate)

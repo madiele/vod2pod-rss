@@ -5,7 +5,7 @@ use reqwest::Url;
 use serde::Deserialize;
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
-use vod_to_podcast_rss::{
+use vod2pod_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert,
 };
 
