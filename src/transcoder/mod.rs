@@ -78,11 +78,18 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
         .arg(url.as_str())
         .output().await;
 
-    if let Ok(x) = output {
-        let raw_url = std::str::from_utf8(&x.stdout).unwrap();
-        Ok(Url::from_str(raw_url).unwrap())
-    } else {
-        Err(eyre::eyre!("could not get youtube stream url"))
+    match output {
+        Ok(x) => {
+            let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default();
+            match Url::from_str(raw_url) {
+                Ok(url) => Ok(url),
+                Err(e) => {
+                    warn!("error while parsing stream url:\ninput: {}\nerror: {}", raw_url, e.to_string());
+                    Err(eyre::eyre!(e))
+                },
+            }
+        }
+        Err(e) => Err(eyre::eyre!(e)),
     }
 
 }
