@@ -26,7 +26,7 @@ io_cached(
         let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
         let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
 
-        AsyncRedisCache::new("cached_yt_video_duration=", 9999999)
+        AsyncRedisCache::new("cached_yt_video_duration=", 86400)
             .set_refresh(false)
             .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
             .build()
