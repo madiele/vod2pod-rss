@@ -194,6 +194,14 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         let item = params.item;
         let transcode_service_url = params.transcode_service_url;
 
+        //needed for youtube: if views are 0 it indicates a premiere
+        if let Some(community) = item.media.first().and_then(|media| media.community.as_ref()) {
+            if community.stats_views == Some(0) {
+                debug!("ignoring item with 0 views (probably youtube preview) with name: {:?}", item.title);
+                return None;
+            }
+        }
+
         let mut item_builder = ItemBuilder::default();
         let mut itunes_builder = ITunesItemExtensionBuilder::default();
 
@@ -272,7 +280,10 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         }
 
         let duration = match media_element.duration {
-            Some(x) => x,
+            Some(x) => {
+                debug!("duration found: {} secs", x.as_secs());
+                x
+            },
             None => {
                 debug!("runnign regex on url: {}", media_url.as_str());
                 let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
