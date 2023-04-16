@@ -21,7 +21,7 @@
             color: #0d1117;
         }
         .container {
-            max-width: 480px;
+            max-width: 530px;
             background-color: #161b22;
             padding: 20px;
             border-radius: 10px;
@@ -53,11 +53,12 @@
   <div class="container">
 <h1 class="text-center mb-4">vod2pod-rss</h1>
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube or Twitch channel URL" aria-describedby="generateButton">
-<button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()" >Generate RSS</button>
+      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube or Twitch channel/playlist URL" aria-describedby="generateButton" oninput="toggleClearButton()">
+      <button class="btn btn-secondary" type="button" id="clearButton" onclick="clearInput()" style="display:none;">x</button>
+      <button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()">Generate RSS</button>
     </div>
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="rssUrl" placeholder="Generated RSS URL" readonly>
+      <input type="text" class="form-control" id="rssUrl" placeholder="Generated RSS URL" readonly autocomplete="off">
       <button class="btn btn-secondary" type="button" id="copyButton" onclick="copyToClipboard()" style="width: 100px;">Copy URL</button>
     </div>
     <div class="rss-preview-container" style="display: none;">
@@ -73,6 +74,23 @@
 </footer>
   </div>
   <script>
+    function toggleClearButton() {
+      if(/Mobi/.test(navigator.userAgent)){
+        var input = document.getElementById("channelUrl");
+        var clearButton = document.getElementById("clearButton");
+        if (input.value.length > 0) {
+          clearButton.style.display = "block";
+        } else {
+          clearButton.style.display = "none";
+        }
+      }
+    }
+
+    function clearInput() {
+      var input = document.getElementById("channelUrl");
+      input.value = "";
+      toggleClearButton();
+    }
     async function generateRSSURL() {
       const channelUrl = document.getElementById("channelUrl").value;
       const rssUrl = `${window.location.href}transcodize_rss?url=${channelUrl}`;
