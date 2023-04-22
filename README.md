@@ -15,6 +15,7 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 
 - First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
 - Youtube channel avatar is missing (https://github.com/madiele/vod2pod-rss/issues/26)
+- Support for Playlist is limited and only the first 15 elements can be shown (https://github.com/madiele/vod2pod-rss/issues/43)
 
 # Usage
 
@@ -39,7 +40,7 @@ Just add the link to your podcast client.
 (only if you use twitch) before doing anything be sure to get your SECRET and CLIENT ID from twitch
 https://dev.twitch.tv/console
 
-precompiled images are [here](https://hub.docker.com/r/madiele/vod-to-podcast/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker compose will do it automatically but it's slow)
+precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker compose will do it automatically but it's slow)
 
 images for raspberry pis 64bit are included
 

@@ -59,10 +59,18 @@ impl ConvertableToFeed for YoutubePlaylistUrl {
             .map(|(_, value)| value)
             .ok_or_else(|| eyre::eyre!("Failed to parse playlist ID from URL: {}", self.url))?;
 
-        let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml").unwrap();
-        feed_url.query_pairs_mut().append_pair("playlist_id", &playlist_id);
 
-        Ok(feed_url)
+        let podtube_api_key = std::env::var("YT_API_KEY").ok().and_then(|s| if s.is_empty() { None } else { Some(s) });
+        if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&std::env::var("PODTUBE_URL").unwrap_or_default()), podtube_api_key) {
+            podtube_url.set_path(format!("/youtube/playlist/{playlist_id}").as_str());
+            Ok(podtube_url)
+        } else {
+            let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml").unwrap();
+            feed_url.query_pairs_mut().append_pair("playlist_id", &playlist_id);
+
+            Ok(feed_url)
+        }
+
     }
 }
 
@@ -109,10 +117,17 @@ impl ConvertableToFeed for YoutubeChannelUrl {
         }
         let url_with_channel_id = find_yt_channel_url_with_c_id(&self.url).await?;
         let channel_id = url_with_channel_id.path_segments().unwrap().last().unwrap();
-        let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml")?;
-        feed_url.query_pairs_mut().append_pair("channel_id", channel_id);
-        info!("converted to {feed_url}");
-        Ok(feed_url)
+
+        let podtube_api_key = std::env::var("YT_API_KEY").ok().and_then(|s| if s.is_empty() { None } else { Some(s) });
+        if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&std::env::var("PODTUBE_URL").unwrap_or_default()), podtube_api_key) {
+            podtube_url.set_path(format!("/youtube/channel/{channel_id}").as_str());
+            Ok(podtube_url)
+        } else {
+            let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml")?;
+            feed_url.query_pairs_mut().append_pair("channel_id", channel_id);
+            info!("converted to {feed_url}");
+            Ok(feed_url)
+        }
     }
 }
 
@@ -162,23 +177,39 @@ mod tests {
         assert_eq!(feed_url.as_str(), "https://ttprss/vod/andersonjph?transcode=false");
     }
 
+
     #[tokio::test]
     async fn test_youtube_to_feed() {
-        let url = "https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw";
-        println!("{:?}", url);
-        let channel = YoutubeChannelUrl { url: Url::parse(url).unwrap() };
-        let feed_url = channel.to_feed_url().await.unwrap();
-        println!("{:?}", feed_url);
-        assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("")),
+            ("PODTUBE_URL", None)
+        ], test()).await;
+
+        async fn test() {
+            let url = "https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw";
+            println!("{:?}", url);
+            let channel = YoutubeChannelUrl { url: Url::parse(url).unwrap() };
+            let feed_url = channel.to_feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+        }
     }
 
     #[tokio::test]
     async fn test_youtube_playlist_to_feed() {
-        let url = Url::parse("https://www.youtube.com/playlist?list=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD").unwrap();
-        println!("{:?}", url);
-        let feed_url = from(url).to_feed_url().await.unwrap();
-        println!("{:?}", feed_url);
-        assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?playlist_id=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD");
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("")),
+            ("PODTUBE_URL", None)
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/playlist?list=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD").unwrap();
+            println!("{:?}", url);
+            let feed_url = from(url).to_feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?playlist_id=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD");
+        }
     }
 
     #[tokio::test]
@@ -197,5 +228,39 @@ mod tests {
         let feed_url = from(url).to_feed_url().await.unwrap();
         println!("{:?}", feed_url);
         assert_eq!(feed_url.as_str(), "https://feeds.simplecast.com/aU_RzZ7j");
+    }
+
+    #[tokio::test]
+    async fn test_youtube_to_feed_api_key_present() {
+
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("1234567890123456780")),
+            ("PODTUBE_URL", Some("http://podtube"))
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
+            println!("{:?}", url);
+            let feed_url = from(url).to_feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "http://podtube/youtube/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_youtube_playlist_to_feed_api_key_present() {
+
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("1234567890123456780")),
+            ("PODTUBE_URL", Some("http://podtube"))
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/playlist?list=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD").unwrap();
+            println!("{:?}", url);
+            let feed_url = from(url).to_feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "http://podtube/youtube/playlist/PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD");
+        }
     }
 }
