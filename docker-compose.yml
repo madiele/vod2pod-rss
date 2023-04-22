@@ -29,6 +29,7 @@ services:
       - SUBFOLDER=/ #for reverse proxies, ex: "/" -> access the app at mywebsite.com ; "vtprss" -> access at mywebsite.com/vtprss
       - RUST_LOG=INFO #set to DEBUG if you are having problems than open a github issue with the logs, use "sudo docker compose logs" to print them
       - TWITCH_TO_PODCAST_URL=ttprss #don't edit this
+      - PODTUBE_URL=http://podtube #don't edit this
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
 
