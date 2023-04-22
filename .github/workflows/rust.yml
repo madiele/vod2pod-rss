@@ -16,12 +16,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: install ffmpeg
-      run: sudo apt-get install ffmpeg
-    - name: install yt-dlp
-      run: python3 -m pip install -U yt-dlp
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --verbose
+      - name: Install ffmpeg and redis
+        run: sudo apt-get install redis-server ffmpeg
+      - name: Install yt-dlp
+        run: python3 -m pip install -U yt-dlp
+      - name: Start Redis server
+        run: redis-server --daemonize yes
+      - name: Run tests
+        run: cargo test --verbose
