@@ -1,7 +1,19 @@
 version: "3.9"
 
 services:
+  api_keys:
+    image: alpine
+    environment:
+    #add your api-keys here
+      # Set your YouTube API key
+      - YT_API_KEY=
+      # Set your Twitch secret
+      - TWITCH_SECRET=
+      # Set your Twitch client ID
+      - TWITCH_CLIENT_ID=
+
   vod2pod:
+    extends: api_keys
     build:
         context: https://github.com/madiele/vod2pod-rss.git
     image: madiele/vod-to-podcast
@@ -31,6 +43,7 @@ services:
       retries: 5
 
   ttprss: # you can remove this section and save some storage if you don't need twitch
+    extends: api_keys
     build:
         context: https://github.com/madiele/TwitchToPodcastRSS.git
     image: madiele/twitch_to_podcast_rss
@@ -38,6 +51,8 @@ services:
     container_name: twitchToPodcastRSS
     environment:
         - TZ=Europe/London
-        - TWITCH_SECRET=<YOUR_SECRET>
-        - TWITCH_CLIENT_ID=<YOUR_CLIENT_ID>
         - TRANSCODE=False #keep this to false, the vod-to-podcast is what really matters
+
+  podtube: #remove this section if you don't need improved youtube support
+    extends: api_keys
+    image: ftawesome/podtube
