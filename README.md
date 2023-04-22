@@ -14,8 +14,7 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 ## Known issues:
 
 - First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
-- Youtube channel avatar is missing (https://github.com/madiele/vod2pod-rss/issues/26)
-- Support for Playlist is limited and only the first 15 elements can be shown (https://github.com/madiele/vod2pod-rss/issues/43)
+- Youtube channel avatar is not present and results are limited to 15 when no youtube API key is set 
 
 # Usage
 
@@ -37,20 +36,32 @@ Just add the link to your podcast client.
 # Installation
 
 ## install with docker
-(only if you use twitch) before doing anything be sure to get your SECRET and CLIENT ID from twitch
+### twitch support (optional) 
+get your SECRET and CLIENT ID from twitch
+
 https://dev.twitch.tv/console
+
+
+### better youtube support (optional)
+only needed if you want youtube channels avatar and better playlist support
+
+get your youtube api key here
+
+https://developers.google.com/youtube/v3/getting-started
+
+### running the server
 
 precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker compose will do it automatically but it's slow)
 
 images for raspberry pis 64bit are included
 
-### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image (easiest)
+#### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image
 
 `git clone https://github.com/madiele/vod2pod-rss.git`
 
 `cd vod2pod-rss`
 
-edit `docker-compose.yml` with your PORT, SECRET and CLIENT_ID
+edit `docker-compose.yml` with your PORT, SECRET and CLIENT_ID for youtube and twitch if needed
 (in the file you will find also optional parameters like bitrate)
 
 `nano docker-compose.yml`

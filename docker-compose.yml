@@ -57,3 +57,5 @@ services:
   podtube: #remove this section if you don't need improved youtube support
     extends: api_keys
     image: ftawesome/podtube
+    environment:
+      - YT_AUTOLOAD_NEWEST_AUDIO=False
