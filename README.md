@@ -36,17 +36,26 @@ Just add the link to your podcast client.
 # Installation
 
 ## install with docker
-(only if you use twitch) before doing anything be sure to get your SECRET and CLIENT ID from twitch
+### twitch support (optional) 
+get your SECRET and CLIENT ID from twitch
+
 https://dev.twitch.tv/console
 
-(only if you want youtube channels avatar and better playlist support) get your youtube api key here
+
+### better youtube suppoert (optional)
+only needed if you want youtube channels avatar and better playlist support
+
+get your youtube api key here
+
 https://developers.google.com/youtube/v3/getting-started
+
+### running the server
 
 precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker compose will do it automatically but it's slow)
 
 images for raspberry pis 64bit are included
 
-### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image (easiest)
+#### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image
 
 `git clone https://github.com/madiele/vod2pod-rss.git`
 
