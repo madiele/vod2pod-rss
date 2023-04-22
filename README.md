@@ -42,7 +42,7 @@ get your SECRET and CLIENT ID from twitch
 https://dev.twitch.tv/console
 
 
-### better youtube suppoert (optional)
+### better youtube support (optional)
 only needed if you want youtube channels avatar and better playlist support
 
 get your youtube api key here
