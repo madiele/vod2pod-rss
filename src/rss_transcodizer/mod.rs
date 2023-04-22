@@ -36,11 +36,13 @@ io_cached(
 ))]
 async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
     debug!("getting duration for yt video: {}", url);
+    acquire_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
     let output = Command::new("yt-dlp")
         .arg("--get-duration")
         .arg(url.to_string())
         .output()
     .await;
+    release_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
     if let Ok(x) = output {
         let duration_str = str::from_utf8(&x.stdout).unwrap().trim().to_string();
         Ok(parse_duration(&duration_str).unwrap_or_default().as_secs())
@@ -49,6 +51,44 @@ async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
         Ok(0)
     }
 
+}
+
+async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
+    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+
+    let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
+    let mut con = client.get_tokio_connection().await?;
+    let unix_timestamp_now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+
+    let mut pipe = redis::pipe();
+
+    pipe.zrembyscore(&semaphore_name, "-inf", unix_timestamp_now - 600);
+
+    pipe.zadd(&semaphore_name, &id, unix_timestamp_now);
+
+    pipe.query_async(&mut con).await?;
+
+    loop {
+        let count: u64 = redis::cmd("ZRANK").arg(&semaphore_name).arg(&id).query_async(&mut con).await?;
+        if count <= 4 { debug!("semaphore {count} <= 4 letting {id} in"); break; }
+        actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    Ok(())
+}
+
+async fn release_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
+    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
+    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+
+    let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
+    let mut con = client.get_tokio_connection().await?;
+
+    debug!("releasing semaphore for {id}");
+    _ = redis::cmd("ZREM").arg(semaphore_name).arg(id).query_async(&mut con).await?;
+
+    Ok(())
 }
 
 fn parse_duration(duration_str: &str) -> Result<Duration, String> {
