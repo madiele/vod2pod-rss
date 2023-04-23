@@ -18,17 +18,16 @@ use tokio::process::Command;
 
 use std::str;
 
+use crate::configs::{conf, ConfName, Conf};
+
 #[cfg_attr(not(test),
 io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<Url, u64>",
     create = r##" {
-        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-
         AsyncRedisCache::new("cached_yt_video_duration=", 86400)
             .set_refresh(false)
-            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
             .await
             .expect("youtube_duration cache")
@@ -54,10 +53,8 @@ async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
 }
 
 async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
-    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-
-    let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
+    let redis_url = conf().get(ConfName::RedisUrl)?;
+    let client = redis::Client::open(redis_url)?;
     let mut con = client.get_tokio_connection().await?;
     let unix_timestamp_now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
 
@@ -79,10 +76,8 @@ async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<(
 }
 
 async fn release_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
-    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-
-    let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
+    let redis_url = conf().get(ConfName::RedisUrl)?;
+    let client = redis::Client::open(redis_url)?;
     let mut con = client.get_tokio_connection().await?;
 
     debug!("releasing semaphore for {id}");
@@ -155,12 +150,9 @@ impl Display for TranscodeParams {
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<TranscodeParams, String>",
     create = r##" {
-        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-
         AsyncRedisCache::new("cached_transcodizer=", 600)
             .set_refresh(false)
-            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
             .await
             .expect("rss_transcodizer cache")
@@ -342,10 +334,9 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
         itunes_builder.duration(Some(duration_string));
         let mut transcode_service_url = transcode_service_url;
-        let bitrate: u64 = std::env::var("BITRATE")
-            .unwrap_or_else(|_| "192".to_string())
+        let bitrate: u64 = conf().get(ConfName::Mp3Bitrate).unwrap()
             .parse()
-            .expect("BITRATE must be a number");
+            .expect("MP3_BITRATE must be a number");
         let generation_uuid  = uuid::Uuid::new_v4().to_string();
         transcode_service_url
             .query_pairs_mut()

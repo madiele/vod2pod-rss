@@ -6,20 +6,14 @@ use serde::Deserialize;
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
 use vod2pod_rss::{
-    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert,
+    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName},
 };
 
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
-    let mut root = std::env::var("SUBFOLDER").unwrap_or("".to_string());
-    if !root.starts_with('/') {
-        root.insert(0, '/');
-    }
-    while root.ends_with('/') {
-        root.pop();
-    }
+    let root = conf().get(ConfName::SubfolderPath).unwrap();
 
     if let Err(err) = flush_redis_on_new_version().await {
         panic!("Error interacting with Redis (redis is required): {:?}", err);
@@ -44,8 +38,8 @@ async fn main() -> std::io::Result<()> {
 }
 
 async fn flush_redis_on_new_version() -> eyre::Result<()> {
-    let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-    let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+    let redis_address = conf().get(ConfName::RedisAddress).unwrap();
+    let redis_port = conf().get(ConfName::RedisPort).unwrap();
     let app_version = env!("CARGO_PKG_VERSION");
     info!("app version {app_version}");
 
@@ -83,7 +77,7 @@ async fn transcodize_rss(
     query: web::Query<HashMap<String, String>>
 ) -> HttpResponse {
 
-    let should_transcode = match std::env::var("TRANSCODE") {
+    let should_transcode = match conf().get(ConfName::TranscodingEnabled) {
         Ok(value) => !value.eq_ignore_ascii_case("false"),
         Err(_) => true,
     };
@@ -157,7 +151,7 @@ async fn transcode(
     let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
     info!("processing transcode at {bitrate}k for {stream_url}");
 
-    if let Ok(value) = std::env::var("TRANSCODE") {
+    if let Ok(value) = conf().get(ConfName::TranscodingEnabled) {
         if value.eq_ignore_ascii_case("false") {
             return HttpResponse::Forbidden().finish();
         }
