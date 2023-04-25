@@ -7,6 +7,8 @@ use cached::AsyncRedisCache;
 #[allow(unused_imports)]
 use cached::proc_macro::io_cached;
 
+use crate::configs::{conf, ConfName, Conf};
+
 pub fn from(url: Url) -> Box<dyn ConvertableToFeed> {
     let url = url.to_owned();
     match url {
@@ -35,7 +37,7 @@ impl ConvertableToFeed for TwitchUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
         info!("trying to convert twitch channel url {}", self.url);
         let username = self.url.path_segments().ok_or_else(|| eyre::eyre!("Unable to get path segments"))?.last().ok_or_else(|| eyre::eyre!("Unable to get last path segment"))?;
-        let mut ttprss_url = std::env::var("TWITCH_TO_PODCAST_URL")?;
+        let mut ttprss_url = conf().get(ConfName::TwitchToPodcastUrl)?;
         if !ttprss_url.starts_with("http://") && !ttprss_url.starts_with("https://") {
             ttprss_url = format!("http://{}", ttprss_url);
         }
@@ -59,9 +61,8 @@ impl ConvertableToFeed for YoutubePlaylistUrl {
             .map(|(_, value)| value)
             .ok_or_else(|| eyre::eyre!("Failed to parse playlist ID from URL: {}", self.url))?;
 
-
-        let podtube_api_key = std::env::var("YT_API_KEY").ok().and_then(|s| if s.is_empty() { None } else { Some(s) });
-        if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&std::env::var("PODTUBE_URL").unwrap_or_default()), podtube_api_key) {
+        let podtube_api_key = conf().get(ConfName::YoutubeApiKey).ok().and_then(|s| if s.is_empty() { None } else { Some(s) });
+        if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&conf().get(ConfName::PodTubeUrl).unwrap_or_default()), podtube_api_key) {
             podtube_url.set_path(format!("/youtube/playlist/{playlist_id}").as_str());
             Ok(podtube_url)
         } else {
@@ -83,12 +84,9 @@ io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<Url, Url>",
     create = r##" {
-        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-
         AsyncRedisCache::new("youtube_channel_username_to_id=", 9999999)
             .set_refresh(false)
-            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
             .await
             .expect("youtube_channel_username_to_id cache")
@@ -117,9 +115,8 @@ impl ConvertableToFeed for YoutubeChannelUrl {
         }
         let url_with_channel_id = find_yt_channel_url_with_c_id(&self.url).await?;
         let channel_id = url_with_channel_id.path_segments().unwrap().last().unwrap();
-
-        let podtube_api_key = std::env::var("YT_API_KEY").ok().and_then(|s| if s.is_empty() { None } else { Some(s) });
-        if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&std::env::var("PODTUBE_URL").unwrap_or_default()), podtube_api_key) {
+        let podtube_api_key = conf().get(ConfName::YoutubeApiKey).ok();
+        if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&conf().get(ConfName::PodTubeUrl).unwrap_or_default()), podtube_api_key) {
             podtube_url.set_path(format!("/youtube/channel/{channel_id}").as_str());
             Ok(podtube_url)
         } else {

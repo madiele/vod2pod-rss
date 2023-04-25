@@ -16,6 +16,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;
 
+use crate::configs::{conf, ConfName, Conf};
 
 #[derive(Serialize)]
 pub enum FFMPEGAudioCodec {
@@ -59,12 +60,9 @@ pub struct Transcoder {
     map_error = r##"|e| eyre::Error::new(e)"##,
     type = "AsyncRedisCache<Url, Url>",
     create = r##" {
-        let redis_address = std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string());
-        let redis_port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-
         AsyncRedisCache::new("cached_yt_stream_url=", 18000)
             .set_refresh(false)
-            .set_connection_string(&format!("redis://{}:{}/", redis_address, redis_port))
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
             .await
             .expect("get_youtube_stream_url cache")
