@@ -5,6 +5,7 @@ use std::time::Duration;
 use cached::AsyncRedisCache;
 #[allow(unused_imports)]
 use cached::proc_macro::io_cached;
+use chrono::DateTime;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use eyre::eyre;
@@ -292,8 +293,13 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     }
 
     let item_futures: Vec<_> =  futures.collect().await;
-    let feed_items: Vec<_> = item_futures.iter().filter_map(|x| if !x.is_none() { Some(x.to_owned().unwrap())} else { None }).collect();
-
+    let mut feed_items: Vec<_> = item_futures.iter().filter_map(|x| if !x.is_none() { Some(x.to_owned().unwrap())} else { None }).collect();
+    feed_items.sort_by(|a, b| {
+        DateTime::parse_from_rfc2822(b.pub_date().unwrap_or_default()).unwrap_or_default()
+            .cmp(
+        &DateTime::parse_from_rfc2822(&a.pub_date().unwrap_or_default()).unwrap_or_default()
+            )
+    });
     feed_builder.items(feed_items);
     Ok(feed_builder.build().to_string())
 }
