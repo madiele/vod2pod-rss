@@ -9,7 +9,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use eyre::eyre;
 use feed_rs::model::{Entry, MediaObject};
-use log::{warn, debug};
+use log::{warn, debug, error};
 use reqwest::Url;
 use rss::{GuidBuilder, Guid};
 use rss::{ Enclosure, ItemBuilder, Item, extension::itunes::ITunesItemExtensionBuilder };
@@ -35,23 +35,31 @@ io_cached(
 ))]
 async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
     debug!("getting duration for yt video: {}", url);
-    acquire_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
-    let output = Command::new("yt-dlp")
-        .arg("--get-duration")
-        .arg(url.to_string())
-        .output()
-    .await;
-    release_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
-    if let Ok(x) = output {
-        let duration_str = str::from_utf8(&x.stdout).unwrap().trim().to_string();
-        Ok(parse_duration(&duration_str).unwrap_or_default().as_secs())
+
+    if let Ok(_) = conf().get(ConfName::YoutubeApiKey) {
+        let id = url.query_pairs().find(|(key, _)| key == "v").map(|(_, value)| {value}).unwrap().to_string();
+        Ok(get_yotube_duration_with_apikey(&id).await?.as_secs())
     } else {
-        warn!("could not parse youtube video duration");
-        Ok(0)
+        acquire_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
+        let output = Command::new("yt-dlp")
+            .arg("--get-duration")
+            .arg(url.to_string())
+            .output()
+        .await;
+        release_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
+        if let Ok(x) = output {
+            let duration_str = str::from_utf8(&x.stdout).unwrap().trim().to_string();
+            Ok(parse_duration(&duration_str).unwrap_or_default().as_secs())
+        } else {
+            warn!("could not parse youtube video duration");
+            Ok(0)
+        }
     }
+
 
 }
 
+//TODO: refactor in to cache abstraction a module
 async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
     let redis_url = conf().get(ConfName::RedisUrl)?;
     let client = redis::Client::open(redis_url)?;
@@ -84,6 +92,79 @@ async fn release_semaphore(semaphore_name: String, id: String) -> eyre::Result<(
     _ = redis::cmd("ZREM").arg(semaphore_name).arg(id).query_async(&mut con).await?;
 
     Ok(())
+}
+
+//I know this code is over-engineered to hell, please don't judge me. I just wanted play around with redis
+async fn get_yotube_duration_with_apikey(id: &String) -> eyre::Result<Duration> {
+    let redis_url = conf().get(ConfName::RedisUrl)?;
+    let client = redis::Client::open(redis_url)?;
+    let mut con = client.get_tokio_connection().await?;
+    let lock_key = "youtube_duration_lock";
+    let queue_key = "youtube_duration_queue";
+    let hash_key = "youtube_duration_batch";
+    let lock_duration_secs = 10;
+    let batch_size = 50;
+    let sleep_duration = 300;
+
+    let _: i64 = redis::cmd("RPUSH").arg(queue_key).arg(&id)
+        .query_async(&mut con).await?;
+    debug!("Inserted video with ID {} into Redis queue", &id);
+
+    let lock: bool = redis::cmd("SET").arg(lock_key).arg("1").arg("NX").arg("EX").arg(lock_duration_secs)
+        .query_async(&mut con).await?;
+
+    if lock {
+        debug!("Redis lock has been acquired successfully");
+        actix_rt::time::sleep(std::time::Duration::from_millis(sleep_duration)).await;
+
+        while let Ok(queue_len)  = redis::cmd("LLEN").arg(queue_key).query_async::<_,i64>(&mut con).await {
+            if queue_len == 0 {break};
+            let batch_end = queue_len - 1;
+            let batch_start = batch_end - batch_size + 1;
+            let batch: Vec<String> = redis::cmd("LRANGE").arg(queue_key).arg(batch_start).arg(batch_end)
+                .query_async(&mut con).await?;
+            debug!("Processing batch of {} items from Redis queue", batch.len());
+
+            let api_key = conf().get(ConfName::YoutubeApiKey)?;
+            let mut url = Url::parse("https://www.googleapis.com/youtube/v3/videos")?;
+            url.query_pairs_mut()
+                .append_pair("id", &batch.join(","))
+                .append_pair("part", "contentDetails")
+                .append_pair("key", &api_key);
+
+            let response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
+            debug!("retrived video infos from youtube apis");
+
+            let items = response["items"].as_array().unwrap();
+            let mut durations_by_id = Vec::new();
+            for item in items {
+                let id = item["id"].as_str().ok_or_else(|| eyre!("Failed to retrieve ID from item"))?.to_owned();
+                let duration_str = item["contentDetails"]["duration"].as_str().ok_or_else(|| eyre!("Failed to retrieve duration string from item."))?;
+                let duration = iso8601_duration::Duration::parse(duration_str).map_err(|_| eyre!("could not parse yotube duration"))?;
+                durations_by_id.push((id, duration));
+            }
+
+            let mut pipe = redis::pipe();
+            for (id, duration) in durations_by_id {
+                pipe.hset(hash_key, id, duration.num_seconds().unwrap_or(0.0).round() as i32).ignore();
+            }
+            pipe.ltrim(queue_key, 0, (batch_start - 1).try_into()?).ignore();
+            pipe.del(lock_key).ignore();
+            let _: () = pipe.query_async(&mut con).await?;
+            debug!("finished retriving batch of durations with youtube api");
+        }
+    }
+
+    let mut duration_secs_str: Option<String> = None;
+    let mut count = 0;
+    while duration_secs_str.is_none() && count < 100 {
+        duration_secs_str = redis::cmd("HGET").arg(hash_key).arg(id).query_async(&mut con).await.ok();
+        if duration_secs_str.is_none() {actix_rt::time::sleep(Duration::from_millis(sleep_duration / 2)).await};
+        count += 1;
+    }
+    debug!("duration found for {id}: {}", duration_secs_str.clone().unwrap_or("???".to_string()));
+    let duration = Duration::from_secs(duration_secs_str.ok_or_else(|| eyre!("duration_secs_str is None"))?.parse()?);
+    return Ok(duration);
 }
 
 fn parse_duration(duration_str: &str) -> Result<Duration, String> {
@@ -316,21 +397,26 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
                 debug!("duration found: {} secs", x.as_secs());
                 x
             },
-            None => {
-                debug!("runnign regex on url: {}", media_url.as_str());
-                let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
-                if youtube_regex.is_match(media_url.as_str()) {
-                    let duration = get_youtube_video_duration(&media_url).await.unwrap();
-                    debug!("duration of {duration} extracted");
-                    Duration::from_secs(duration)
-                } else {
-                    warn!("no duration found");
-                    Duration::default()
-                }
+        None => {
+            debug!("runnign regex on url: {}", media_url.as_str());
+            let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
+            if youtube_regex.is_match(media_url.as_str()) {
+                let duration = match get_youtube_video_duration(&media_url).await {
+                    Ok(dur) => Duration::from_secs(dur),
+                    Err(e) => {
+                        error!("Error getting youtube video duration: {:?}", e);
+                        Duration::default()
+                    }
+                };
+                duration
+            } else {
+                warn!("no duration found");
+                Duration::default()
             }
-        };
+        }
+    };
 
-        let duration_secs = duration.as_secs();
+    let duration_secs = duration.as_secs();
         let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
         itunes_builder.duration(Some(duration_string));
         let mut transcode_service_url = transcode_service_url;

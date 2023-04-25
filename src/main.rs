@@ -4,7 +4,7 @@ use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
 use simple_logger::SimpleLogger;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 use vod2pod_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName},
 };
@@ -72,10 +72,12 @@ async fn index(req: HttpRequest) -> HttpResponse {
     HttpResponse::Ok().content_type("text/html").body(html)
 }
 
+
 async fn transcodize_rss(
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>
 ) -> HttpResponse {
+    let start_time = Instant::now();
 
     let should_transcode = match conf().get(ConfName::TranscodingEnabled) {
         Ok(value) => !value.eq_ignore_ascii_case("false"),
@@ -111,6 +113,10 @@ async fn transcodize_rss(
             return HttpResponse::Conflict().finish();
         }
     };
+
+    let end_time = Instant::now();
+    let duration = end_time - start_time;
+    debug!("rss generation took {} seconds", duration.as_secs_f32());
 
     HttpResponse::Ok().content_type("application/xml").body(body)
 }

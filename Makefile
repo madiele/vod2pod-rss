@@ -8,4 +8,4 @@ run:
 	RUST_LOG=info cargo run
 
 hot-reload:
-	cargo watch -x run
+	cargo watch -s "redis-cli flushdb && cargo run"
