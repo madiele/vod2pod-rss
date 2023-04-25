@@ -20,6 +20,19 @@
             background-color: #c9d1d9;
             color: #0d1117;
         }
+      .item {
+          display: none;
+          animation: fadeIn 1s ease-in-out;
+      }
+
+      @keyframes fadeIn {
+        0% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
         .container {
             max-width: 530px;
             background-color: #161b22;
@@ -61,11 +74,19 @@
       <input type="text" class="form-control" id="rssUrl" placeholder="Generated RSS URL" readonly autocomplete="off">
       <button class="btn btn-secondary" type="button" id="copyButton" onclick="copyToClipboard()" style="width: 100px;">Copy URL</button>
     </div>
-    <div class="rss-preview-container" style="display: none;">
-      <h2 class="text-center mb-4">RSS Feed Preview</h2>
-      <div id="rssPreviewContent"></div>
-    </div>
-<footer class="text-center">
+      <div class="rss-preview-container" style="display: none;">
+        <h2 class="text-center mb-4">RSS Feed Preview</h2>
+        <div class="d-flex justify-content-center">
+          <div id="loadingCircle" style="display:none;">
+            <div style="border: 16px solid #f3f3f3;border-top: 16px solid #3498db;border-radius: 50%;width: 50px;height: 50px;animation: spin 0.3s linear infinite;"></div>
+            <style>
+            @keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}
+            </style>
+          </div>
+        </div>
+        <div id="rssPreviewContent"></div>
+      </div>
+      <footer class="text-center">
   <p class="mb-4">
     <small class="text-muted">made by <a href="https://github.com/madiele" target="_blank">Mattia Di Eleuterio</a></small>
     <small class="text-muted">check the repo on <a href="https://github.com/madiele/vod2pod-rss" target="_blank">github</a>
@@ -74,116 +95,192 @@
 </footer>
   </div>
   <script>
-    function toggleClearButton() {
-      if(/Mobi/.test(navigator.userAgent)){
-        var input = document.getElementById("channelUrl");
-        var clearButton = document.getElementById("clearButton");
-        if (input.value.length > 0) {
-          clearButton.style.display = "block";
-        } else {
-          clearButton.style.display = "none";
-        }
-      }
-    }
+function toggleClearButton() {
+  const clearButton = document.getElementById("clearButton");
+  const inputField = document.getElementById("channelUrl");
 
-    function clearInput() {
-      var input = document.getElementById("channelUrl");
-      input.value = "";
-      toggleClearButton();
-    }
-    async function generateRSSURL() {
-      const channelUrl = document.getElementById("channelUrl").value;
-      const rssUrl = `${window.location.href}transcodize_rss?url=${channelUrl}`;
-      document.getElementById("rssUrl").value = rssUrl;
-      await displayRSSPreview(rssUrl);
-    }
+  if (inputField.value !== "") {
+    clearButton.style.display = "inline";
+  } else {
+    clearButton.style.display = "none";
+  }
+}
 
-    async function displayRSSPreview(url) {
+function clearInput() {
+  const inputField = document.getElementById("channelUrl");
+  inputField.value = "";
+  toggleClearButton();
+}
 
-      const rssPreviewContainer = document.querySelector('.rss-preview-container');
-      const rssPreviewContent = document.getElementById('rssPreviewContent');
+async function generateRSSURL() {
+  const channelUrl = document.getElementById("channelUrl").value;
+  const rssUrl = `${window.location.href}transcodize_rss?url=${channelUrl}`;
+  document.getElementById("rssUrl").value = rssUrl;
+  await displayRSSPreview(rssUrl);
+}
 
-      // Show loading screen
-      rssPreviewContent.innerHTML = '<div class="loading-screen">Loading preview...</div>';
-      rssPreviewContainer.style.display = 'block';
+async function displayRSSPreview(rssUrl) {
+  try {
+    document.getElementById("loadingCircle").style.display = "block";
+    const rssPreviewContainer = document.querySelector(".rss-preview-container");
+    rssPreviewContainer.style.display = "block";
+    const rss = await fetchData(rssUrl);
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        rssPreviewContent.innerHTML = `
-<div class="alert alert-danger" role="alert">
-  Error: ${response.status} ${response.statusText}
+    const podcastInfo = extractPodcastInfo(rss);
+    document.getElementById("rssPreviewContent").innerHTML = "";
+    displayPodcastInfo(podcastInfo);
+
+    document.getElementById("loadingCircle").style.display = "none";
+    const episodes = extractEpisodes(rss);
+    displayEpisodes(episodes);
+  } catch (error) {
+    displayError(error);
+  }
+}
+
+async function fetchData(rssUrl) {
+  const response = await fetch(rssUrl);
+  if (!response.ok) {
+    throw new Error(`Error ${response.status}`);
+  }
+  const text = await response.text();
+  const parser = new DOMParser();
+  const rss = parser.parseFromString(text, "application/xml");
+  return rss;
+}
+
+function extractPodcastInfo(rss) {
+  const podcast = {
+    title: rss.querySelector("channel > title").textContent,
+    thumbnail: rss.querySelector("channel > image") ? rss.querySelector("channel > image > url").textContent : null,
+    description: rss.querySelector("channel > description").textContent
+  };
+  return podcast;
+}
+
+function displayPodcastInfo(podcast) {
+  const podcastInfoContainer = document.createElement("div");
+  podcastInfoContainer.classList.add("item");
+  podcastInfoContainer.innerHTML = `
+    <div class="card">
+      <div class="card-body">
+        <div class="row">
+                    <div class="d-none d-md-block col-md-3 d-flex align-items-center">
+                      <img class="card-img-top img-fluid" src="${podcast.thumbnail || 'https://via.placeholder.com/50'}" alt="Podcast Thumbnail" style="max-height: 80px; width: auto; max-width: 100%;">
+                    </div>
+          <div class="col-md-9">
+            <h5 class="card-title">${podcast.title}</h5>
+            <p class="card-text">${podcast.description}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  podcastInfoContainer.style.display = "block";
+  document.getElementById("rssPreviewContent").appendChild(podcastInfoContainer);
+}
+
+function extractEpisodes(rss) {
+  const items = [...rss.querySelectorAll("channel > item")];
+  const episodes = items.map(item => {
+    return {
+      title: item.querySelector("title").textContent,
+      duration: item.querySelector("duration").textContent,
+      mp3_url: item.querySelector("enclosure") ? item.querySelector("enclosure").getAttribute("url") : null,
+      image: item.querySelector("image") ? item.querySelector("image").textContent : null
+    };
+  });
+  return episodes;
+}
+
+function displayEpisodes(episodes) {
+  const episodeListContainer = document.createElement("div");
+  episodeListContainer.classList.add("card-deck");
+  episodes.forEach(episode => {
+
+const episodeItem = document.createElement("div");
+    episodeItem.innerHTML = `
+<div class="card">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center">
+      <h4 class="card-title mb-0" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${episode.title}">${episode.title}</h4>
+      <button class="btn btn-secondary play-button mt-3 d-flex align-items-center justify-content-center">Play</button>
+    </div>
+    <div class="episode-player" style="display: none; animation: slideDown 0.3s ease forwards;"></div>
+    <a href=${episode.mp3_url} style="display:none;"></a>
+  </div>
 </div>
-<pre>${await response.text()}</pre>`;
-        return;
-      }
-      const xmlText = await response.text();
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-      rssPreviewContent.innerHTML = '';
 
-      const items = xmlDoc.getElementsByTagName("item");
+<style>
+.episode-player.slideOut {
+  animation: slideUp 1s ease reverse forwards;
+}
+@keyframes slideDown {
+0% {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+100% {
+  transform: translateY(0);
+  opacity: 1;
+}
+}
+</style>
+    `;
+    episodeItem.querySelector(".play-button").addEventListener("click", () => togglePlay(episodeItem));
+    episodeListContainer.appendChild(episodeItem);
+    episodeItem.classList.add("item");
+    episodeItem.style.display = "block";
+  });
+  document.getElementById("rssPreviewContent").appendChild(episodeListContainer);
+}
 
-      for (let i = 0; i < items.length; i++) {
-        const title = items[i].getElementsByTagName("title")[0] ? items[i].getElementsByTagName("title")[0].textContent : "No Title";
-        const link = items[i].getElementsByTagName("enclosure")[0] ? items[i].getElementsByTagName("enclosure")[0].attributes.getNamedItem("url").value : "#";
+function togglePlay(episodeItem) {
+  const episodePlayer = episodeItem.querySelector(".episode-player");
+  const playButton = episodeItem.querySelector(".play-button");
 
-        const itemDiv = document.createElement('div');
-        itemDiv.classList.add('rss-item');
-        itemDiv.style.display = 'flex';
-        itemDiv.style.justifyContent = 'space-between';
-        itemDiv.style.alignItems = 'center';
+  if (episodePlayer.style.display === "none") {
+    playButton.textContent = "Stop";
+    episodePlayer.style.display = "block";
+    const audio = document.createElement("audio");
+    audio.style.width = "100%";
+    audio.src = episodeItem.querySelector("a").getAttribute("href");
+    audio.controls = true;
+    audio.play();
+    episodePlayer.appendChild(audio);
+  } else {
+    // Stop the episode
+    playButton.textContent = "Play";
+    episodePlayer.style.display = "none";
+    const audio = episodePlayer.querySelector("audio");
+    audio.pause();
+    audio.src = "";
+    episodePlayer.removeChild(audio);
+  }
+}
 
+function displayError(error) {
+  const errorContainer = document.createElement("div");
+  errorContainer.classList.add("error");
+  errorContainer.style.backgroundColor = "red";
+  errorContainer.textContent = error.message;
+  document.getElementById("rssPreviewContent").appendChild(errorContainer);
+}
 
-        const itemTitle = document.createElement('h3');
-        itemTitle.textContent = title;
-
-        const itemButton = document.createElement('button');
-        itemButton.classList.add('btn', 'btn-primary');
-        itemButton.innerHTML = "&#9658;"; // play emoji
-        itemButton.onclick = () => {
-          var mediaElement;
-          if (itemDiv.getElementsByTagName('audio').length === 0) {
-            mediaElement = document.createElement('audio');
-            mediaElement.autoplay = false;
-            itemDiv.appendChild(mediaElement);
-          } else {
-            mediaElement = itemDiv.getElementsByTagName('audio')[0];
-          }
-          if (mediaElement.paused) {
-            var playtime = Math.round(mediaElement.currentTime);
-            mediaElement.src = link + "#t=" + playtime;
-            mediaElement.load();
-            mediaElement.play();
-            itemButton.innerHTML = "&#10074;&#10074;"; // pause emoji
-          } else {
-            mediaElement.pause();
-            var tmp_src = mediaElement.src;
-            var playtime = mediaElement.currentTime;
-            mediaElement.src = '';
-            mediaElement.load();
-            mediaElement.currentTime = playtime;
-            itemButton.innerHTML = "&#9658;"; // play emoji
-          }
-        };
-
-        itemDiv.appendChild(itemTitle);
-        itemDiv.appendChild(itemButton);
-        rssPreviewContent.appendChild(itemDiv);
-      }
-    }
-
-    function copyToClipboard() {
-      const rssUrl = document.getElementById("rssUrl");
-      rssUrl.select();
-      document.execCommand("copy");
-      const button = document.querySelector('#copyButton');
-      button.classList.add('btn-success');
-      button.innerHTML = '<i class="fas fa-check">✓</i>';
-      setTimeout(() => {
-        button.classList.remove('btn-success');
-        button.innerHTML = 'Copy URL';
-      }, 2000);
-    }
+function copyToClipboard() {
+  const rssUrl = document.getElementById("rssUrl");
+  rssUrl.select();
+  rssUrl.setSelectionRange(0, 99999); // For mobile devices
+  document.execCommand("copy");
+  // Provide the user feedback that the URL was copied
+  const copyButton = document.getElementById("copyButton");
+  copyButton.textContent = "Copied!";
+  copyButton.classList.add('btn-success');
+  setTimeout(() => {
+    copyButton.textContent = "Copy URL";
+    copyButton.classList.remove('btn-success');
+  }, 2000);
+}
   </script>
 </body>
 
