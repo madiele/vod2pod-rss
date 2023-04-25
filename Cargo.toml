@@ -34,6 +34,7 @@ md5 = "0.7.0"
 mime = "0.3.17"
 cached = { version = "0.42.0", features = ["redis_tokio"] }
 iso8601-duration = "0.2.0"
+chrono = "0.4.24"
 
 [dev-dependencies]
 temp-env ={ version = "0.3.4", features = ["async_closure"] }
