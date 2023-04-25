@@ -275,8 +275,10 @@ function copyToClipboard() {
   // Provide the user feedback that the URL was copied
   const copyButton = document.getElementById("copyButton");
   copyButton.textContent = "Copied!";
+  copyButton.classList.add('btn-success');
   setTimeout(() => {
     copyButton.textContent = "Copy URL";
+    copyButton.classList.remove('btn-success');
   }, 2000);
 }
   </script>
