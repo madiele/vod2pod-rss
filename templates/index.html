@@ -20,10 +20,15 @@
             background-color: #c9d1d9;
             color: #0d1117;
         }
-      .item {
+        .item {
           display: none;
           animation: fadeIn 1s ease-in-out;
-      }
+          color: #c9d1d9;
+          font-size: 18px;
+          margin-top: 5px;
+          background-color: #161b22;
+          animation: slideLeft 0.3s ease forwards;
+        }
 
       @keyframes fadeIn {
         0% {
@@ -162,12 +167,12 @@ function displayPodcastInfo(podcast) {
   const podcastInfoContainer = document.createElement("div");
   podcastInfoContainer.classList.add("item");
   podcastInfoContainer.innerHTML = `
-    <div class="card">
+    <div class="card bg-dark text-white">
       <div class="card-body">
         <div class="row">
-                    <div class="d-none d-md-block col-md-3 d-flex align-items-center">
-                      <img class="card-img-top img-fluid" src="${podcast.thumbnail || 'https://via.placeholder.com/50'}" alt="Podcast Thumbnail" style="max-height: 80px; width: auto; max-width: 100%;">
-                    </div>
+          <div class="d-none d-md-block col-md-3 d-flex align-items-center">
+            <img class="card-img-top img-fluid" src="${podcast.thumbnail || 'https://via.placeholder.com/50'}" alt="Podcast Thumbnail" style="max-height: 80px; width: auto; max-width: 100%;">
+          </div>
           <div class="col-md-9">
             <h5 class="card-title">${podcast.title}</h5>
             <p class="card-text">${podcast.description}</p>
@@ -199,28 +204,31 @@ function displayEpisodes(episodes) {
 
 const episodeItem = document.createElement("div");
     episodeItem.innerHTML = `
-<div class="card">
+<div class="card bg-dark text-white ">
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center">
       <h4 class="card-title mb-0" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${episode.title}">${episode.title}</h4>
 <button id="playBtn" class="btn btn-secondary play-button mt-3 d-flex align-items-center justify-content-center" ${!episode.mp3_url ? 'disabled' : ''} title="${!episode.mp3_url ? 'Transcoding is disabled' : ''}" style="pointer-events: auto;" >Play</button>
     </div>
-    <div class="episode-player" style="display: none; animation: slideDown 0.3s ease forwards;"></div>
+    <div class="episode-player" style="display: none; animation: slideLeft 0.3s ease forwards;"></div>
     <a href=${episode.mp3_url} style="display:none;"></a>
   </div>
 </div>
 
 <style>
+.episode-player {
+  padding-top: 10px;
+}
 .episode-player.slideOut {
   animation: slideUp 1s ease reverse forwards;
 }
-@keyframes slideDown {
+@keyframes slideLeft {
 0% {
-  transform: translateY(-100%);
+  transform: translateX(-5%);
   opacity: 0;
 }
 100% {
-  transform: translateY(0);
+  transform: translateX(0);
   opacity: 1;
 }
 }
