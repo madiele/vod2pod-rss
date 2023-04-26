@@ -38,6 +38,28 @@
           opacity: 1;
         }
       }
+  .error-animation {
+    background-color: red;
+    animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+  }
+
+  @keyframes shake {
+    10%, 90% {
+      transform: translate3d(-1px, 0, 0);
+    }
+
+    20%, 80% {
+      transform: translate3d(2px, 0, 0);
+    }
+
+    30%, 50%, 70% {
+      transform: translate3d(-4px, 0, 0);
+    }
+
+    40%, 60% {
+      transform: translate3d(4px, 0, 0);
+    }
+  }
         .container {
             max-width: 530px;
             background-color: #161b22;
@@ -83,7 +105,7 @@
         <h2 class="text-center mb-4">RSS Feed Preview</h2>
         <div class="d-flex justify-content-center">
           <div id="loadingCircle" style="display:none;">
-            <div style="border: 16px solid #f3f3f3;border-top: 16px solid #3498db;border-radius: 50%;width: 50px;height: 50px;animation: spin 0.3s linear infinite;"></div>
+            <div style="border: 8px solid #f3f3f3;border-top: 8px solid #3498db;border-radius: 50%;width: 50px;height: 50px;animation: spin 0.7s linear infinite;"></div>
             <style>
             @keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}
             </style>
@@ -99,6 +121,7 @@
   </p>
 </footer>
   </div>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script>
   <script>
 function toggleClearButton() {
   const clearButton = document.getElementById("clearButton");
@@ -126,27 +149,38 @@ async function generateRSSURL() {
 
 async function displayRSSPreview(rssUrl) {
   try {
+    document.getElementById("rssPreviewContent").innerHTML = "";
     document.getElementById("loadingCircle").style.display = "block";
     const rssPreviewContainer = document.querySelector(".rss-preview-container");
     rssPreviewContainer.style.display = "block";
     const rss = await fetchData(rssUrl);
 
     const podcastInfo = extractPodcastInfo(rss);
-    document.getElementById("rssPreviewContent").innerHTML = "";
     displayPodcastInfo(podcastInfo);
 
     document.getElementById("loadingCircle").style.display = "none";
     const episodes = extractEpisodes(rss);
     displayEpisodes(episodes);
+    const observer = lozad(); // lazy loads elements with default selector as '.lozad'
+    observer.observe();
   } catch (error) {
+    document.getElementById("loadingCircle").style.display = "none";
+    var button = document.getElementById("generateButton");
+    button.classList.add("error-animation");
+    button.classList.add('btn-danger');
     displayError(error);
+    setTimeout(function() {
+      button.classList.remove("error-animation");
+      button.classList.remove('btn-danger');
+    }, 2000);
   }
 }
 
 async function fetchData(rssUrl) {
   const response = await fetch(rssUrl);
   if (!response.ok) {
-    throw new Error(`Error ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`Error ${response.status}: ${errorText}`);
   }
   const text = await response.text();
   const parser = new DOMParser();
@@ -170,10 +204,10 @@ function displayPodcastInfo(podcast) {
     <div class="card bg-dark text-white">
       <div class="card-body">
         <div class="row">
-          <div class="d-none d-md-block col-md-3 d-flex align-items-center">
+          <div class="col-3 d-flex align-items-center rounded">
             <img class="card-img-top img-fluid" src="${podcast.thumbnail || 'https://via.placeholder.com/50'}" alt="Podcast Thumbnail" style="max-height: 80px; width: auto; max-width: 100%;">
           </div>
-          <div class="col-md-9">
+          <div class="col-9">
             <h5 class="card-title">${podcast.title}</h5>
             <p class="card-text">${podcast.description}</p>
           </div>
@@ -191,7 +225,8 @@ function extractEpisodes(rss) {
     return {
       title: item.querySelector("title").textContent,
       mp3_url: item.querySelector("enclosure") ? item.querySelector("enclosure").getAttribute("url") : null,
-      image: item.querySelector("image") ? item.querySelector("image").textContent : null
+      image: item.querySelector("image") ? item.querySelector("image").getAttribute("href") : null,
+      description: item.querySelector("description") ? item.querySelector("description").textContent : ""
     };
   });
   return episodes;
@@ -204,14 +239,19 @@ function displayEpisodes(episodes) {
 
 const episodeItem = document.createElement("div");
     episodeItem.innerHTML = `
-<div class="card bg-dark text-white ">
-  <div class="card-body">
-    <div class="d-flex justify-content-between align-items-center">
-      <h4 class="card-title mb-0" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${episode.title}">${episode.title}</h4>
-<button id="playBtn" class="btn btn-secondary play-button mt-3 d-flex align-items-center justify-content-center" ${!episode.mp3_url ? 'disabled' : ''} title="${!episode.mp3_url ? 'Transcoding is disabled' : ''}" style="pointer-events: auto;" >Play</button>
+<div class="card bg-dark text-white lozad" data-background-image="${episode.image}" style="border: none; background-position: center; background-size: cover;  animation: fadeIn ease-in 1s;">
+  <div class="card-body" style="background-color: rgba(0, 0, 0, 0.9);">
+    <div class="row">
+      <div class="row col-11 d-flex justify-content-between align-items-center">
+        <h4 class="card-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${episode.title}">${episode.title}</h4>
+        <div onclick="this.style.maxHeight = (this.style.maxHeight === 'none') ? '50px' : 'none';" class="description" style="max-height: 50px; overflow: hidden;">
+          ${episode.description}
+        </div>
+      </div>
+      <button id="playBtn" class="btn btn-secondary play-button col-1 d-flex align-items-center justify-content-center align-self-center " ${!episode.mp3_url ? 'disabled' : ''} title="${!episode.mp3_url ? 'Transcoding is disabled' : ''}" style="max-height: 50px;pointer-events: auto;" >Play</button>
     </div>
     <div class="episode-player" style="display: none; animation: slideLeft 0.3s ease forwards;"></div>
-    <a href=${episode.mp3_url} style="display:none;"></a>
+    <a class="mp3-url" href=${episode.mp3_url} style="display:none;"></a>
   </div>
 </div>
 
@@ -251,7 +291,7 @@ function togglePlay(episodeItem) {
     episodePlayer.style.display = "block";
     const audio = document.createElement("audio");
     audio.style.width = "100%";
-    audio.src = episodeItem.querySelector("a").getAttribute("href");
+    audio.src = episodeItem.querySelector(".mp3-url").getAttribute("href");
     audio.controls = true;
     audio.play();
     episodePlayer.appendChild(audio);
@@ -268,9 +308,19 @@ function togglePlay(episodeItem) {
 
 function displayError(error) {
   const errorContainer = document.createElement("div");
-  errorContainer.classList.add("error");
-  errorContainer.style.backgroundColor = "red";
-  errorContainer.textContent = error.message;
+  errorContainer.id = "error-container";
+  errorContainer.classList.add("card", "bg-danger");
+  const errorCardBody = document.createElement("div");
+  errorCardBody.classList.add("card-body");
+  const errorTitle = document.createElement("h5");
+  errorTitle.classList.add("card-title");
+  errorTitle.textContent = "Error";
+  const errorMessage = document.createElement("p");
+  errorMessage.classList.add("card-text");
+  errorMessage.textContent = error.message;
+  errorCardBody.appendChild(errorTitle);
+  errorCardBody.appendChild(errorMessage);
+  errorContainer.appendChild(errorCardBody);
   document.getElementById("rssPreviewContent").appendChild(errorContainer);
 }
 
@@ -279,7 +329,6 @@ function copyToClipboard() {
   rssUrl.select();
   rssUrl.setSelectionRange(0, 99999); // For mobile devices
   document.execCommand("copy");
-  // Provide the user feedback that the URL was copied
   const copyButton = document.getElementById("copyButton");
   copyButton.textContent = "Copied!";
   copyButton.classList.add('btn-success');

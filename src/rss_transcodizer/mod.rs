@@ -401,7 +401,7 @@ Url::parse(url.href.to_string().as_str()).unwrap()
 
     let duration = match media_element.duration {
         Some(x) => {
-    debug!("duration found: {} secs", x.as_secs());
+            debug!("duration found: {} secs", x.as_secs());
             x
         },
         None => {
@@ -424,6 +424,10 @@ Url::parse(url.href.to_string().as_str()).unwrap()
     };
 
     let duration_secs = duration.as_secs();
+    if duration_secs == 0 {
+        warn!("skipping episode with 0 duration with title {}", &item.title.map(|t| t.content.to_string()).unwrap_or_default());
+        return None;
+    }
     let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
     itunes_builder.duration(Some(duration_string));
     let mut transcode_service_url = transcode_service_url;
