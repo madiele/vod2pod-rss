@@ -11,13 +11,12 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 - VoDs are transcoded to MP3 192k on the fly by default, tested to be working flawlessly even on a Raspberry Pi 3-4.
 - also work on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
 
-## Known issues:
+## Limitations:
 
-- First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
 - Youtube channel avatar is not present and results are limited to 15 when no youtube API key is set 
 
-<a label="frontend" href="url"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
 # Usage
+<a label="frontend" href="url"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
 
 Just go to the root of the server es: `myserver.com` and paste the channel you want to convert to podcast and copy the generated link.
 
