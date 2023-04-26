@@ -185,7 +185,6 @@ function extractEpisodes(rss) {
   const episodes = items.map(item => {
     return {
       title: item.querySelector("title").textContent,
-      duration: item.querySelector("duration").textContent,
       mp3_url: item.querySelector("enclosure") ? item.querySelector("enclosure").getAttribute("url") : null,
       image: item.querySelector("image") ? item.querySelector("image").textContent : null
     };
@@ -204,7 +203,7 @@ const episodeItem = document.createElement("div");
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center">
       <h4 class="card-title mb-0" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${episode.title}">${episode.title}</h4>
-      <button class="btn btn-secondary play-button mt-3 d-flex align-items-center justify-content-center">Play</button>
+<button id="playBtn" class="btn btn-secondary play-button mt-3 d-flex align-items-center justify-content-center" ${!episode.mp3_url ? 'disabled' : ''} title="${!episode.mp3_url ? 'Transcoding is disabled' : ''}" style="pointer-events: auto;" >Play</button>
     </div>
     <div class="episode-player" style="display: none; animation: slideDown 0.3s ease forwards;"></div>
     <a href=${episode.mp3_url} style="display:none;"></a>
