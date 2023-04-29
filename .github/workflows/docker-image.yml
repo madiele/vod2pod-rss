@@ -21,6 +21,18 @@ jobs:
           # Replace the old version with the new version
           sed -i "s/^version = \"$VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
         shell: bash
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a v$VERSION -m "version $VERSION"
+          git commit -a -m "Bump patch version to $NEW_VERSION"
+          git push origin HEAD --follow-tags
+          git fetch --unshallow
+          git checkout main
+          git merge stable
+          git push origin HEAD --follow-tags
+          git checkout stable
 
   push_to_Docker_Hub_amd64:
       needs: cargo_version_bump
@@ -49,10 +61,111 @@ jobs:
           with:
             context: ./
             file: ./Dockerfile
+            push: true
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
+            platforms: linux/amd64
             cache-from: type=gha
             cache-to: type=gha,mode=max
-            push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:test-amd64
-            platforms: linux/amd64
             build-args: |
               BUILDKIT_INLINE_CACHE=1
+  push_to_Docker_Hub_arm64:
+      needs: cargo_version_bump
+      runs-on: ubuntu-latest
+      steps:
+        - name: checkout repo
+          uses: actions/checkout@v3
+        - name: Bump patch version
+          run: |
+            # Get the current version
+            VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
+        - name: Set up QEMU
+          uses: docker/setup-qemu-action@v2
+        - name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v2
+        - name: Login to DockerHub
+          uses: docker/login-action@v2
+          with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_TOKEN }}
+        - name: Build and push
+          uses: docker/build-push-action@v4
+          with:
+            context: ./
+            file: ./Dockerfile
+            push: true
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
+            platforms: linux/arm64
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+            build-args: |
+              BUILDKIT_INLINE_CACHE=1
+  push_to_Docker_Hub_arm_v7:
+      needs: cargo_version_bump
+      runs-on: ubuntu-latest
+      steps:
+        - name: Set Swap Space
+          uses: pierotofy/set-swap-space@v1.0
+          with:
+            swap-size-gb: 10
+        - run: |
+            # Workaround for https://github.com/rust-lang/cargo/issues/8719
+            sudo mkdir -p /var/lib/docker
+            sudo mount -t tmpfs -o size=10G none /var/lib/docker
+            sudo systemctl restart docker
+        - name: checkout repo
+          uses: actions/checkout@v3
+        - name: get version
+          run: |
+            # Get the current version
+            VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
+        - name: Set up QEMU
+          uses: docker/setup-qemu-action@v2
+        - name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v2
+        - name: Login to DockerHub
+          uses: docker/login-action@v2
+          with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_TOKEN }}
+        - name: Build and push
+          uses: docker/build-push-action@v4
+          with:
+            context: ./
+            file: ./Dockerfile
+            push: true
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
+            platforms: linux/arm/v7
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+            build-args: |
+              BUILDKIT_INLINE_CACHE=1
+  merge_tags:
+      needs: [push_to_Docker_Hub_arm64, push_to_Docker_Hub_arm_v7, push_to_Docker_Hub_amd64]
+      runs-on: ubuntu-latest
+      steps:
+        - name: checkout repo
+          uses: actions/checkout@v3
+        - name: get version
+          run: |
+            # Get the current version
+            VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: Login to DockerHub
+          uses: docker/login-action@v2
+          with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_TOKEN }}
+        - name: merge into latest
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64
+        - name: merge into versio
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }} ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
