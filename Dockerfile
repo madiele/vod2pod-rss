@@ -18,7 +18,8 @@ RUN apt-get update && \
 
 RUN cargo build-deps --release
 COPY src /tmp/vod2pod/src
-COPY Cargo.toml ./
+COPY set_version.sh version.txt* ./
+RUN sh set_version.sh
 
 RUN cargo build  --release
 
