@@ -23,7 +23,8 @@ pub fn from(url: Url) -> Box<dyn ConvertableToFeed> {
         _ if url.domain().unwrap_or_default().contains("twitch.tv") => Box::new(TwitchUrl { url }),
         _ if url.domain().unwrap_or_default().contains("youtube.com") || url.domain().unwrap_or_default().contains("youtu.be") => {
             match url {
-                _ if url.path().starts_with("/playlist/") => Box::new(YoutubePlaylistUrl { url }),
+                _ if url.path().starts_with("/playlist") => Box::new(YoutubePlaylistUrl { url }),
+                _ if url.path().starts_with("/feeds/") => Box::new(GenericUrl { url }),
                 _ if url.path().starts_with("/channel/") => Box::new(YoutubeChannelUrl { url }),
                 _ if url.path().starts_with("/user/") => Box::new(YoutubeChannelUrl { url }),
                 _ if url.path().starts_with("/c/") => Box::new(YoutubeChannelUrl { url }),
