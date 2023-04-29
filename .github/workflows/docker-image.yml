@@ -58,4 +58,5 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:test-amd64
             platforms: linux/amd64
-            build-arg: BUILDKIT_INLINE_CACHE=1
+            build-args: |
+              BUILDKIT_INLINE_CACHE=1
