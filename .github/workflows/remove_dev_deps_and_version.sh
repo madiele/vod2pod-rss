@@ -10,6 +10,7 @@ VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' $TOML_FILE)
 sed '/\[dev-dependencies\]/,/^$/d' $TOML_FILE | sed 's/^version = .*$/version = "0\.0\.1"/' > "$TMP_FILE"
 echo "$0: version found $VERSION"
 echo "$VERSION" > version.txt
+cat version.txt
 
 # print the modified TOML code to the console
 cat "$TMP_FILE" > "$TOML_FILE"
