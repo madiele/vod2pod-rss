@@ -66,8 +66,8 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
             platforms: linux/amd64
-            cache-from: type=gha,scope=${{ github.head_ref || github.ref_name }}-amd64
-            cache-to: type=gha,mode=max,scope=${{ github.head_ref || github.ref_name }}-amd64
+            cache-from: type=gha,scope=main-amd64
+            cache-to: type=gha,mode=max,scope=main-amd64
             build-args: |
               BUILDKIT_INLINE_CACHE=1
   push_to_Docker_Hub_arm64:
@@ -102,8 +102,8 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
             platforms: linux/arm64
-            cache-from: type=gha,scope=${{ github.head_ref || github.ref_name }}-arm64
-            cache-to: type=gha,mode=max,scope=${{ github.head_ref || github.ref_name }}-arm64
+            cache-from: type=gha,scope=main-arm64
+            cache-to: type=gha,mode=max,scope=main-arm64
             build-args: |
               BUILDKIT_INLINE_CACHE=1
   push_to_Docker_Hub_arm_v7:
@@ -147,8 +147,8 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
             platforms: linux/arm/v7
-            cache-from: type=gha,scope=${{ github.head_ref || github.ref_name }}-armv7
-            cache-to: type=gha,mode=max,scope=${{ github.head_ref || github.ref_name }}-armv7
+            cache-from: type=gha,scope=main-armv7
+            cache-to: type=gha,mode=max,scope=main-armv7
             build-args: |
               BUILDKIT_INLINE_CACHE=1
   merge_tags:
