@@ -12,8 +12,15 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+#VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' $TOML_FILE)
+#sed '/\[dev-dependencies\]/,/^$/d' $TOML_FILE | sed 's/^version = .*$/version = "0\.0\.1"/' > "$TMP_FILE"
+#echo "$VERSION" > version.txt
+
 RUN cargo build-deps --release
 COPY src /tmp/vod2pod/src
+COPY set_version.sh ./
+RUN sh set_version.sh
+
 RUN cargo build  --release
 
 #----------
