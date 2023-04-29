@@ -1,4 +1,4 @@
-# vod2pod-rss [![tests](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml) [![deploy to dockerhub](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml)
+# vod2pod-rss [![tests](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml/badge.svg)](https://github.com/madiele/vod2pod-rss/actions/workflows/rust.yml) [![stable image](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml/badge.svg?branch=stable)](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image.yml) [![beta image](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image-beta.yml/badge.svg)](https://github.com/madiele/vod2pod-rss/actions/workflows/docker-image-beta.yml)
 
 Converts a YouTube or Twitch channel into a full-blown podcast.
 
@@ -11,13 +11,12 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 - VoDs are transcoded to MP3 192k on the fly by default, tested to be working flawlessly even on a Raspberry Pi 3-4.
 - also work on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
 
-## Known issues:
+## Limitations:
 
-- First time you ask for a feed it will take up to a minute or two for the request to go through, following request will be faster as the cache get build.
 - Youtube channel avatar is not present and results are limited to 15 when no youtube API key is set 
 
-<a label="frontend" href="url"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
 # Usage
+<a label="frontend" href="url"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
 
 Just go to the root of the server es: `myserver.com` and paste the channel you want to convert to podcast and copy the generated link.
 
@@ -28,7 +27,7 @@ Example youtube: `myserver.com/transcodize_rss?url=https://www.youtube.com/c/cha
 
 Example twitch: `myserver.com/transcodize_rss?url=https://www.twitch.tv/channelname`
 
-Example rss/atom feed: `myserver.com/transcodize_rss?url=https://feeds.simplecast.com/aU_RzZ7j`
+Example rss/atom feed (be sure to add the domain to the whitelist): `myserver.com/transcodize_rss?url=https://feeds.simplecast.com/aU_RzZ7j`
 
 
 Just add the link to your podcast client.
@@ -51,9 +50,7 @@ https://developers.google.com/youtube/v3/getting-started
 
 ### running the server
 
-precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64. other architectures will need to be compiled (docker compose will do it automatically but it's slow)
-
-images for raspberry pis 64bit are included
+precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
 
 #### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image
 
@@ -87,6 +84,7 @@ You can set the following environment variables:
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
 - `BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
+- `VALID_URL_DOMAINS`: Set a comma separated list of domains urls that are allowed to be converted into RSS  (defaults to yotube and twitch urls)
 
 ## Donations
 
@@ -98,3 +96,4 @@ This is a passion project, and mostly made for personal use, but if you want to 
 
 Pull requests for small features and bugs are welcome. For major changes, please open an issue first to discuss what you would like to change.
 to run locally you will need to install ffmpeg and yt-dlp, for redis just use `sudo docker compose -f docker compose.dev_enviroment.yml up -d` on the root folder of the project, set enviroment variables using `export RUST_LOG=DEBUG` you can see all the envs you need to set in the docker-compose.yml file, feel free to get in contact if you need help!
+To run the latest build based on the main branch just pull the `madiele/vod-to-podcast:beta` image

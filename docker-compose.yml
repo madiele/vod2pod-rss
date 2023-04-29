@@ -4,18 +4,18 @@ services:
   api_keys:
     image: alpine
     environment:
-    #add your api-keys here
+    #add your api-keys here (put them after the "=" sign or use an .env file)
       # Set your YouTube API key
-      - YT_API_KEY=
+      - YT_API_KEY=${YT_API_KEY}
       # Set your Twitch secret
-      - TWITCH_SECRET=
+      - TWITCH_SECRET=${TWITCH_SECRET}
       # Set your Twitch client ID
-      - TWITCH_CLIENT_ID=
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
 
   vod2pod:
     extends: api_keys
     build:
-        context: https://github.com/madiele/vod2pod-rss.git
+        context: .
     image: madiele/vod-to-podcast
     depends_on:
       - redis
@@ -27,11 +27,13 @@ services:
       - MP3_BITRATE=192 #bitrate in kilobits of the mp3 transcode
       - TRANSCODE=true #put to false if you only need feed generation
       - SUBFOLDER=/ #for reverse proxies, ex: "/" -> access the app at mywebsite.com ; "vtprss" -> access at mywebsite.com/vtprss
-      - RUST_LOG=INFO #set to DEBUG if you are having problems than open a github issue with the logs, use "sudo docker compose logs" to print them
+      - RUST_LOG=DEBUG #set to DEBUG if you are having problems than open a github issue with the logs, use "sudo docker compose logs" to print them
       - TWITCH_TO_PODCAST_URL=ttprss #don't edit this
       - PODTUBE_URL=http://podtube:15000 #don't edit this
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
+      # put here any url (scheme included) you want to allow for rss conversion separated by comma
+      - VALID_URL_DOMAINS=https://www.youtube.com/,https://www.youtu.be/,https://www.twitch.tv/
 
   redis:
     image: "redis:6.2"

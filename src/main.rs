@@ -9,7 +9,6 @@ use vod2pod_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName},
 };
 
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
@@ -97,6 +96,11 @@ async fn transcodize_rss(
         Ok(x) => x,
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
+
+    if !url_convert::check_if_in_whitelist(&parsed_url) {
+        error!("supplied url ({parsed_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
+        return HttpResponse::NotAcceptable().body("scheme and host not in whitelist");
+    }
 
     let converted_url = match url_convert::from(parsed_url).to_feed_url().await {
         Ok(x) => x,

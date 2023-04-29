@@ -1,43 +1,16 @@
-name: stable image
+name: beta image
 on:
-  push:
-    branches: [ stable ]
-  # Allows you to run this workflow manually from the Actions tab
+  workflow_run:
+    workflows: ["tests"]
+    branches: [main]
+    types:
+      - completed
   workflow_dispatch:
 
 concurrency: ${{ github.head_ref || github.ref_name }}
 
 jobs:
-  cargo_version_bump:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Bump patch version
-        run: |
-          # Get the current version
-          VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
-          # Bump the minor version
-          NEW_VERSION=$(echo $VERSION | awk -F "." '{print $1"."$2"."($3+1)}')
-          echo "NEW_VERSION=${NEW_VERSION}" >> $GITHUB_ENV
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          # Replace the old version with the new version
-          sed -i "s/^version = \"$VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
-        shell: bash
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Action"
-          git tag -a v$VERSION -m "version $VERSION"
-          git commit -a -m "Bump patch version to $NEW_VERSION"
-          git push origin HEAD --follow-tags
-          git fetch --unshallow
-          git checkout main
-          git merge stable
-          git push origin HEAD --follow-tags
-          git checkout stable
-
   push_to_Docker_Hub_amd64:
-      needs: cargo_version_bump
       runs-on: ubuntu-latest
       steps:
         - name: checkout repo
@@ -64,14 +37,13 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-beta
             platforms: linux/amd64
             cache-from: type=gha,scope=main-amd64
             cache-to: type=gha,mode=max,scope=main-amd64
             build-args: |
               BUILDKIT_INLINE_CACHE=1
   push_to_Docker_Hub_arm64:
-      needs: cargo_version_bump
       runs-on: ubuntu-latest
       steps:
         - name: checkout repo
@@ -100,14 +72,13 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-beta
             platforms: linux/arm64
             cache-from: type=gha,scope=main-arm64
             cache-to: type=gha,mode=max,scope=main-arm64
             build-args: |
               BUILDKIT_INLINE_CACHE=1
   push_to_Docker_Hub_arm_v7:
-      needs: cargo_version_bump
       runs-on: ubuntu-latest
       steps:
         - name: Set Swap Space
@@ -145,7 +116,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-beta
             platforms: linux/arm/v7
             cache-from: type=gha,scope=main-armv7
             cache-to: type=gha,mode=max,scope=main-armv7
@@ -167,7 +138,7 @@ jobs:
           with:
             username: ${{ secrets.DOCKERHUB_USERNAME }}
             password: ${{ secrets.DOCKERHUB_TOKEN }}
-        - name: merge into latest
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
-        - name: merge into versio
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }} ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
+        - name: merge into version
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-beta
+        - name: merge into version
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-beta

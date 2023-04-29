@@ -1,4 +1,4 @@
-name: run rust tests
+name: tests
 
 on:
   push:
@@ -17,6 +17,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --verbose
       - name: Install ffmpeg and redis
