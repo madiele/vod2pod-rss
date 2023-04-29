@@ -1,4 +1,4 @@
-name: deploy beta to dockerhub
+name: beta image
 on:
   workflow_run:
     workflows: ["run rust tests"]

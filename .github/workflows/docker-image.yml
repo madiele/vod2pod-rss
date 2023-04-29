@@ -1,4 +1,4 @@
-name: deploy to dockerhub
+name: stable image
 on:
   push:
     branches: [ stable ]
