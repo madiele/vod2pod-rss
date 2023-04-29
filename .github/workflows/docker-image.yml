@@ -45,6 +45,10 @@ jobs:
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v2
         - name: Login to DockerHub
@@ -60,6 +64,10 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
             platforms: linux/amd64
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+            build-args: |
+              BUILDKIT_INLINE_CACHE=1
   push_to_Docker_Hub_arm64:
       needs: cargo_version_bump
       runs-on: ubuntu-latest
@@ -71,6 +79,10 @@ jobs:
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v2
         - name: Set up Docker Buildx
@@ -88,6 +100,10 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
             platforms: linux/arm64
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+            build-args: |
+              BUILDKIT_INLINE_CACHE=1
   push_to_Docker_Hub_arm_v7:
       needs: cargo_version_bump
       runs-on: ubuntu-latest
@@ -108,6 +124,10 @@ jobs:
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v2
         - name: Set up Docker Buildx
@@ -125,6 +145,10 @@ jobs:
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
             platforms: linux/arm/v7
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
+            build-args: |
+              BUILDKIT_INLINE_CACHE=1
   merge_tags:
       needs: [push_to_Docker_Hub_arm64, push_to_Docker_Hub_arm_v7, push_to_Docker_Hub_amd64]
       runs-on: ubuntu-latest

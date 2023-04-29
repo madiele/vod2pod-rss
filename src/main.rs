@@ -9,7 +9,6 @@ use vod2pod_rss::{
     transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName},
 };
 
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
