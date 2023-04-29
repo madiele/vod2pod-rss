@@ -1,7 +1,7 @@
 name: beta image
 on:
   workflow_run:
-    workflows: ["run rust tests"]
+    workflows: ["tests"]
     branches: [main]
     types:
       - completed
