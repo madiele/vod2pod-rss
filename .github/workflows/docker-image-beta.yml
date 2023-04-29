@@ -7,6 +7,8 @@ on:
       - completed
   workflow_dispatch:
 
+concurrency: ${{ github.head_ref || github.ref_name }}
+
 jobs:
   push_to_Docker_Hub_amd64:
       runs-on: ubuntu-latest

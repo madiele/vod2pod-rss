@@ -5,6 +5,8 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+concurrency: ${{ github.head_ref || github.ref_name }}
+
 jobs:
   cargo_version_bump:
     runs-on: ubuntu-latest
