@@ -45,6 +45,10 @@ jobs:
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v2
         - name: Login to DockerHub
@@ -57,6 +61,8 @@ jobs:
           with:
             context: ./
             file: ./Dockerfile
+            cache-from: type=gha
+            cache-to: type=gha
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
             platforms: linux/amd64
@@ -71,6 +77,10 @@ jobs:
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v2
         - name: Set up Docker Buildx
@@ -108,6 +118,10 @@ jobs:
             # Get the current version
             VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        - name: remove dev deps and version (for cache purposes)
+          run: |
+            sh .github/workflows/remove_dev_deps_and_version.sh
+          shell: bash
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v2
         - name: Set up Docker Buildx
