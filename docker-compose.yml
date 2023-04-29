@@ -6,11 +6,11 @@ services:
     environment:
     #add your api-keys here (put them after the "=" sign or use an .env file)
       # Set your YouTube API key
-      - YT_API_KEY=${YT_API_KEY}
+      - YT_API_KEY=${YT_API_KEY:-}
       # Set your Twitch secret
-      - TWITCH_SECRET=${TWITCH_SECRET}
+      - TWITCH_SECRET=${TWITCH_SECRET:-}
       # Set your Twitch client ID
-      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
 
   vod2pod:
     extends: api_keys
@@ -33,7 +33,7 @@ services:
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
       # put here any url (scheme included) you want to allow for rss conversion separated by comma
-      - VALID_URL_DOMAINS=https://www.youtube.com/,https://www.youtu.be/,https://www.twitch.tv/
+      - VALID_URL_DOMAINS=https://www.youtube.com/,https://youtube.com/,https://www.youtu.be/,https://www.twitch.tv/,https://twitch.tv/
 
   redis:
     image: "redis:6.2"

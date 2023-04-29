@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use log::info;
+use log::{info, error};
 use reqwest::Url;
 use tokio::process::Command;
 #[allow(unused_imports)]
@@ -24,7 +24,12 @@ pub fn from(url: Url) -> Box<dyn ConvertableToFeed> {
         _ if url.domain().unwrap_or_default().contains("youtube.com") || url.domain().unwrap_or_default().contains("youtu.be") => {
             match url {
                 _ if url.path().starts_with("/playlist") => Box::new(YoutubePlaylistUrl { url }),
-                _ => Box::new(YoutubeChannelUrl { url }),
+                _ if url.path().starts_with("/feeds/") => Box::new(GenericUrl { url }),
+                _ if url.path().starts_with("/channel/") => Box::new(YoutubeChannelUrl { url }),
+                _ if url.path().starts_with("/user/") => Box::new(YoutubeChannelUrl { url }),
+                _ if url.path().starts_with("/c/") => Box::new(YoutubeChannelUrl { url }),
+                _ if url.path().starts_with("/@") => Box::new(YoutubeChannelUrl { url }),
+                _ => Box::new(UnsupportedYoutubeUrl { url }),
             }
         },
         _ => Box::new(GenericUrl { url }),
@@ -133,6 +138,18 @@ impl ConvertableToFeed for YoutubeChannelUrl {
             info!("converted to {feed_url}");
             Ok(feed_url)
         }
+    }
+}
+
+struct UnsupportedYoutubeUrl {
+    url: Url,
+}
+
+#[async_trait]
+impl ConvertableToFeed for UnsupportedYoutubeUrl {
+    async fn to_feed_url(&self) -> eyre::Result<Url> {
+        error!("unsupported yotube url found: {}", &self.url);
+        Err(eyre::eyre!("unsupported yotube url found: {}", &self.url))
     }
 }
 
