@@ -50,9 +50,7 @@ https://developers.google.com/youtube/v3/getting-started
 
 ### running the server
 
-precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7.
-
-images for raspberry pis 64bit are included
+precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
 
 #### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image
 
