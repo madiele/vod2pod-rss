@@ -54,7 +54,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             cache-from: type=gha
-            cache-to: type=gha
+            cache-to: type=gha,mode=max
             push: true
             tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
             platforms: linux/amd64
