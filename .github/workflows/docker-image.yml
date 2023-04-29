@@ -62,7 +62,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
             platforms: linux/amd64
             cache-from: type=gha
             cache-to: type=gha,mode=max
@@ -98,7 +98,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64
             platforms: linux/arm64
             cache-from: type=gha
             cache-to: type=gha,mode=max
@@ -143,7 +143,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7,${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7
             platforms: linux/arm/v7
             cache-from: type=gha
             cache-to: type=gha,mode=max
@@ -166,6 +166,6 @@ jobs:
             username: ${{ secrets.DOCKERHUB_USERNAME }}
             password: ${{ secrets.DOCKERHUB_TOKEN }}
         - name: merge into latest
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest-amd64
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:latest ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
         - name: merge into versio
           run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }} ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64 ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64
