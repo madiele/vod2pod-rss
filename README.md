@@ -27,7 +27,7 @@ Example youtube: `myserver.com/transcodize_rss?url=https://www.youtube.com/c/cha
 
 Example twitch: `myserver.com/transcodize_rss?url=https://www.twitch.tv/channelname`
 
-Example rss/atom feed: `myserver.com/transcodize_rss?url=https://feeds.simplecast.com/aU_RzZ7j`
+Example rss/atom feed (be sure to add the domain to the whitelist): `myserver.com/transcodize_rss?url=https://feeds.simplecast.com/aU_RzZ7j`
 
 
 Just add the link to your podcast client.
