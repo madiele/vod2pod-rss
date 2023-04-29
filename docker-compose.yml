@@ -33,7 +33,7 @@ services:
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
       # put here any url (scheme included) you want to allow for rss conversion separated by comma
-      - VALID_URL_DOMAINS=https://www.youtube.com/,https://www.youtu.be/,https://www.twitch.tv/
+      - VALID_URL_DOMAINS=https://www.youtube.com/,https://youtube.com/,https://www.youtu.be/,https://www.twitch.tv/,https://twitch.tv/
 
   redis:
     image: "redis:6.2"

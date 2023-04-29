@@ -56,7 +56,7 @@ impl Conf for EnvConf {
                 }
                 Ok(folder)
             },
-            ConfName::ValidUrlDomains => Ok(std::env::var("VALID_URL_DOMAINS").unwrap_or_else(|_| "https://www.youtube.com/,https://www.youtu.be/,https://www.twitch.tv/".to_string())),
+            ConfName::ValidUrlDomains => Ok(std::env::var("VALID_URL_DOMAINS").unwrap_or_else(|_| "https://www.youtube.com/,https://youtube.com/,https://www.youtu.be/,https://www.twitch.tv/,https://twitch.tv/".to_string())),
         }
     }
 }
