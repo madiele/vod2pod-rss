@@ -9,6 +9,14 @@ use cached::proc_macro::io_cached;
 
 use crate::configs::{conf, ConfName, Conf};
 
+pub fn check_if_in_whitelist(url: &Url) -> bool {
+    let valid_domains: Vec<Url> = conf().get(ConfName::ValidUrlDomains).unwrap().split(",").map(|s| Url::parse(s).unwrap()).collect();
+    let is_valid = valid_domains.iter().any(|valid_domain| {
+        url.scheme() == valid_domain.scheme() && url.host_str() == valid_domain.host_str()
+    });
+    return is_valid;
+}
+
 pub fn from(url: Url) -> Box<dyn ConvertableToFeed> {
     let url = url.to_owned();
     match url {

@@ -97,6 +97,11 @@ async fn transcodize_rss(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
+    if !url_convert::check_if_in_whitelist(&parsed_url) {
+        error!("supplied url ({parsed_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
+        return HttpResponse::NotAcceptable().body("scheme and host not in whitelist");
+    }
+
     let converted_url = match url_convert::from(parsed_url).to_feed_url().await {
         Ok(x) => x,
         Err(e) => {error!("fail when trying to convert channel {e}"); return HttpResponse::BadRequest().body(e.to_string())},

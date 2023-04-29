@@ -18,6 +18,7 @@ pub enum ConfName {
     PodTubeUrl,
     TranscodingEnabled,
     SubfolderPath,
+    ValidUrlDomains,
 }
 
 struct EnvConf { }
@@ -55,6 +56,7 @@ impl Conf for EnvConf {
                 }
                 Ok(folder)
             },
+            ConfName::ValidUrlDomains => Ok(std::env::var("VALID_URL_DOMAINS").unwrap_or_else(|_| "https://www.youtube.com/,https://www.youtu.be/,https://www.twitch.tv/".to_string())),
         }
     }
 }
