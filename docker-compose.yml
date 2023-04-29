@@ -6,11 +6,11 @@ services:
     environment:
     #add your api-keys here (put them after the "=" sign or use an .env file)
       # Set your YouTube API key
-      - YT_API_KEY=${YT_API_KEY}
+      - YT_API_KEY=${YT_API_KEY:-}
       # Set your Twitch secret
-      - TWITCH_SECRET=${TWITCH_SECRET}
+      - TWITCH_SECRET=${TWITCH_SECRET:-}
       # Set your Twitch client ID
-      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
 
   vod2pod:
     extends: api_keys
