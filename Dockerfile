@@ -1,14 +1,8 @@
 FROM rust:1.68 as builder
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends hashdeep && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
 COPY Cargo.toml ./
-RUN hashdeep -c md5,sha256 -r -o f -l .
 
 RUN cargo fetch
 RUN cargo install cargo-build-deps
@@ -25,7 +19,7 @@ COPY src /tmp/vod2pod/src
 COPY set_version.sh version.txt* ./
 RUN sh set_version.sh
 
-RUN cargo build  --release
+RUN cargo build --release
 
 #----------
 FROM debian:bullseye-slim
