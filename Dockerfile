@@ -28,33 +28,10 @@ FROM debian:bullseye-slim
 #install ffmpeg and yt-dlp
 ARG TARGETPLATFORM
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends xz-utils python3 curl ca-certificates && \
-    case ${TARGETPLATFORM} in \
-      linux/arm64) \
-        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz \
-        ;; \
-      linux/arm/v7) \
-        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-armhf-static.tar.xz \
-        ;; \
-      linux/amd64) \
-        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
-        ;; \
-      linux/386) \
-        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-i686-static.tar.xz \
-        ;; \
-      *) \
-        echo "Unsupported architecture: ${TARGETPLATFORM}" >&2 && exit 1 \
-        ;; \
-    esac && \
-    ls ffmpeg-release-static.tar.xz -lah && \
-    tar xf ffmpeg-release-static.tar.xz && \
-    cd ffmpeg-*-static && \
-    mv ffmpeg /usr/local/bin/ && \
-    cd .. && \
-    rm -rf ffmpeg-release-static.tar.xz ffmpeg-*-static && \
+    apt-get install -y --no-install-recommends python3 curl ca-certificates ffmpeg && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
-    apt-get -y purge curl xz-utils && \
+    apt-get -y purge curl && \
     apt-get -y autoremove && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/*
