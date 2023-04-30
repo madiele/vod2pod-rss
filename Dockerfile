@@ -18,6 +18,7 @@ COPY src /tmp/vod2pod/src
 
 #trick to use github action cache, check the action folder for more info
 COPY set_version.sh version.txt* ./
+COPY templates/ ./templates/
 RUN sh set_version.sh
 
 RUN cargo build --release
@@ -37,8 +38,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tmp/vod2pod/target/release/app /usr/local/bin/vod2pod
+COPY --from=builder /tmp/vod2pod/templates/ ./templates
 
-COPY templates/ ./templates/
 
 EXPOSE 8080
 

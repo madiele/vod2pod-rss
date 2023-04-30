@@ -8,7 +8,7 @@ else
 fi
 
 sed "s/^version = .*$/version = \"$VERSION\"/" Cargo.toml > Cargo.toml.tmp
-VERSION_HTML="<small class=\"text-muted\">$VERSION<\/small>"
+VERSION_HTML="<small class=\"text-muted\"><br>v$VERSION<\/small>"
 sed "s/<\!-- ###VERSION### -->/$VERSION_HTML/" templates/index.html > templates/index.html.tmp
 mv Cargo.toml.tmp Cargo.toml
-mv templates/index.html.tmp templates/index.html.ttttt
+mv templates/index.html.tmp templates/index.html
