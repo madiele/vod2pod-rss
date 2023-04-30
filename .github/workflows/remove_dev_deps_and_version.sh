@@ -4,7 +4,7 @@ SHORT_HASH=$(git rev-parse --short HEAD | cut -c1-7)
 
 RELEASE_TYPE=${1:-beta}
 
-if [[ "$RELEASE_TYPE" != "beta" && "$RELEASE_TYPE" != "stable" ]]; then
+if [ "$RELEASE_TYPE" != "beta" ] && [ "$RELEASE_TYPE" != "stable" ]; then
   echo "Please provide either 'beta' or 'stable' as input."
   exit 1
 fi
@@ -20,7 +20,7 @@ VERSION=$(grep -oP '^version = "\K[0-9]+\.[0-9]+\.[0-9]+' $TOML_FILE)
 sed '/\[dev-dependencies\]/,/^$/d' $TOML_FILE | sed 's/^version = .*$/version = "0\.0\.1"/' > "$TMP_FILE"
 echo "$0: version found $VERSION"
 
-if [[ "$RELEASE_TYPE" == "beta" ]]; then
+if [ "$RELEASE_TYPE" = "beta" ]; then
   VERSION="$VERSION-beta-$SHORT_HASH"
 fi
 
