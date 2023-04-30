@@ -3,6 +3,7 @@ FROM rust:1.68 as builder
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
 COPY Cargo.toml ./
+RUN sed '/\[dev-dependencies\]/,/^$/d' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
 
 RUN cargo fetch
 RUN cargo install cargo-build-deps
@@ -24,13 +25,39 @@ RUN cargo build --release
 #----------
 FROM debian:bullseye-slim
 
+#install ffmpeg and yt-dlp
+ARG TARGETPLATFORM
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg python3 curl libpcre2-dev ca-certificates && \
-    apt-get clean && \
+    apt-get install -y --no-install-recommends xz-utils python3 curl ca-certificates && \
+    case ${TARGETPLATFORM} in \
+      linux/arm64) \
+        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz \
+        ;; \
+      linux/arm/v7) \
+        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-armhf-static.tar.xz \
+        ;; \
+      linux/amd64) \
+        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
+        ;; \
+      linux/386) \
+        curl -o ffmpeg-release-static.tar.xz -O https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-i686-static.tar.xz \
+        ;; \
+      *) \
+        echo "Unsupported architecture: ${TARGETPLATFORM}" >&2 && exit 1 \
+        ;; \
+    esac && \
+    ls ffmpeg-release-static.tar.xz -lah && \
+    tar xf ffmpeg-release-static.tar.xz && \
+    cd ffmpeg-*-static && \
+    mv ffmpeg /usr/local/bin/ && \
+    cd .. && \
+    rm -rf ffmpeg-static.tar.xz ffmpeg-*-static && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp && \
+    apt-get -y purge curl xz-utils && \
+    apt-get -y autoremove && \
+    apt-get -y clean && \
     rm -rf /var/lib/apt/lists/*
-
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
-    chmod a+rx /usr/local/bin/yt-dlp
 
 COPY --from=builder /tmp/vod2pod/target/release/app /usr/local/bin/vod2pod
 
