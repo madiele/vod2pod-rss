@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 if [ -f version.txt ]; then
   cat version.txt
@@ -8,4 +8,7 @@ else
 fi
 
 sed "s/^version = .*$/version = \"$VERSION\"/" Cargo.toml > Cargo.toml.tmp
+VERSION_HTML="<small class=\"text-muted\"><br>v$VERSION<\/small>"
+sed "s/<\!-- ###VERSION### -->/$VERSION_HTML/" templates/index.html > templates/index.html.tmp
 mv Cargo.toml.tmp Cargo.toml
+mv templates/index.html.tmp templates/index.html
