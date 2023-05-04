@@ -40,10 +40,11 @@ impl Default for FFMPEGAudioCodec {
 #[derive(Serialize)]
 pub struct FfmpegParameters {
     pub seek_time: u32,
-    pub url: Url,
+    pub audio_url: Url,
     pub audio_codec: FFMPEGAudioCodec,
     pub bitrate_kbit: u32,
     pub max_rate_kbit: u32,
+    pub video_url: Url,
 }
 
 impl FfmpegParameters {
@@ -68,7 +69,7 @@ pub struct Transcoder {
             .expect("get_youtube_stream_url cache")
 } "##
 )]
-async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
+async fn get_youtube_audio_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let output = tokio::process::Command::new("yt-dlp")
         .arg("-x")
@@ -92,32 +93,121 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
 
 }
 
+#[io_cached(
+    map_error = r##"|e| eyre::Error::new(e)"##,
+    type = "AsyncRedisCache<Url, (Url, Url)>",
+    create = r##" {
+        AsyncRedisCache::new("cached_yt_video_audio_stream_url=", 18000)
+            .set_refresh(false)
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
+            .build()
+            .await
+            .expect("get_youtube_stream_url cache")
+} "##
+)]
+async fn get_youtube_video_audio_stream_urls(url: &Url) -> eyre::Result<(Url, Url)> {
+    debug!("getting stream_url for yt video: {}", url);
+    let output = tokio::process::Command::new("yt-dlp")
+        .arg("--get-url")
+        .arg(url.as_str())
+        .output().await;
+
+    match output {
+        Ok(x) => {
+            let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default();
+            let urls: Vec<&str> = raw_url.split('\n').collect();
+            if urls.len() < 2 {
+                return Err(eyre::eyre!("not enough streams found: {}", raw_url));
+            }
+            let video = Url::from_str(urls[1])?;
+            let audio = Url::from_str(urls[0])?;
+            Ok((video, audio))
+        }
+        Err(e) => Err(eyre::eyre!(e)),
+    }
+
+}
+
 impl Transcoder {
-    pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
+    pub async fn mp3_transcoder(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
         let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
-        let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
+        let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.audio_url.to_string()) {
             info!("detected youtube url, need to find the stream url if not in cache");
-            Self::get_ffmpeg_command(&FfmpegParameters {
+            let audio_url = get_youtube_audio_stream_url(&ffmpeg_paramenters.audio_url).await?;
+            Self::get_mp3_ffmpeg_command(&FfmpegParameters {
                 seek_time: ffmpeg_paramenters.seek_time,
-                url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
+                audio_url: audio_url.clone(),
+                video_url: audio_url, //TODO: refactor
                 audio_codec: FFMPEGAudioCodec::Libmp3lame,
                 bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
-                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit })
+                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit
+                })
         } else {
-            Self::get_ffmpeg_command(ffmpeg_paramenters)
+            Self::get_mp3_ffmpeg_command(ffmpeg_paramenters)
         };
 
 
         Ok(Self { ffmpeg_command })
     }
 
-    fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
+    pub async fn mp4_transcoder(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
+        let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
+        let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.audio_url.to_string()) {
+            info!("detected youtube url, need to find the stream url if not in cache");
+            let (video_url, audio_url) = get_youtube_video_audio_stream_urls(&ffmpeg_paramenters.audio_url).await?;
+            Self::get_mp4_ffmpeg_command(&FfmpegParameters {
+                seek_time: ffmpeg_paramenters.seek_time,
+                audio_url,
+                video_url,
+                audio_codec: FFMPEGAudioCodec::Libmp3lame,
+                bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
+                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit
+                })
+        } else {
+            Self::get_mp4_ffmpeg_command(ffmpeg_paramenters)
+        };
+
+
+        Ok(Self { ffmpeg_command })
+    }
+
+    fn get_mp4_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
         debug!("generating ffmpeg command");
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
         command_ref
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
-            .args(["-i", ffmpeg_paramenters.url.as_str()])
+            .args(["-i", ffmpeg_paramenters.audio_url.as_str()])
+            .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
+            .args(["-i", ffmpeg_paramenters.video_url.as_str()])
+            .args(["-map", "0:v"])
+            .args(["-map", "1:a"])
+            .args(["-c:v", "libx264"])
+            .args(["-crf", "35"])
+            .args(["-preset", "ultrafast"])
+            .args(["-c:a", "aac"])
+            .args(["-b:a", "64k"])
+            .args(["-movflags", "frag_keyframe+empty_moov"])
+            .args(["-hide_banner"])
+            .args(["-loglevel", "error"])
+            .args(["-f", "mp4"])
+            .args(["pipe:stdout"]);
+        let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
+        info!(
+            "generated ffmpeg command:\n{} {}",
+            command_ref.get_program().to_string_lossy(),
+            args.join(" ")
+        );
+        command
+    }
+
+    fn get_mp3_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
+        debug!("generating ffmpeg command");
+        let mut command = Command::new("ffmpeg");
+        let command_ref = &mut command;
+        command_ref
+            .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
+            .args(["-i", ffmpeg_paramenters.audio_url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
             .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str()])
             .args(["-f", "mp3"])
@@ -262,12 +352,13 @@ mod test {
         let stream_url = Url::parse("http://url.mp3").unwrap();
         let params = FfmpegParameters {
             seek_time: 30,
-            url: stream_url,
+            audio_url: stream_url.clone(),
+            video_url: stream_url,
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
         };
-        let transcoder = Transcoder::new(&params).await.unwrap();
+        let transcoder = Transcoder::mp3_transcoder(&params).await.unwrap();
         let ppath = transcoder.ffmpeg_command.get_program();
         if let Some(x) = ppath.to_str() {
             info!("{} ", x);
@@ -285,7 +376,7 @@ mod test {
                 Some("-i") => {
                     let value = args.next().unwrap().to_str().unwrap();
                     info!("-i {}", value);
-                    assert_eq!(value, params.url.as_str());
+                    assert_eq!(value, params.audio_url.as_str());
                 }
                 Some("-acodec") => {
                     let value = args.next().unwrap().to_str().unwrap();

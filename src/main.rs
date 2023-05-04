@@ -26,7 +26,11 @@ async fn main() -> std::io::Result<()> {
                 .service(web::resource("transcode_media/to_mp3")
                     .name("transcode_mp3")
                     .guard(guard::Get())
-                    .to(transcode))
+                    .to(transcode_mp3))
+                .service(web::resource("transcode_media/to_mp4")
+                    .name("transcode_mp4")
+                    .guard(guard::Get())
+                    .to(transcode_mp4))
                 .route("transcodize_rss", web::get().to(transcodize_rss))
                 .route("/", web::get().to(index))
                 .route("", web::get().to(index))
@@ -151,7 +155,7 @@ fn get_start_and_end(content_range_str: &str, bytes_count: u32) -> eyre::Result<
     Ok((start, end))
 }
 
-async fn transcode(
+async fn transcode_mp3(
     req: HttpRequest,
     query: web::Query<TranscodizeQuery>,
 ) -> HttpResponse {
@@ -191,14 +195,15 @@ async fn transcode(
     debug!("choosen seek_time: {seek}");
     let ffmpeg_paramenters = FfmpegParameters {
         seek_time: seek.floor() as _,
-        url: stream_url.clone(),
+        audio_url: stream_url.clone(),
+        video_url: stream_url.clone(), //TODO: refactor
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
-    match Transcoder::new(&ffmpeg_paramenters).await {
+    match Transcoder::mp3_transcoder(&ffmpeg_paramenters).await {
         Ok(transcoder) => {
             let stream = transcoder.get_transcode_stream();
 
@@ -209,6 +214,74 @@ async fn transcode(
             response_builder.insert_header(("Accept-Ranges", "bytes"))
                 .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
                 .content_type("audio/mpeg")
+                .no_chunking((bytes_count - start).into())
+                .streaming(stream)
+        }
+        Err(e) => {
+            HttpResponse::ServiceUnavailable().body(e.to_string())
+        },
+    }
+}
+
+async fn transcode_mp4(
+    req: HttpRequest,
+    query: web::Query<TranscodizeQuery>,
+) -> HttpResponse {
+    let stream_url = &query.url;
+    let bitrate = query.bitrate;
+    let duration_secs = query.duration;
+    let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
+    info!("processing transcode at {bitrate}k for {stream_url}");
+
+    if let Ok(value) = conf().get(ConfName::TranscodingEnabled) {
+        if value.eq_ignore_ascii_case("false") {
+            return HttpResponse::Forbidden().finish();
+        }
+    }
+
+    // Range header parsing
+    const DEFAULT_CONTENT_RANGE: &str = "0-";
+    let content_range_str = match req.headers().get("Range") {
+        Some(x) => x.to_str().unwrap_or_default(),
+        None => DEFAULT_CONTENT_RANGE,
+    };
+
+    debug!("received content range {content_range_str}");
+
+
+    let (start, end) = match get_start_and_end(content_range_str, bytes_count) {
+        Ok((start, end)) => (start, end),
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+    };
+
+    debug!("requested content-range: bytes {start}-{end}/{bytes_count}");
+
+    if start > end || start > bytes_count {
+        return HttpResponse::RangeNotSatisfiable().finish();
+    }
+    let seek = ((start as f32) / (bytes_count as f32)) * (duration_secs as f32);
+    debug!("choosen seek_time: {seek}");
+    let ffmpeg_paramenters = FfmpegParameters {
+        seek_time: seek.floor() as _,
+        audio_url: stream_url.clone(),
+        video_url: stream_url.clone(),
+        audio_codec: FFMPEGAudioCodec::Libmp3lame,
+        bitrate_kbit: bitrate,
+        max_rate_kbit: bitrate * 30,
+    };
+    debug!("seconds: {duration_secs}, bitrate: {bitrate}");
+
+    match Transcoder::mp4_transcoder(&ffmpeg_paramenters).await {
+        Ok(transcoder) => {
+            let stream = transcoder.get_transcode_stream();
+
+            let mut response_builder = match ffmpeg_paramenters.seek_time {
+                0 => HttpResponse::Ok(),
+                _ => HttpResponse::PartialContent(),
+            };
+            response_builder.insert_header(("Accept-Ranges", "bytes"))
+                .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
+                .content_type("video/mp4")
                 .no_chunking((bytes_count - start).into())
                 .streaming(stream)
         }
