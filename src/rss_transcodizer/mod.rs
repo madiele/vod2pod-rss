@@ -569,11 +569,16 @@ mod test {
         let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
 
-        let res = validate_must_have_props(rss_transcodizer).await;
+        temp_env::async_with_vars([
+            ("VALID_URL_DOMAINS", Some("http://127.0.0.1"))
+        ], test(rss_transcodizer)).await;
+
+        async fn test(rss_transcodizer: RssTranscodizer) {
+            _ = validate_must_have_props(rss_transcodizer).await;
+        }
 
         stop_test(handle).await;
-
-        res
+        Ok(())
     }
 
     #[actix_web::test]
@@ -586,11 +591,17 @@ mod test {
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
 
 
-        let res = validate_must_have_props(rss_transcodizer).await;
+        temp_env::async_with_vars([
+            ("VALID_URL_DOMAINS", Some("http://127.0.0.1"))
+        ], test(rss_transcodizer)).await;
+
+        async fn test(rss_transcodizer: RssTranscodizer) {
+            let _ = validate_must_have_props(rss_transcodizer).await;
+        }
 
         stop_test(handle).await;
 
-        res
+        Ok(())
     }
 
     #[actix_web::test]
@@ -602,11 +613,17 @@ mod test {
         let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
         let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
 
-        let res = validate_must_have_props(rss_transcodizer).await;
+        temp_env::async_with_vars([
+            ("VALID_URL_DOMAINS", Some("http://127.0.0.1"))
+        ], test(rss_transcodizer)).await;
+
+        async fn test(rss_transcodizer: RssTranscodizer) {
+            let _ = validate_must_have_props(rss_transcodizer).await;
+        }
 
         stop_test(handle).await;
 
-        res
+        Ok(())
     }
 
     async fn startup_test(type_test: String, port: u16) -> ServerHandle {
