@@ -32,8 +32,6 @@ services:
       - PODTUBE_URL=http://podtube:15000 #don't edit this
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
-      # put here any url (scheme included) you want to allow for rss conversion separated by comma
-      - VALID_URL_DOMAINS=https://*.youtube.com/,https://youtube.com/,https://youtu.be/,https://*.youtu.be/,https://*.twitch.tv/,https://twitch.tv/,https://*.googlevideo.com/,https://*.cloudfront.net/
 
   redis:
     image: "redis:6.2"
