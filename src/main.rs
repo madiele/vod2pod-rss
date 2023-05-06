@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
                 .service(web::resource("transcode_media/to_mp3")
                     .name("transcode_mp3")
                     .guard(guard::Get())
-                    .to(transcode))
+                    .to(transcode_to_mp3))
                 .route("transcodize_rss", web::get().to(transcodize_rss))
                 .route("/", web::get().to(index))
                 .route("", web::get().to(index))
@@ -151,7 +151,7 @@ fn get_start_and_end(content_range_str: &str, bytes_count: u32) -> eyre::Result<
     Ok((start, end))
 }
 
-async fn transcode(
+async fn transcode_to_mp3(
     req: HttpRequest,
     query: web::Query<TranscodizeQuery>,
 ) -> HttpResponse {

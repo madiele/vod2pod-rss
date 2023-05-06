@@ -33,16 +33,6 @@ services:
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
 
-  redis:
-    image: "redis:6.2"
-    command: redis-server --save 20 1 --loglevel warning
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
   ttprss: # you can remove this section and save some storage if you don't need twitch
     extends: api_keys
     build:
@@ -59,3 +49,13 @@ services:
     image: ftawesome/podtube
     environment:
       - YT_AUTOLOAD_NEWEST_AUDIO=False
+
+  redis:
+    image: "redis:6.2"
+    command: redis-server --save 20 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

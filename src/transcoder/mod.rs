@@ -89,7 +89,6 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
         }
         Err(e) => Err(eyre::eyre!(e)),
     }
-
 }
 
 impl Transcoder {
@@ -195,7 +194,10 @@ impl Transcoder {
                                 _ = child.wait();
                                 break;
                             }
-                            if let Err(e) = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))) {
+
+                            let send_res = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes])));
+
+                            if let Err(e) = send_res {
                                 debug!("{}", e);
                                 info!("connection to client dropped, stopping transcode");
                                 _ = child.kill();
@@ -237,19 +239,15 @@ impl Transcoder {
 
 
             info!("streaming to client");
-            loop {
-                if let Some(x) = rx.recv().await {
-                    match x {
-                        Ok(bytes) => co.yield_(Ok(bytes)).await,
-                        Err(e) => { rx.close(); co.yield_(Err(e)).await },
-                    }
+            while let Some(x) = rx.recv().await {
+                match x {
+                    Ok(bytes) => co.yield_(Ok(bytes)).await,
+                    Err(e) => { rx.close(); co.yield_(Err(e)).await },
                 }
             }
         }
         Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
     }
-
-
 }
 
 #[cfg(test)]
