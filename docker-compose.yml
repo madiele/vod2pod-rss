@@ -14,7 +14,7 @@ services:
 
   vod2pod:
     extends: api_keys
-    image: madiele/vod2pod-rss:beta
+    image: madiele/vod2pod-rss
     build:
         context: .
     depends_on:
@@ -35,9 +35,9 @@ services:
 
   ttprss: # you can remove this section and save some storage if you don't need twitch
     extends: api_keys
+    image: madiele/twitch_to_podcast_rss
     build:
         context: https://github.com/madiele/TwitchToPodcastRSS.git
-    image: madiele/twitch_to_podcast_rss
     restart: unless-stopped
     container_name: twitchToPodcastRSS
     environment:
