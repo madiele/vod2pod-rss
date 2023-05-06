@@ -14,9 +14,9 @@ services:
 
   vod2pod:
     extends: api_keys
+    image: madiele/vod2pod-rss:beta
     build:
         context: .
-    image: madiele/vod-to-podcast
     depends_on:
       - redis
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
       # put here any url (scheme included) you want to allow for rss conversion separated by comma
-      - VALID_URL_DOMAINS=https://www.youtube.com/,https://youtube.com/,https://www.youtu.be/,https://www.twitch.tv/,https://twitch.tv/,https://m.twitch.tv/
+      - VALID_URL_DOMAINS=https://*.youtube.com/,https://youtube.com/,https://youtu.be/,https://*.youtu.be/,https://*.twitch.tv/,https://twitch.tv/,https://*.googlevideo.com/,https://*.cloudfront.net/
 
   redis:
     image: "redis:6.2"

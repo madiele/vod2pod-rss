@@ -167,6 +167,11 @@ async fn transcode(
         }
     }
 
+    if !url_convert::check_if_in_whitelist(&stream_url) {
+        error!("supplied url ({stream_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
+        return HttpResponse::Forbidden().body("scheme and host not in whitelist");
+    }
+
     // Range header parsing
     const DEFAULT_CONTENT_RANGE: &str = "0-";
     let content_range_str = match req.headers().get("Range") {
