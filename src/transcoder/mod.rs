@@ -95,7 +95,7 @@ async fn get_youtube_audio_stream_url(url: &Url) -> eyre::Result<Url> {
 
 #[io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
-    type = "AsyncRedisCache<Url, (Url, Url)>",
+    type = "AsyncRedisCache<Url, Url>",
     create = r##" {
         AsyncRedisCache::new("cached_yt_video_audio_stream_url=", 18000)
             .set_refresh(false)
@@ -105,9 +105,10 @@ async fn get_youtube_audio_stream_url(url: &Url) -> eyre::Result<Url> {
             .expect("get_youtube_stream_url cache")
 } "##
 )]
-async fn get_youtube_video_audio_stream_urls(url: &Url) -> eyre::Result<(Url, Url)> {
+async fn get_youtube_video_audio_stream_urls(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let output = tokio::process::Command::new("yt-dlp")
+        .args(["-f", "worst[ext=mp4]"])
         .arg("--get-url")
         .arg(url.as_str())
         .output().await;
@@ -115,13 +116,13 @@ async fn get_youtube_video_audio_stream_urls(url: &Url) -> eyre::Result<(Url, Ur
     match output {
         Ok(x) => {
             let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default();
-            let urls: Vec<&str> = raw_url.split('\n').collect();
-            if urls.len() < 2 {
-                return Err(eyre::eyre!("not enough streams found: {}", raw_url));
+            match Url::from_str(raw_url) {
+                Ok(url) => Ok(url),
+                Err(e) => {
+                    warn!("error while parsing stream url:\ninput: {}\nerror: {}", raw_url, e.to_string());
+                    Err(eyre::eyre!(e))
+                },
             }
-            let video = Url::from_str(urls[1])?;
-            let audio = Url::from_str(urls[0])?;
-            Ok((video, audio))
         }
         Err(e) => Err(eyre::eyre!(e)),
     }
@@ -154,7 +155,8 @@ impl Transcoder {
         let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
         let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.audio_url.to_string()) {
             info!("detected youtube url, need to find the stream url if not in cache");
-            let (video_url, audio_url) = get_youtube_video_audio_stream_urls(&ffmpeg_paramenters.audio_url).await?;
+            let video_url = get_youtube_video_audio_stream_urls(&ffmpeg_paramenters.audio_url).await?;
+            let audio_url = video_url.clone();
             Self::get_mp4_ffmpeg_command(&FfmpegParameters {
                 seek_time: ffmpeg_paramenters.seek_time,
                 audio_url,
@@ -176,18 +178,9 @@ impl Transcoder {
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
         command_ref
-            .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.audio_url.as_str()])
-            .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
-            .args(["-i", ffmpeg_paramenters.video_url.as_str()])
-            .args(["-map", "0:v"])
-            .args(["-map", "1:a"])
-            .args(["-c:v", "libx264"])
-            .args(["-crf", "35"])
-            .args(["-preset", "ultrafast"])
-            .args(["-c:a", "aac"])
-            .args(["-b:a", "64k"])
-            .args(["-movflags", "frag_keyframe+empty_moov"])
+            .args(["-c", "copy"])
+            .args(["-movflags", "frag_keyframe+faststart"])
             .args(["-hide_banner"])
             .args(["-loglevel", "error"])
             .args(["-f", "mp4"])
