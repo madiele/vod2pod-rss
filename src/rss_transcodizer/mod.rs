@@ -500,6 +500,7 @@ fn get_description(media_element: &MediaObject, item: &Entry, url: &Url) -> Opti
 mod test {
     use actix_web::{HttpServer, App, web::{self, Data}, HttpResponse, http::header::ContentType, rt, dev::ServerHandle};
     use rss::Channel;
+    use test_log::test;
 
     use super::*;
 
@@ -560,7 +561,7 @@ mod test {
         handle.stop(false).await
     }
 
-    #[actix_web::test]
+    #[test(actix_web::test)]
     async fn rss_podcast_feed() -> Result<(), String> {
         let handle = startup_test("podcast".to_string() , 9872).await;
 
@@ -576,7 +577,7 @@ mod test {
         res
     }
 
-    #[actix_web::test]
+    #[test(actix_web::test)]
     async fn rss_twitch_feed() -> Result<(), String> {
         let handle = startup_test("twitch".to_string(), 9871).await;
 
@@ -593,7 +594,7 @@ mod test {
         res
     }
 
-    #[actix_web::test]
+    #[test(actix_web::test)]
     async fn rss_youtube_feed() -> Result<(), String> {
         let handle = startup_test("youtube".to_string(), 9870).await;
 
