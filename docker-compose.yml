@@ -26,7 +26,7 @@ services:
       - TZ=Europe/London #set if you want the logs to have you timezone
       - MP3_BITRATE=192 #bitrate in kilobits of the mp3 transcode
       - TRANSCODE=true #put to false if you only need feed generation
-      - SUBFOLDER=/ #for reverse proxies, ex: "/" -> access the app at mywebsite.com ; "vtprss" -> access at mywebsite.com/vtprss
+      - SUBFOLDER=/ #for reverse proxies, ex: "/" -> access the app at mywebsite.com ; vod2pod" -> access at mywebsite.com/vod2pod
       - RUST_LOG=DEBUG #set to DEBUG if you are having problems than open a github issue with the logs, use "sudo docker compose logs" to print them
       - TWITCH_TO_PODCAST_URL=ttprss #don't edit this
       - PODTUBE_URL=http://podtube:15000 #don't edit this
