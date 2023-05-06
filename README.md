@@ -67,6 +67,10 @@ save and
 
 `sudo docker compose up -d`
 
+#### new releases notifications
+
+To get notifications of new release be sure to watch the repo and set a custom notification only on new releases.
+
 #### when you want to update:
 
 run this inside the folder with `docker-compose.yml`
