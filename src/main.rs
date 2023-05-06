@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
                 .service(web::resource("transcode_media/to_mp3")
                     .name("transcode_mp3")
                     .guard(guard::Get())
-                    .to(transcode))
+                    .to(transcode_to_mp3))
                 .route("transcodize_rss", web::get().to(transcodize_rss))
                 .route("/", web::get().to(index))
                 .route("", web::get().to(index))
@@ -129,11 +129,11 @@ async fn transcodize_rss(
 #[derive(Deserialize)]
 struct TranscodizeQuery {
     url: Url,
-    bitrate: u32,
-    duration: u32,
+    bitrate: usize,
+    duration: usize,
 }
 
-fn get_start_and_end(content_range_str: &str, bytes_count: u32) -> eyre::Result<(u32, u32)> {
+fn get_start_and_end(content_range_str: &str, bytes_count: usize) -> eyre::Result<(usize, usize)> {
     let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?")?;
     let captures = if let Some(x) = re.captures_iter(content_range_str).next() { x } else {
         return Err(eyre::eyre!("content range regex failed"));
@@ -151,20 +151,25 @@ fn get_start_and_end(content_range_str: &str, bytes_count: u32) -> eyre::Result<
     Ok((start, end))
 }
 
-async fn transcode(
+async fn transcode_to_mp3(
     req: HttpRequest,
     query: web::Query<TranscodizeQuery>,
 ) -> HttpResponse {
     let stream_url = &query.url;
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
-    let bytes_count = ((duration_secs * bitrate) / 8) * 1024;
+    let bytes_count = (duration_secs * bitrate * 1000) / 8;
     info!("processing transcode at {bitrate}k for {stream_url}");
 
     if let Ok(value) = conf().get(ConfName::TranscodingEnabled) {
         if value.eq_ignore_ascii_case("false") {
             return HttpResponse::Forbidden().finish();
         }
+    }
+
+    if !url_convert::check_if_in_whitelist(&stream_url) {
+        error!("supplied url ({stream_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
+        return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
 
     // Range header parsing
@@ -195,6 +200,7 @@ async fn transcode(
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
+        expected_bytes_count: bytes_count - start,
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
@@ -209,7 +215,7 @@ async fn transcode(
             response_builder.insert_header(("Accept-Ranges", "bytes"))
                 .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
                 .content_type("audio/mpeg")
-                .no_chunking((bytes_count - start).into())
+                .no_chunking((bytes_count - start).try_into().unwrap())
                 .streaming(stream)
         }
         Err(e) => {

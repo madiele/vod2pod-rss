@@ -12,7 +12,11 @@ use crate::configs::{conf, ConfName, Conf};
 pub fn check_if_in_whitelist(url: &Url) -> bool {
     let valid_domains: Vec<Url> = conf().get(ConfName::ValidUrlDomains).unwrap().split(",").map(|s| Url::parse(s).unwrap()).collect();
     let is_valid = valid_domains.iter().any(|valid_domain| {
-        url.scheme() == valid_domain.scheme() && url.host_str() == valid_domain.host_str()
+            if valid_domain.host_str().unwrap().starts_with("*.") {
+                let valid_suffix = &valid_domain.host_str().unwrap()[2..];
+                return url.scheme() == valid_domain.scheme() && url.host_str().unwrap().ends_with(valid_suffix);
+            }
+            return url.scheme() == valid_domain.scheme() && url.host_str() == valid_domain.host_str();
     });
     return is_valid;
 }

@@ -39,21 +39,23 @@ impl Default for FFMPEGAudioCodec {
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {
-    pub seek_time: u32,
+    pub seek_time: usize,
     pub url: Url,
     pub audio_codec: FFMPEGAudioCodec,
-    pub bitrate_kbit: u32,
-    pub max_rate_kbit: u32,
+    pub bitrate_kbit: usize,
+    pub max_rate_kbit: usize,
+    pub expected_bytes_count: usize,
 }
 
 impl FfmpegParameters {
-    pub fn bitarate(&self) -> u64 {
-        u64::from(self.bitrate_kbit * 1024)
+    pub fn bitarate(&self) -> usize {
+        self.bitrate_kbit * 1024
     }
 }
 
 pub struct Transcoder {
     ffmpeg_command: Command,
+    expected_bytes_count: usize,
 }
 
 #[io_cached(
@@ -89,7 +91,6 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
         }
         Err(e) => Err(eyre::eyre!(e)),
     }
-
 }
 
 impl Transcoder {
@@ -102,13 +103,15 @@ impl Transcoder {
                 url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
                 audio_codec: FFMPEGAudioCodec::Libmp3lame,
                 bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
-                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit })
+                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
+                expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
+            })
         } else {
             Self::get_ffmpeg_command(ffmpeg_paramenters)
         };
 
 
-        Ok(Self { ffmpeg_command })
+        Ok(Self { ffmpeg_command, expected_bytes_count: ffmpeg_paramenters.expected_bytes_count})
     }
 
     fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
@@ -142,6 +145,7 @@ impl Transcoder {
 
         async fn generetor_coroutine(
             mut command: Command,
+            expected_bytes_count: usize,
             co: Co<Result<Bytes, std::io::Error>>
         ) {
             let mut child = command
@@ -184,24 +188,42 @@ impl Transcoder {
 
             //stdout thread
             std::thread::spawn(move || {
-                let mut buff: [u8; 1024] = [0; 1024];
+                const BUFFER_SIZE: usize = 1024;
+                let mut buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
                 let mut tries = 0;
+                let mut sent_bytes_count: usize = 0;
                 loop {
                     match out.read(&mut buff) {
                         Ok(read_bytes) => {
-
                             if read_bytes == 0 {
                                 info!("transcoded everything");
+                                //pad end of stream with 00000000 bytes if client expects more data to be sent
+                                const NULL_BUFF: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+                                debug!("sending {} bytes of padding", expected_bytes_count - sent_bytes_count);
+                                while sent_bytes_count < expected_bytes_count {
+                                    let padding_bytes = expected_bytes_count - sent_bytes_count;
+                                    if padding_bytes >= BUFFER_SIZE {
+                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF)));
+                                        sent_bytes_count += BUFFER_SIZE;
+                                    } else {
+                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)])));
+                                        sent_bytes_count += padding_bytes;
+                                    }
+                                }
                                 _ = child.wait();
                                 break;
                             }
-                            if let Err(e) = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes]))) {
+
+                            let send_res = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes])));
+
+                            if let Err(e) = send_res {
                                 debug!("{}", e);
                                 info!("connection to client dropped, stopping transcode");
                                 _ = child.kill();
                                 _ = child.wait();
                                 break;
                             };
+                            sent_bytes_count += read_bytes;
                         }
                         Err(e) => {
                             match e.kind() {
@@ -237,19 +259,15 @@ impl Transcoder {
 
 
             info!("streaming to client");
-            loop {
-                if let Some(x) = rx.recv().await {
-                    match x {
-                        Ok(bytes) => co.yield_(Ok(bytes)).await,
-                        Err(e) => { rx.close(); co.yield_(Err(e)).await },
-                    }
+            while let Some(x) = rx.recv().await {
+                match x {
+                    Ok(bytes) => co.yield_(Ok(bytes)).await,
+                    Err(e) => { rx.close(); co.yield_(Err(e)).await },
                 }
             }
         }
-        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, co))
+        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, self.expected_bytes_count, co))
     }
-
-
 }
 
 #[cfg(test)]
@@ -266,6 +284,7 @@ mod test {
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
             bitrate_kbit: 3,
+            expected_bytes_count: 999,
         };
         let transcoder = Transcoder::new(&params).await.unwrap();
         let ppath = transcoder.ffmpeg_command.get_program();

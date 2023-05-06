@@ -14,9 +14,9 @@ services:
 
   vod2pod:
     extends: api_keys
+    image: madiele/vod2pod-rss
     build:
         context: .
-    image: madiele/vod-to-podcast
     depends_on:
       - redis
     restart: unless-stopped
@@ -26,30 +26,18 @@ services:
       - TZ=Europe/London #set if you want the logs to have you timezone
       - MP3_BITRATE=192 #bitrate in kilobits of the mp3 transcode
       - TRANSCODE=true #put to false if you only need feed generation
-      - SUBFOLDER=/ #for reverse proxies, ex: "/" -> access the app at mywebsite.com ; "vtprss" -> access at mywebsite.com/vtprss
+      - SUBFOLDER=/ #for reverse proxies, ex: "/" -> access the app at mywebsite.com ; vod2pod" -> access at mywebsite.com/vod2pod
       - RUST_LOG=DEBUG #set to DEBUG if you are having problems than open a github issue with the logs, use "sudo docker compose logs" to print them
       - TWITCH_TO_PODCAST_URL=ttprss #don't edit this
       - PODTUBE_URL=http://podtube:15000 #don't edit this
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
-      # put here any url (scheme included) you want to allow for rss conversion separated by comma
-      - VALID_URL_DOMAINS=https://www.youtube.com/,https://youtube.com/,https://www.youtu.be/,https://www.twitch.tv/,https://twitch.tv/,https://m.twitch.tv/
-
-  redis:
-    image: "redis:6.2"
-    command: redis-server --save 20 1 --loglevel warning
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   ttprss: # you can remove this section and save some storage if you don't need twitch
     extends: api_keys
+    image: madiele/twitch_to_podcast_rss
     build:
         context: https://github.com/madiele/TwitchToPodcastRSS.git
-    image: madiele/twitch_to_podcast_rss
     restart: unless-stopped
     container_name: twitchToPodcastRSS
     environment:
@@ -61,3 +49,13 @@ services:
     image: ftawesome/podtube
     environment:
       - YT_AUTOLOAD_NEWEST_AUDIO=False
+
+  redis:
+    image: "redis:6.2"
+    command: redis-server --save 20 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

@@ -2,7 +2,7 @@
 authors = ["madiele92@gmail.com"]
 edition = "2021"
 name = "vod2pod-rss"
-version = "0.7.3"
+version = "1.0.0"
 
 [lib]
 path = "src/lib.rs"
@@ -38,3 +38,5 @@ chrono = "0.4.24"
 
 [dev-dependencies]
 temp-env ={ version = "0.3.4", features = ["async_closure"] }
+env_logger = "*"
+test-log = "0.2.11"
