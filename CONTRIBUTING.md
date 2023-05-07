@@ -16,7 +16,7 @@ launch a new codepace here
 
 ![image](https://user-images.githubusercontent.com/4585690/236680399-36e2fc82-17fc-4b30-b914-686abbff191f.png)
 
-wait for the post script to end and your good to go
+wait for the post script to end and your good to go (be sure to close and reopen the terminal or most commands will fail)
 
 ### local development setup
 #### Requirements
