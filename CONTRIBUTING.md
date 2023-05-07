@@ -18,6 +18,8 @@ launch a new codepace here
 
 wait for the post script to end and your good to go (be sure to close and reopen the terminal or most commands will fail)
 
+you will still need to add your apikeys to the .dev.env file and run `make start-deps` to have all features enabled
+
 ### local development setup
 #### Requirements
 
