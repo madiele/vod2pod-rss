@@ -7,14 +7,16 @@ assignees: ''
 
 ---
 
-issue description (include logs if you can):
+app version: X.X.X
+
+- [ ] twitch api key set
+- [ ] youtube api key set
 
 ______
+issue description:
 
-#setup infos
 
-app version: x.x.x
+<your issue here be sure to include logs if you can>
 
-twitch api key set? [ ]
 
-youtube api key set? [ ]
+
