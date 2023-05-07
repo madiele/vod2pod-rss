@@ -10,24 +10,22 @@ All pull request should point to the main branch
 
 ## Dev enviroment setup
 ### github spaces development setup
-[pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) At the time of this guide, the free tier offers 120 hours of free usage 
+[pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) At the time of this guide, the free tier offers 120 hours of free usage
 
 launch a new codepace here
 
 ![image](https://user-images.githubusercontent.com/4585690/236680399-36e2fc82-17fc-4b30-b914-686abbff191f.png)
 
-Then, in the terminal, type `make install-ubuntu-deps` which will install all the necessary dependencies. Follow the instructions if any input is required.
-
-make sure you open a new terminal before using other commands 
+wait for the post script to end and your good to go
 
 ### local development setup
 #### Requirements
 
 you need to meake sure those commands are installed on your machine
-- [docker](https://docs.docker.com/desktop/install/linux-install/) 
+- [docker](https://docs.docker.com/desktop/install/linux-install/)
 - redis-cli (`sudo apt install redis`)
 - ffmpeg (`sudo apt install ffmpeg`)
-- yt-dlp (`sudo apt install python3-pip && pip3 install yt-dlp`) 
+- yt-dlp (`sudo apt install python3-pip && pip3 install yt-dlp`)
 - cargo ([rustup](https://rustup.rs/))
 - Editor setup for rust development, for [VScode here is a guide](https://code.visualstudio.com/docs/languages/rust)
 
