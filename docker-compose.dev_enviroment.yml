@@ -14,7 +14,7 @@ services:
   ttprss:
     extends: api_keys
     image: madiele/twitch_to_podcast_rss
-    restart: unless-stopped
+    restart: "no"
     container_name: twitchToPodcastRSS
     ports:
       - "8085:80"
@@ -25,6 +25,7 @@ services:
   podtube:
     extends: api_keys
     image: ftawesome/podtube
+    restart: "no"
     ports:
       - "15000:15000"
     environment:
