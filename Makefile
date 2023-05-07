@@ -1,10 +1,25 @@
 #!make
+define write-env =
+echo TRANSCODE=true > .dev.env
+echo YT_API_KEY= >> .dev.env
+echo TWITCH_SECRET= >> .dev.env
+echo TWITCH_CLIENT_ID= >> .dev.env
+echo RUST_LOG=DEBUG >> .dev.env
+echo MP3_BITRATE=192 >> .dev.env
+echo SUBFOLDER=/ >> .dev.env
+echo TWITCH_TO_PODCAST_URL=localhost:8085 >> .dev.env
+echo PODTUBE_URL=http://localhost:15000 >> .dev.env
+echo REDIS_ADDRESS=redis >> .dev.env
+echo REDIS_PORT=6379 >> .dev.env
+endef
+
 ifneq (,$(wildcard ./.dev.env))
     include .dev.env
     export
 endif
 
 install-ubuntu-deps:
+	$(write-env)
 	sudo apt update
 	sudo apt install -y ffmpeg python3-pip redis
 	echo installing rust + cargo
@@ -13,6 +28,7 @@ install-ubuntu-deps:
 	pip3 install yt-dlp --yes
 
 install-fedora-deps:
+	$(write-env)
 	sudo dnf update
 	sudo dnf install -y ffmpeg python3-pip redis
 	echo installing rust + cargo

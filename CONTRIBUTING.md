@@ -13,7 +13,7 @@ All pull request should point to the main branch and should pass all tests (`mak
 
 ## Initial setup
 ### github spaces development setup
-[pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) 
+[pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces)
 
 At the time of this guide, the free tier offers 60 hours of free usage on a standard 2 core machine
 
@@ -49,7 +49,7 @@ or
 
 ### set enviroment variables
 
-edit the `.dev.env` file with your api keys if needed (be sure to not commit your secrets accidentally)
+after launching the deps install script edit the `.dev.env` file that was generated in the root folder with your api keys if needed (be sure to not commit your secrets accidentally)
 
 ### launch required services (!!!REQUIRED!!!)
 run `make start-deps`
