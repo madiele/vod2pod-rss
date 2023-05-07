@@ -1,10 +1,5 @@
 {
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "features": {
-    "ghcr.io/devcontainers-contrib/features/redis-homebrew:1": {},
-    "ghcr.io/devcontainers-contrib/features/ffmpeg-homebrew:1": {},
-    "ghcr.io/devcontainers-contrib/features/yt-dlp:2": {},
-    "ghcr.io/devcontainers/features/rust:1": {},
-    "ghcr.io/lee-orr/rusty-dev-containers/cargo-watch:0": {}
-  }
+  "postCreateCommand": "make install-ubuntu-deps"
+  "postStartCommand": "make start-deps"
 }
