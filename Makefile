@@ -6,14 +6,16 @@ install-ubuntu-deps:
 	sudo apt update
 	sudo apt install ffmpeg python3-pip redis
 	echo installing rust + cargo
-	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+	cargo install cargo-watch
 	pip3 install yt-dlp
 
 install-fedora-deps:
 	sudo dnf update
 	sudo dnf install ffmpeg python3-pip redis
 	echo installing rust + cargo
-	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+	cargo install cargo-watch
 	pip3 install yt-dlp
 
 start-deps:
