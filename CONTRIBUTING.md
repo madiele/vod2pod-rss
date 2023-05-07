@@ -12,7 +12,9 @@ When adding a feature try to also add some test if possible.
 All pull request should point to the main branch and should pass all tests (`make test`)
 
 ## Initial setup
+
 ### github spaces development setup
+
 [pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces)
 
 At the time of this guide, the free tier offers 60 hours of free usage on a standard 2 core machine
@@ -26,9 +28,11 @@ wait for the post script to end and your good to go (be sure to close and reopen
 you will still need to add your apikeys to the .dev.env file and run `make start-deps` to have all features enabled
 
 ### local development setup
+
 #### Requirements
 
 you need to meake sure those commands are installed on your machine
+
 - [docker](https://docs.docker.com/desktop/install/linux-install/)
 - redis-cli (`sudo apt install redis`)
 - ffmpeg (`sudo apt install ffmpeg`)
@@ -45,6 +49,7 @@ or
 `make install-ubuntu-deps`
 
 **You will need to install Docker separately**
+
 ## General development commands
 
 ### set enviroment variables
@@ -52,18 +57,23 @@ or
 after launching the deps install script edit the `.dev.env` file that was generated in the root folder with your api keys if needed (be sure to not commit your secrets accidentally)
 
 ### launch required services (!!!REQUIRED!!!)
+
 run `make start-deps`
 
 you need to run at least once at the start of your development session (in codespaces this is done automatically)
 
 ### launch tests
+
 run `make test`
 
 ### launch the server
+
 run `make run`
 
 ### automatically run the project when making changes
+
 run `make hot-reload`
 
 ### build the container image locally
+
 run `make image`
