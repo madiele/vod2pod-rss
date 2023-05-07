@@ -1,3 +1,3 @@
 #!/bin/bash
-make install-ubuntu-deps && \
-make start-deps
+make install-ubuntu-deps >> devcontainerInstall.log
+make start-deps >> devcontainerInstall.log
