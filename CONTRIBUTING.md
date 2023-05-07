@@ -12,7 +12,11 @@ All pull request should point to the main branch
 ### development setup
 #### Requirements
 
+you need to meake sure this commands are installed on you machine
 - docker + docker compose
+- redis-cli
+- ffmpeg
+- yt-dlp
 - cargo
 - Editor setup for rust development, for [VScode here is a guide](https://code.visualstudio.com/docs/languages/rust)
 
