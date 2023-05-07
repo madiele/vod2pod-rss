@@ -2,11 +2,14 @@
 
 When contributing to this repository, please first discuss the change you wish to make via issue,
 email, or any other method with the owners of this repository before making a change.
-Fix for bugs can be opened out of the blue
+
+Fix for bugs can be opened out of the blue.
+
+When adding a feature try to also add some test if possible.
 
 ## Pull Request Process
 
-All pull request should point to the main branch
+All pull request should point to the main branch and should pass all tests (`make test`)
 
 ## Dev enviroment setup
 ### github spaces development setup
