@@ -13,11 +13,11 @@ All pull request should point to the main branch
 #### Requirements
 
 you need to meake sure this commands are installed on you machine
-- docker + docker compose
-- redis-cli
-- ffmpeg
-- yt-dlp
-- cargo
+- [docker](https://docs.docker.com/desktop/install/linux-install/) 
+- redis-cli (`sudo apt install redis-cli`)
+- ffmpeg (`sudo apt install ffmpeg`)
+- yt-dlp (`sudo apt install python3-pip && pip3 install yt-dlp`) 
+- cargo ([rustup](https://rustup.rs/))
 - Editor setup for rust development, for [VScode here is a guide](https://code.visualstudio.com/docs/languages/rust)
 
 #### set enviroment variables
