@@ -4,19 +4,19 @@ export $$(cat .dev.env | xargs)
 
 install-ubuntu-deps:
 	sudo apt update
-	sudo apt install ffmpeg python3-pip redis
+	sudo apt install -y ffmpeg python3-pip redis
 	echo installing rust + cargo
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 	cargo install cargo-watch
-	pip3 install yt-dlp
+	pip3 install yt-dlp --yes
 
 install-fedora-deps:
 	sudo dnf update
-	sudo dnf install ffmpeg python3-pip redis
+	sudo dnf install -y ffmpeg python3-pip redis
 	echo installing rust + cargo
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 	cargo install cargo-watch
-	pip3 install yt-dlp
+	pip3 install yt-dlp --yes
 
 start-deps:
 	@if which docker-compose >/dev/null; then \
