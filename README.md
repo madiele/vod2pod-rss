@@ -58,8 +58,14 @@ precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for
 
 `cd vod2pod-rss`
 
-edit `docker-compose.yml` with your PORT, SECRET and CLIENT_ID for youtube and twitch if needed
-(in the file you will find also optional parameters like bitrate)
+edit `docker-compose.yml` with your SECRET and CLIENT_ID for youtube and twitch if needed
+(in the file you will find also optional parameters like bitrate).
+
+If you host other stuff on you machine you might want to change the host port from 80 to something else:
+
+es: to change the host port to 1234 edit `- "80:8080"` to `- "1234:8080"`
+
+to edit the file do
 
 `nano docker-compose.yml`
 
