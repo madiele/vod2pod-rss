@@ -12,6 +12,7 @@ test-watch:
 	cargo watch "test -- --nocapture"
 
 run:
+	redis-cli flushdb
 	cargo run
 
 hot-reload:
