@@ -6,7 +6,8 @@
 	"vscode": {
 		"extensions": [
 			"rust-lang.rust-analyzer",
-			"DavidAnson.vscode-markdownlint"
+			"DavidAnson.vscode-markdownlint",
+			"ms-azuretools.vscode-docker"
 		]
 	}
 }
