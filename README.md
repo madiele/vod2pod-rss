@@ -104,4 +104,4 @@ This is a passion project, and mostly made for personal use, but if you want to 
 
 # Contributing
 
-check the [CONTRIBUTING.md](CONTRIBUTING.md)
+check the [CONTRIBUTING.md](CONTRIBUTING.md) to find a tutorial on how to setup your enviroment for develpment
