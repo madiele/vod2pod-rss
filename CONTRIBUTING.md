@@ -25,7 +25,9 @@ you need to meake sure this commands are installed on you machine
 edit the `.dev.env` file with your api keys if needed
 
 #### launch required services (!!!REQUIRED!!!)
-run `make start-deps` in the root of the project
+run `make start-deps`
+
+you need to run at least once at the start of your development session
 
 #### launch tests
 run `make test`
