@@ -11,7 +11,7 @@ When adding a feature try to also add some test if possible.
 
 All pull request should point to the main branch and should pass all tests (`make test`)
 
-## Dev enviroment setup
+## Initial setup
 ### github spaces development setup
 [pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) 
 
@@ -45,6 +45,7 @@ or
 `make install-ubuntu-deps`
 
 **You will need to install Docker separately**
+## General development commands
 
 ### set enviroment variables
 
@@ -53,7 +54,7 @@ edit the `.dev.env` file with your api keys if needed (be sure to not commit you
 ### launch required services (!!!REQUIRED!!!)
 run `make start-deps`
 
-you need to run at least once at the start of your development session
+you need to run at least once at the start of your development session (in codespaces this is done automatically)
 
 ### launch tests
 run `make test`
