@@ -1,5 +1,5 @@
 {
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "postCreateCommand": "make install-ubuntu-deps",
+  "postCreateCommand": "./.devcontainer/PostCreateScript.sh",
   "postStartCommand": "make start-deps"
 }
