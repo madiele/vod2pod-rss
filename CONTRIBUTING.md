@@ -12,7 +12,7 @@ All pull request should point to the main branch
 ### development setup
 #### Requirements
 
-you need to meake sure this commands are installed on you machine
+you need to meake sure those commands are installed on your machine
 - [docker](https://docs.docker.com/desktop/install/linux-install/) 
 - redis-cli (`sudo apt install redis-cli`)
 - ffmpeg (`sudo apt install ffmpeg`)
