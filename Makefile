@@ -9,7 +9,7 @@ echo MP3_BITRATE=192 >> .dev.env
 echo SUBFOLDER=/ >> .dev.env
 echo TWITCH_TO_PODCAST_URL=localhost:8085 >> .dev.env
 echo PODTUBE_URL=http://localhost:15000 >> .dev.env
-echo REDIS_ADDRESS=redis >> .dev.env
+echo REDIS_ADDRESS=localhost >> .dev.env
 echo REDIS_PORT=6379 >> .dev.env
 endef
 
