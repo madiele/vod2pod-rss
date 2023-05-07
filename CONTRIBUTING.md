@@ -22,7 +22,7 @@ you need to meake sure this commands are installed on you machine
 
 #### set enviroment variables
 
-edit the `.dev.env` file with your api keys if needed
+edit the `.dev.env` file with your api keys if needed (be sure to not commit your secrets accidentally)
 
 #### launch required services (!!!REQUIRED!!!)
 run `make start-deps`
