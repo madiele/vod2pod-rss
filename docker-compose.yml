@@ -19,7 +19,7 @@ services:
       - redis
     restart: unless-stopped
     ports:
-      - "80:8080"
+      - "80:8080" #change from 80 to another port if you already use the port 80 on your host
     environment:
       - TZ=Europe/London #set if you want the logs to have you timezone
       - MP3_BITRATE=192 #bitrate in kilobits of the mp3 transcode
