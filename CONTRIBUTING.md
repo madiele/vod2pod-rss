@@ -15,7 +15,7 @@ All pull request should point to the main branch and should pass all tests (`mak
 ### github spaces development setup
 [pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) 
 
-At the time of this guide, the free tier offers 120 hours of free usage
+At the time of this guide, the free tier offers 60 hours of free usage on a standard 2 core machine
 
 launch a new codepace here
 
