@@ -10,13 +10,13 @@ All pull request should point to the main branch
 
 ## Dev enviroment setup
 ### github spaces development setup
-[pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) at the time of this guide free tier has 120 hours of free use 
+[pricing](https://docs.github.com/en/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces) At the time of this guide, the free tier offers 120 hours of free usage 
 
 launch a new codepace here
 
 ![image](https://user-images.githubusercontent.com/4585690/236680399-36e2fc82-17fc-4b30-b914-686abbff191f.png)
 
-then in the terminal do `make install-ubuntu-deps` which will install all the needed deps (follow the instruction if input is needed) 
+Then, in the terminal, type `make install-ubuntu-deps` which will install all the necessary dependencies. Follow the instructions if any input is required.
 
 make sure you open a new terminal before using other commands 
 
