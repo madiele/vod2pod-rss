@@ -1,20 +1,21 @@
 #!make
 define write-env =
-echo TRANSCODE=true > .dev.env
-echo YT_API_KEY= >> .dev.env
-echo TWITCH_SECRET= >> .dev.env
-echo TWITCH_CLIENT_ID= >> .dev.env
-echo RUST_LOG=DEBUG >> .dev.env
-echo MP3_BITRATE=192 >> .dev.env
-echo SUBFOLDER=/ >> .dev.env
-echo TWITCH_TO_PODCAST_URL=localhost:8085 >> .dev.env
-echo PODTUBE_URL=http://localhost:15000 >> .dev.env
-echo REDIS_ADDRESS=localhost >> .dev.env
-echo REDIS_PORT=6379 >> .dev.env
+touch .env
+grep -q '^TRANSCODE=' .env || echo 'TRANSCODE=true' >> .env
+grep -q '^YT_API_KEY=' .env || echo 'YT_API_KEY=' >> .env
+grep -q '^TWITCH_SECRET=' .env || echo 'TWITCH_SECRET=' >> .env
+grep -q '^TWITCH_CLIENT_ID=' .env || echo 'TWITCH_CLIENT_ID=' >> .env
+grep -q '^RUST_LOG=' .env || echo 'RUST_LOG=DEBUG' >> .env
+grep -q '^MP3_BITRATE=' .env || echo 'MP3_BITRATE=192' >> .env
+grep -q '^SUBFOLDER=' .env || echo 'SUBFOLDER=/' >> .env
+grep -q '^TWITCH_TO_PODCAST_URL=' .env || echo 'TWITCH_TO_PODCAST_URL=localhost:8085' >> .env
+grep -q '^PODTUBE_URL=' .env || echo 'PODTUBE_URL=http://localhost:15000' >> .env
+grep -q '^REDIS_ADDRESS=' .env || echo 'REDIS_ADDRESS=localhost' >> .env
+grep -q '^REDIS_PORT=' .env || echo 'REDIS_PORT=6379' >> .env
 endef
 
-ifneq (,$(wildcard ./.dev.env))
-    include .dev.env
+ifneq (,$(wildcard ./.env))
+    include .env
     export
 endif
 

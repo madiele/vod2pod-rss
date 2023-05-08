@@ -2,8 +2,6 @@ version: '3.8'
 services:
   api_keys:
     image: alpine
-    env_file:
-      - .dev.env
     environment:
     #add your api-keys here (put them after the "=" sign or use an .env file)
       # Set your YouTube API key
