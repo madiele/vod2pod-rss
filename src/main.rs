@@ -202,7 +202,7 @@ async fn transcode_to_mp3(
     let seek_secs = ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
     debug!("choosen seek_time: {seek_secs}");
     let ffmpeg_paramenters = FfmpegParameters {
-        seek_time: seek_secs.floor() as _,
+        seek_time: seek_secs,
         url: stream_url.clone(),
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: bitrate,
@@ -215,10 +215,8 @@ async fn transcode_to_mp3(
         Ok(transcoder) => {
             let stream = transcoder.get_transcode_stream();
 
-            let mut response_builder = match ffmpeg_paramenters.seek_time {
-                0 => HttpResponse::Ok(),
-                _ => HttpResponse::PartialContent(),
-            };
+            let mut response_builder = if ffmpeg_paramenters.seek_time <= 0.1 { HttpResponse::Ok() } else { HttpResponse::PartialContent() };
+
             response_builder.insert_header(("Accept-Ranges", "bytes"))
                 .insert_header(("Content-Range", format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}")))
                 .content_type("audio/mpeg")

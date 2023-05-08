@@ -39,7 +39,7 @@ impl Default for FFMPEGAudioCodec {
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {
-    pub seek_time: usize,
+    pub seek_time: f32,
     pub url: Url,
     pub audio_codec: FFMPEGAudioCodec,
     pub bitrate_kbit: usize,
@@ -290,7 +290,7 @@ mod test {
     async fn check_ffmpeg_command() {
         let stream_url = Url::parse("http://url.mp3").unwrap();
         let params = FfmpegParameters {
-            seek_time: 30,
+            seek_time: 30.0,
             url: stream_url,
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
