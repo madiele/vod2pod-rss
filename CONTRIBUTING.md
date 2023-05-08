@@ -3,7 +3,7 @@
 When contributing to this repository, please first discuss the change you wish to make via issue,
 email, or any other method with the owners of this repository before making a change.
 
-Fix for bugs can be opened out of the blue.
+Fix for small bugs or typos can be opened out of the blue as long as they don't alter the flow of the program too much.
 
 When adding a feature try to also add some test if possible.
 
