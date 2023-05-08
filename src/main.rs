@@ -133,7 +133,7 @@ struct TranscodizeQuery {
     duration: usize,
 }
 
-fn get_start_and_end(content_range_str: &str, bytes_count: usize) -> eyre::Result<(usize, usize)> {
+fn parse_range_header(content_range_str: &str, bytes_count: usize) -> eyre::Result<(usize, usize, usize)> {
     let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?")?;
     let captures = if let Some(x) = re.captures_iter(content_range_str).next() { x } else {
         return Err(eyre::eyre!("content range regex failed"));
@@ -148,7 +148,13 @@ fn get_start_and_end(content_range_str: &str, bytes_count: usize) -> eyre::Resul
         end = x.as_str().parse()?;
     }
 
-    Ok((start, end))
+    if end == start {
+        return Err(eyre::eyre!("The requested Rage header with a length of 0 is invalid: {content_range_str}"));
+    }
+
+    let expected = (end + 1) - start ;
+
+    Ok((start, end, expected))
 }
 
 async fn transcode_to_mp3(
@@ -158,7 +164,7 @@ async fn transcode_to_mp3(
     let stream_url = &query.url;
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
-    let bytes_count = (duration_secs * bitrate * 1000) / 8;
+    let total_streamable_bytes = (duration_secs * bitrate * 1000) / 8;
     info!("processing transcode at {bitrate}k for {stream_url}");
 
     if let Ok(value) = conf().get(ConfName::TranscodingEnabled) {
@@ -182,25 +188,26 @@ async fn transcode_to_mp3(
     debug!("received content range {content_range_str}");
 
 
-    let (start, end) = match get_start_and_end(content_range_str, bytes_count) {
-        Ok((start, end)) => (start, end),
+    let (start_bytes, end_bytes, expected_bytes) = match parse_range_header(content_range_str, total_streamable_bytes) {
+        Ok((start, end, expected)) => (start, end, expected),
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    debug!("requested content-range: bytes {start}-{end}/{bytes_count}");
+    debug!("requested content-range: bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}");
 
-    if start > end || start > bytes_count {
+    if start_bytes > end_bytes || start_bytes > total_streamable_bytes {
         return HttpResponse::RangeNotSatisfiable().finish();
     }
-    let seek = ((start as f32) / (bytes_count as f32)) * (duration_secs as f32);
-    debug!("choosen seek_time: {seek}");
+
+    let seek_secs = ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
+    debug!("choosen seek_time: {seek_secs}");
     let ffmpeg_paramenters = FfmpegParameters {
-        seek_time: seek.floor() as _,
+        seek_time: seek_secs.floor() as _,
         url: stream_url.clone(),
         audio_codec: FFMPEGAudioCodec::Libmp3lame,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
-        expected_bytes_count: bytes_count - start,
+        expected_bytes_count: expected_bytes,
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
@@ -213,9 +220,9 @@ async fn transcode_to_mp3(
                 _ => HttpResponse::PartialContent(),
             };
             response_builder.insert_header(("Accept-Ranges", "bytes"))
-                .insert_header(("Content-Range", format!("bytes {start}-{end}/{bytes_count}")))
+                .insert_header(("Content-Range", format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}")))
                 .content_type("audio/mpeg")
-                .no_chunking((bytes_count - start).try_into().unwrap())
+                .no_chunking((expected_bytes).try_into().unwrap())
                 .streaming(stream)
         }
         Err(e) => {
@@ -226,4 +233,38 @@ async fn transcode_to_mp3(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_start_and_end_start_to_end() {
+        let content_range_str = "bytes=0-99";
+        let bytes_count = 100;
+        let (start, end, expected) = parse_range_header(content_range_str, bytes_count).unwrap();
+        assert_eq!((start, end, expected), (0, 99, 100));
+    }
+
+    #[test]
+    fn test_get_start_and_end_middle1_to_middle2() {
+        let content_range_str = "bytes=50-199";
+        let bytes_count = 200;
+        let (start, end, expected) = parse_range_header(content_range_str, bytes_count).unwrap();
+        assert_eq!((start, end, expected), (50, 199, 150));
+    }
+
+    #[test]
+    fn test_get_start_and_end_middle_to_undefined() {
+        let content_range_str = "bytes=100-";
+        let bytes_count = 200;
+        let (start, end, expected) = parse_range_header(content_range_str, bytes_count).unwrap();
+        assert_eq!((start, end, expected), (100, 199, 100));
+    }
+
+    #[test]
+    fn test_get_start_and_end_start_to_undefined() {
+        let content_range_str = "bytes=0-";
+        let bytes_count = 200;
+        let (start, end, expected) = parse_range_header(content_range_str, bytes_count).unwrap();
+        assert_eq!((start, end, expected), (0, 199, 200));
+    }
 }
+
