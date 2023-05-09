@@ -54,7 +54,7 @@ or
 
 ### set enviroment variables
 
-after launching the deps install script edit the `.dev.env` file that was generated in the root folder with your api keys if needed (be sure to not commit your secrets accidentally)
+after launching the deps install script edit the `.env` file that was generated in the root folder with your api keys if needed (be sure to not commit your secrets accidentally)
 
 ### launch required services (!!!REQUIRED!!!)
 
