@@ -12,6 +12,7 @@ use eyre::eyre;
 use feed_rs::model::{Entry, MediaObject};
 use log::{warn, debug, error};
 use reqwest::Url;
+use rss::extension::itunes::ITunesChannelExtensionBuilder;
 use rss::{GuidBuilder, Guid};
 use rss::{ Enclosure, ItemBuilder, Item, extension::itunes::ITunesItemExtensionBuilder };
 use feed_rs::parser;
@@ -301,6 +302,11 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
             )
     });
     feed_builder.items(feed_items);
+
+    let mut itunes_section = ITunesChannelExtensionBuilder::default();
+    itunes_section.block(Some("yes".to_string())); //this tells podcast players to not index the podcast in their search engines
+    feed_builder.itunes_ext(Some(itunes_section.build()));
+
     Ok(feed_builder.build().to_string())
 }
 
