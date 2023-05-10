@@ -142,7 +142,8 @@ function clearInput() {
 
 async function generateRSSURL() {
   const channelUrl = document.getElementById("channelUrl").value;
-  const rssUrl = `${window.location.href}transcodize_rss?url=${channelUrl}`;
+  const baseUrl = window.location.href.endsWith('/') ? window.location.href : window.location.href + '/';
+  const rssUrl = `${baseUrl}transcodize_rss?url=${channelUrl}`;
   document.getElementById("rssUrl").value = rssUrl;
   await displayRSSPreview(rssUrl);
 }
