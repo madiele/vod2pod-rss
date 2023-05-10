@@ -38,7 +38,7 @@ services:
     container_name: twitchToPodcastRSS
     environment:
         - TZ=Europe/London
-        - TRANSCODE=False #keep this to false, the vod-to-podcast is what really matters
+        - TRANSCODE=False #keep this to false, the vod2pod one is the one you should change
 
   podtube: #remove this section if you don't need improved youtube support
     extends: api_keys
