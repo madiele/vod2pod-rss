@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -254,7 +255,11 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
         }
     };
 
+    let mut namespaces = BTreeMap::new();
+    namespaces.insert("rss".to_string(), "http://www.itunes.com/dtds/podcast-1.0.dtd".to_string());
+    namespaces.insert("itunes".to_string(), "http://www.itunes.com/dtds/podcast-1.0.dtd".to_string());
     let mut feed_builder = rss::ChannelBuilder::default();
+    feed_builder.namespaces(namespaces);
     if let Some(x) = feed.title {
         debug!("Title found: {}", x.content);
         feed_builder.title(x.content);
@@ -372,8 +377,9 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         _ => {
             let url_link = item.links.iter().find(|x| {
                 debug!("pondering on link {:?}", x);
-                let regex = regex::Regex::new("^(https?://)?(www\\.youtube\\.com|youtu\\.be)/.+$").unwrap();
-                regex.is_match(x.href.as_str())
+                let youtube_regex = regex::Regex::new("^(https?://)?(www\\.youtube\\.com|youtu\\.be)/.+$").unwrap();
+                let audio_or_video_regex = regex::Regex::new("^(https?://)?.+\\.(mp3|mp4|wav|avi|mov|flv|wmv|mkv|aac|ogg|webm|3gp|3g2|asf|m4a|mpg|mpeg|ts|m3u|m3u8|pls)$").unwrap();
+                youtube_regex.is_match(x.href.as_str()) || audio_or_video_regex.is_match(x.href.as_str())
             });
             if let Some(url) = url_link {
                 debug!("media url found inside links: {:?}", url_link);
