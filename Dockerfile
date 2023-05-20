@@ -28,9 +28,11 @@ FROM debian:bullseye-slim
 
 #install ffmpeg and yt-dlp
 ARG TARGETPLATFORM
+COPY requirements.txt ./
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 curl ca-certificates ffmpeg && \
-    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    export YT_DLP_VERSION=$(cat requirements.txt | grep yt-dlp | cut -d "=" -f3) && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/download/$YT_DLP_VERSION/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
     apt-get -y purge curl && \
     apt-get -y autoremove && \

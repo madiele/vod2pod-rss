@@ -1,0 +1,14 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "postCreateCommand": "./.devcontainer/PostCreateScript.sh",
+"postStartCommand": "make start-deps",
+"customizations": {
+	"vscode": {
+		"extensions": [
+			"rust-lang.rust-analyzer",
+			"DavidAnson.vscode-markdownlint",
+			"ms-azuretools.vscode-docker"
+		]
+	}
+}
+}

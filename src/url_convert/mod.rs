@@ -153,7 +153,11 @@ struct UnsupportedYoutubeUrl {
 impl ConvertableToFeed for UnsupportedYoutubeUrl {
     async fn to_feed_url(&self) -> eyre::Result<Url> {
         error!("unsupported yotube url found: {}", &self.url);
-        Err(eyre::eyre!("unsupported yotube url found: {}", &self.url))
+        if self.url.path().starts_with("/watch") {
+            return Err(eyre::eyre!("given url ({}) is a video URL, can't create a podcast from a single video, please suply a playlist or channel URL", &self.url))
+        } else {
+            return Err(eyre::eyre!("given url ({}) is not a supported youtube URL, please suply a playlist or channel URL", &self.url))
+        }
     }
 }
 

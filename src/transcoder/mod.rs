@@ -39,7 +39,7 @@ impl Default for FFMPEGAudioCodec {
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {
-    pub seek_time: usize,
+    pub seek_time: f32,
     pub url: Url,
     pub audio_codec: FFMPEGAudioCodec,
     pub bitrate_kbit: usize,
@@ -195,6 +195,17 @@ impl Transcoder {
                 loop {
                     match out.read(&mut buff) {
                         Ok(read_bytes) => {
+
+                            if sent_bytes_count + read_bytes > expected_bytes_count {
+                                //partial request is fulfilled we only need to send the remaining data
+                                let bytes_remaining = expected_bytes_count - sent_bytes_count;
+                                _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..bytes_remaining])));
+                                info!("transcoded everything in partial request");
+                                _ = child.kill();
+                                _ = child.wait();
+                                break;
+                            }
+
                             if read_bytes == 0 {
                                 info!("transcoded everything");
                                 //pad end of stream with 00000000 bytes if client expects more data to be sent
@@ -279,7 +290,7 @@ mod test {
     async fn check_ffmpeg_command() {
         let stream_url = Url::parse("http://url.mp3").unwrap();
         let params = FfmpegParameters {
-            seek_time: 30,
+            seek_time: 30.0,
             url: stream_url,
             max_rate_kbit: 64,
             audio_codec: FFMPEGAudioCodec::Libmp3lame,
