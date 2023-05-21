@@ -7,4 +7,4 @@
 
 ## Reporting a Vulnerability
 
-If you find a vulnerability use the Security tag and report it privatly, I'll try to do my best to fix it
+If you find a vulnerability use the Security tab and report it privatly, I'll try to do my best to fix it
