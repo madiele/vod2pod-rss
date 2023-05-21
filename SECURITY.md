@@ -8,4 +8,4 @@
 
 ## Reporting a Vulnerability
 
-If you find a vulnerability use the Security tab and report it privatly, I'll try to do my best to fix it
+If you come across a vulnerability, please use the Security tab and report it privately. I will do my best to fix it.
