@@ -21,7 +21,7 @@ use tokio::process::Command;
 
 use std::str;
 
-use crate::configs::{conf, ConfName, Conf};
+use crate::configs::{conf, ConfName, Conf, AudioCodec};
 
 #[cfg_attr(not(test),
 io_cached(
@@ -448,13 +448,15 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         .parse()
         .expect("MP3_BITRATE must be a number");
     let generation_uuid  = uuid::Uuid::new_v4().to_string();
+    let codec: AudioCodec = conf().get(ConfName::AudioCodec).unwrap().into();
+    let ext = format!(".{}", codec.get_extension_str());
     transcode_service_url
         .query_pairs_mut()
         .append_pair("bitrate", bitrate.to_string().as_str())
         .append_pair("uuid", generation_uuid.as_str())
         .append_pair("duration", duration_secs.to_string().as_str())
         .append_pair("url", media_url.as_str())
-        .append_pair("ext", ".mp3"); //this should allways be last, some players refuse to play urls not ending in .mp3
+        .append_pair("ext", ext.as_str()); //this should allways be last, some players refuse to play urls not ending in .mp3
 
     let enclosure = Enclosure {
         length: (bitrate * 1024 * duration_secs).to_string(),

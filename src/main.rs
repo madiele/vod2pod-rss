@@ -6,7 +6,7 @@ use serde::Deserialize;
 use simple_logger::SimpleLogger;
 use std::{collections::HashMap, time::Instant};
 use vod2pod_rss::{
-    transcoder::{ Transcoder, FfmpegParameters, FFMPEGAudioCodec }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName},
+    transcoder::{ Transcoder, FfmpegParameters }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName },
 };
 
 #[actix_web::main]
@@ -201,10 +201,11 @@ async fn transcode_to_mp3(
 
     let seek_secs = ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
     debug!("choosen seek_time: {seek_secs}");
+    let codec = conf().get(ConfName::AudioCodec).unwrap().into();
     let ffmpeg_paramenters = FfmpegParameters {
         seek_time: seek_secs,
         url: stream_url.clone(),
-        audio_codec: FFMPEGAudioCodec::Libmp3lame,
+        audio_codec: codec,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
         expected_bytes_count: expected_bytes,
@@ -219,7 +220,7 @@ async fn transcode_to_mp3(
 
             response_builder.insert_header(("Accept-Ranges", "bytes"))
                 .insert_header(("Content-Range", format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}")))
-                .content_type("audio/mpeg")
+                .content_type(codec.get_mime_type_str())
                 .no_chunking((expected_bytes).try_into().unwrap())
                 .streaming(stream)
         }

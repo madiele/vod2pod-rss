@@ -16,32 +16,13 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;
 
-use crate::configs::{conf, ConfName, Conf};
-
-#[derive(Serialize)]
-pub enum FFMPEGAudioCodec {
-    Libmp3lame,
-}
-
-impl FFMPEGAudioCodec {
-    fn as_str(&self) -> &'static str {
-        match self {
-            FFMPEGAudioCodec::Libmp3lame => "libmp3lame",
-        }
-    }
-}
-
-impl Default for FFMPEGAudioCodec {
-    fn default() -> Self {
-        Self::Libmp3lame
-    }
-}
+use crate::configs::{conf, ConfName, Conf, AudioCodec};
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {
     pub seek_time: f32,
     pub url: Url,
-    pub audio_codec: FFMPEGAudioCodec,
+    pub audio_codec: AudioCodec,
     pub bitrate_kbit: usize,
     pub max_rate_kbit: usize,
     pub expected_bytes_count: usize,
@@ -101,7 +82,7 @@ impl Transcoder {
             Self::get_ffmpeg_command(&FfmpegParameters {
                 seek_time: ffmpeg_paramenters.seek_time,
                 url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
-                audio_codec: FFMPEGAudioCodec::Libmp3lame,
+                audio_codec: ffmpeg_paramenters.audio_codec.to_owned(),
                 bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
                 max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
                 expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
@@ -118,12 +99,13 @@ impl Transcoder {
         debug!("generating ffmpeg command");
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
+        debug!("{}", ffmpeg_paramenters.audio_codec.get_ffmpeg_codec_str());
         command_ref
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
-            .args(["-acodec", ffmpeg_paramenters.audio_codec.as_str()])
+            .args(["-acodec", ffmpeg_paramenters.audio_codec.get_ffmpeg_codec_str()])
             .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str()])
-            .args(["-f", "mp3"])
+            .args(["-f", ffmpeg_paramenters.audio_codec.get_extension_str()])
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
             .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
             .args(["-timeout", "300"])
@@ -293,7 +275,7 @@ mod test {
             seek_time: 30.0,
             url: stream_url,
             max_rate_kbit: 64,
-            audio_codec: FFMPEGAudioCodec::Libmp3lame,
+            audio_codec: AudioCodec::MP3,
             bitrate_kbit: 3,
             expected_bytes_count: 999,
         };
@@ -320,7 +302,7 @@ mod test {
                 Some("-acodec") => {
                     let value = args.next().unwrap().to_str().unwrap();
                     info!("-acodec {}", value);
-                    assert_eq!(value, params.audio_codec.as_str());
+                    assert_eq!(value, params.audio_codec.get_ffmpeg_codec_str());
                 }
                 Some("-ab") => {
                     let value = args.next().unwrap().to_str().unwrap();
