@@ -99,7 +99,6 @@ impl Transcoder {
         debug!("generating ffmpeg command");
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
-        debug!("{}", ffmpeg_paramenters.audio_codec.get_ffmpeg_codec_str());
         command_ref
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
