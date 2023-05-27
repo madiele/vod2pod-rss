@@ -13,6 +13,7 @@ grep -q '^TWITCH_TO_PODCAST_URL=' .env || echo 'TWITCH_TO_PODCAST_URL=localhost:
 grep -q '^PODTUBE_URL=' .env || echo 'PODTUBE_URL=http://localhost:15000' >> .env
 grep -q '^REDIS_ADDRESS=' .env || echo 'REDIS_ADDRESS=localhost' >> .env
 grep -q '^REDIS_PORT=' .env || echo 'REDIS_PORT=6379' >> .env
+grep -q '^AUDIO_CODEC=' .env || echo 'AUDIO_CODEC=MP3' >> .env
 endef
 
 ifneq (,$(wildcard ./.env))
