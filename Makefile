@@ -28,7 +28,7 @@ install-ubuntu-deps:
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 	source "${HOME}/.cargo/env"
 	cargo install cargo-watch
-	pip3 install yt-dlp --yes
+	pip3 install yt-dlp
 
 install-fedora-deps:
 	$(write-env)
@@ -38,7 +38,7 @@ install-fedora-deps:
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 	source "${HOME}/.cargo/env"
 	cargo install cargo-watch
-	pip3 install yt-dlp --yes
+	pip3 install yt-dlp
 
 start-deps:
 	@if which docker-compose >/dev/null; then \
