@@ -15,6 +15,9 @@ use serde::Serialize;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;
+use webm_iterable::WebmIterator;
+use webm_iterable::matroska_spec::{MatroskaSpec, Master};
+use webm_iterable::WebmWriter;
 
 use crate::configs::{conf, ConfName, Conf, AudioCodec};
 
@@ -103,6 +106,7 @@ impl Transcoder {
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
             .args(["-acodec", ffmpeg_paramenters.audio_codec.get_ffmpeg_codec_str()])
+            .args(["-vbr", "off"])
             .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str()])
             .args(["-f", ffmpeg_paramenters.audio_codec.get_extension_str()])
             .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
@@ -169,13 +173,43 @@ impl Transcoder {
 
             //stdout thread
             std::thread::spawn(move || {
-                const BUFFER_SIZE: usize = 1024;
+                const BUFFER_SIZE: usize = 1024*1024;
                 let mut buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+                let mut switch_buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
                 let mut tries = 0;
                 let mut sent_bytes_count: usize = 0;
+                let mut first_cluster_passed = false;
                 loop {
                     match out.read(&mut buff) {
                         Ok(read_bytes) => {
+                            let stream_from_buffer = std::io::Cursor::new(&buff[..read_bytes]);
+                            let iter = WebmIterator::new(stream_from_buffer, &[]);
+                            let switch_curs = std::io::Cursor::new(switch_buff);
+                            let mut webm_write = WebmWriter::new(switch_curs);
+
+                            //TODO: as an experiment try to rewrite the ebml with Cue and overwrite the original buffer (check that the new buffer is < than BUFFER_SIZE) then see if seeking works
+                            //TODO: if it works refactor and abstract this so that the MP3 codec is left untouched
+                            for tag in iter {
+                                if let Ok(tag) = tag {
+                                    debug!("{:?}", tag);
+                                    match tag {
+                                        MatroskaSpec::Cluster(Master::Start) => {
+                                            if first_cluster_passed {
+                                                _ = webm_write.write(&tag);
+                                            }
+                                            first_cluster_passed = true;
+                                            _ = webm_write.write(&MatroskaSpec::Cues(Master::Start));
+                                            _ = webm_write.write(&MatroskaSpec::CuePoint(Master::Start));
+                                            _ = webm_write.write(&MatroskaSpec::CueTrackPositions(Master::Start));
+                                            //TODO: something goes here
+                                            _ = webm_write.write(&MatroskaSpec::CueTrackPositions(Master::End));
+                                            _ = webm_write.write(&MatroskaSpec::CuePoint(Master::End));
+                                            _ = webm_write.write(&MatroskaSpec::Cues(Master::End));
+                                        }
+                                        any => (),
+                                    };
+                                } else { break; }
+                            }
 
                             if sent_bytes_count + read_bytes > expected_bytes_count {
                                 //partial request is fulfilled we only need to send the remaining data
