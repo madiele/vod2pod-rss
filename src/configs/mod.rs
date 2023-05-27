@@ -103,16 +103,16 @@ impl AudioCodec {
     pub fn get_extension_str(&self) -> &'static str {
         match self {
             AudioCodec::MP3 => "mp3",
-            AudioCodec::Opus => "opus",
-            AudioCodec::OGGVorbis => "ogg",
+            AudioCodec::Opus => "webm",
+            AudioCodec::OGGVorbis => "webm",
         }
     }
 
     pub fn get_mime_type_str(&self) -> &'static str {
         match self {
             AudioCodec::MP3 => "audio/mpeg",
-            AudioCodec::Opus => "audio/opus",
-            AudioCodec::OGGVorbis => "audio/ogg",
+            AudioCodec::Opus => "audio/webm",
+            AudioCodec::OGGVorbis => "audio/webm",
         }
     }
 }
