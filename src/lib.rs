@@ -1,3 +1,4 @@
+#![feature(return_position_impl_trait_in_trait)]
 pub mod transcoder;
 pub mod rss_transcodizer;
 pub mod url_convert;

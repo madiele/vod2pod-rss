@@ -1,25 +1,23 @@
+pub mod remuxer;
+
+use std::collections::VecDeque;
+use std::io::{Write};
 use std::str::FromStr;
-use std::{ error::Error, time::Duration };
+use std::error::Error;
 use std::{io::Read, process::{ Command, Stdio }};
 
 use cached::AsyncRedisCache;
-use actix_rt::time::sleep;
-use actix_web::web::Bytes;
 use cached::proc_macro::io_cached;
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
-use log::info;
-use log::{ debug, error, warn };
+use log::{info, debug, error, warn};
 use reqwest::Url;
 use serde::Serialize;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::channel;
-use webm_iterable::WebmIterator;
-use webm_iterable::matroska_spec::{MatroskaSpec, Master};
-use webm_iterable::WebmWriter;
+use tokio::sync::mpsc::{Receiver, Sender, channel};
+
 
 use crate::configs::{conf, ConfName, Conf, AudioCodec};
+use crate::transcoder::remuxer::{EbmlRemuxer, Remuxer};
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {
@@ -126,12 +124,12 @@ impl Transcoder {
 
     pub fn get_transcode_stream(
         self,
-    ) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
+    ) -> Gen<Result<actix_web::web::Bytes, impl Error>, (), impl Future<Output = ()>> {
 
         async fn generetor_coroutine(
             mut command: Command,
             expected_bytes_count: usize,
-            co: Co<Result<Bytes, std::io::Error>>
+            co: Co<Result<actix_web::web::Bytes, std::io::Error>>
         ) {
             let mut child = command
                 .stdout(Stdio::piped())
@@ -143,8 +141,8 @@ impl Transcoder {
             let mut out = child.stdout.take().expect("failed to open stdout");
 
             let channel_size: usize = 10;
-            let (tx, mut rx): (Sender<Result<Bytes, std::io::Error>>,
-                                    Receiver<Result<Bytes, std::io::Error>>) = channel(channel_size);
+            let (tx, mut rx): (Sender<Result<actix_web::web::Bytes, std::io::Error>>,
+                                    Receiver<Result<actix_web::web::Bytes, std::io::Error>>) = channel(channel_size);
 
             let tx_stdout = tx.clone();
             let tx_stderr = tx;
@@ -173,66 +171,94 @@ impl Transcoder {
 
             //stdout thread
             std::thread::spawn(move || {
-                const BUFFER_SIZE: usize = 1024*1024;
-                let mut buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-                let mut switch_buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-                let mut tries = 0;
+                const BUFFER_SIZE: usize = 1024*100;
+                //let mut tries = 0;
                 let mut sent_bytes_count: usize = 0;
-                let mut first_cluster_passed = false;
+                //let mut first_cluster_passed = false;
+                //let ffmpeg_out_webm = WebmIterator::new(out, &[]);
+
+                //let (remuxed_in , mut remuxed_out) = channel(1000);
+                //std::thread::spawn(move || {
+                //    for tag in ffmpeg_out_webm {
+                //        if let Ok(tag) = tag {
+                //            match tag {
+                //                MatroskaSpec::Cluster(Master::Start) => {
+                //                    if true {
+                //                        _ = remuxed_in.blocking_send(tag);
+                //                        continue;
+                //                    }
+                //                    first_cluster_passed = true;
+                //                    _ = remuxed_in.blocking_send(MatroskaSpec::Cues(Master::Start));
+                //                    //timestap are in nanoseconds so 1000 == 1 second, testing a 150 seconds clip
+                //                    //at 192k each second is 192000/8 bytes
+                //                    for i in 0..149 {
+                //                        let cluster_position = (i + 1) * (192000/8);
+                //                        let cluster_timestamp = (i + 1) * 1000;
+                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CuePoint(Master::Start));
+                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueTime(cluster_timestamp));
+                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueTrackPositions(Master::Start));
+                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueTrack(1));
+                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueClusterPosition(cluster_position));
+                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CuePoint(Master::End));
+                //                    }
+                //                    _ = remuxed_in.blocking_send(MatroskaSpec::Cues(Master::End));
+                //                    _ = remuxed_in.blocking_send(MatroskaSpec::Cluster(Master::Start));
+                //                },
+                //                tag => _ = remuxed_in.blocking_send(tag),
+                //            };
+                //        } else { break; }
+                //    }
+                //});
+
+                let mut buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+                let mut remuxer = EbmlRemuxer::new(VecDeque::new());
                 loop {
                     match out.read(&mut buff) {
-                        Ok(read_bytes) => {
-                            let stream_from_buffer = std::io::Cursor::new(&buff[..read_bytes]);
-                            let iter = WebmIterator::new(stream_from_buffer, &[]);
-                            let switch_curs = std::io::Cursor::new(switch_buff);
-                            let mut webm_write = WebmWriter::new(switch_curs);
+                        Ok(readed) => {
+                            //if read_bytes == 0 { break };
+                            //TODO: when seeking to a non 0 point we should probably throw away the header?
 
                             //TODO: as an experiment try to rewrite the ebml with Cue and overwrite the original buffer (check that the new buffer is < than BUFFER_SIZE) then see if seeking works
                             //TODO: if it works refactor and abstract this so that the MP3 codec is left untouched
-                            for tag in iter {
-                                if let Ok(tag) = tag {
-                                    debug!("{:?}", tag);
-                                    match tag {
-                                        MatroskaSpec::Cluster(Master::Start) => {
-                                            if first_cluster_passed {
-                                                _ = webm_write.write(&tag);
-                                            }
-                                            first_cluster_passed = true;
-                                            _ = webm_write.write(&MatroskaSpec::Cues(Master::Start));
-                                            _ = webm_write.write(&MatroskaSpec::CuePoint(Master::Start));
-                                            _ = webm_write.write(&MatroskaSpec::CueTrackPositions(Master::Start));
-                                            //TODO: something goes here
-                                            _ = webm_write.write(&MatroskaSpec::CueTrackPositions(Master::End));
-                                            _ = webm_write.write(&MatroskaSpec::CuePoint(Master::End));
-                                            _ = webm_write.write(&MatroskaSpec::Cues(Master::End));
-                                        }
-                                        any => (),
-                                    };
-                                } else { break; }
-                            }
-
-                            if sent_bytes_count + read_bytes > expected_bytes_count {
+                            if sent_bytes_count + readed > expected_bytes_count {
                                 //partial request is fulfilled we only need to send the remaining data
                                 let bytes_remaining = expected_bytes_count - sent_bytes_count;
-                                _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..bytes_remaining])));
+                                _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&buff[..bytes_remaining])));
                                 info!("transcoded everything in partial request");
                                 _ = child.kill();
                                 _ = child.wait();
                                 break;
                             }
 
-                            if read_bytes == 0 {
-                                info!("transcoded everything");
-                                //pad end of stream with 00000000 bytes if client expects more data to be sent
+                            if readed == 0 {
                                 const NULL_BUFF: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+                                info!("transcoded everything");
+                                _ = remuxer.flush();
+
+                                //FIX: block just for testing, it works! but due to a limitation of can only flush the buffer if the whole file is read
+                                {
+                                    let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect();
+                                    debug!("2: {:?}", collect);
+                                    if collect.first().is_none() {continue;}
+                                    let send_res = tx_stdout.blocking_send(Ok(collect));
+                                    if let Err(e) = send_res {
+                                        debug!("{}", e);
+                                        info!("connection to client dropped, stopping transcode");
+                                        _ = child.kill();
+                                        _ = child.wait();
+                                        break;
+                                    };
+                                }
+
+                                //pad end of stream with 00000000 bytes if client expects more data to be sent
                                 debug!("sending {} bytes of padding", expected_bytes_count - sent_bytes_count);
                                 while sent_bytes_count < expected_bytes_count {
                                     let padding_bytes = expected_bytes_count - sent_bytes_count;
                                     if padding_bytes >= BUFFER_SIZE {
-                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF)));
+                                        _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF)));
                                         sent_bytes_count += BUFFER_SIZE;
                                     } else {
-                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)])));
+                                        _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)])));
                                         sent_bytes_count += padding_bytes;
                                     }
                                 }
@@ -240,8 +266,12 @@ impl Transcoder {
                                 break;
                             }
 
-                            let send_res = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes])));
-
+                            //debug!("1: {:?}", buff);
+                            _ = remuxer.write(&buff);
+                            let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect(); //FIX: due to a limitation in TagWriter this is always empty, an incomplete flush is needed
+                            debug!("2: {:?}", collect);
+                            if collect.first().is_none() {continue;} //TODO: remove just for testing
+                            let send_res = tx_stdout.blocking_send(Ok(collect));
                             if let Err(e) = send_res {
                                 debug!("{}", e);
                                 info!("connection to client dropped, stopping transcode");
@@ -249,39 +279,17 @@ impl Transcoder {
                                 _ = child.wait();
                                 break;
                             };
-                            sent_bytes_count += read_bytes;
+
+
+                            sent_bytes_count += readed;
                         }
-                        Err(e) => {
-                            match e.kind() {
-                                std::io::ErrorKind::Interrupted => {
-                                    if tries > 10 {
-                                        error!("read was interrupted too many times");
-                                        if let Err(err) = tx_stdout.blocking_send(Err(e)) {
-                                            error!("unexpected error occured:");
-                                            error!("{}", err);
-                                            _ = child.kill();
-                                            _ = child.wait();
-                                            break;
-                                        };
-                                    }
-                                    warn!("read was interrupted, retrying in 1sec");
-                                    let _ = sleep(Duration::from_secs(1));
-                                    tries += 1;
-                                }
-                                _ => {
-                                    if let Err(err) = tx_stdout.blocking_send(Err(e)) {
-                                        error!("unexpected error occured:");
-                                        error!("{}", err);
-                                        _ = child.kill();
-                                        _ = child.wait();
-                                        break;
-                                    };
-                                },
-                            }
+                        Err(_e) => {
+                            panic!();
                         }
-                    };
-                }
+                    }
+                };
             });
+
 
 
             info!("streaming to client");
