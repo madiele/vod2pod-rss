@@ -36,6 +36,10 @@ cached = { version = "0.43.0", features = ["redis_tokio"] }
 iso8601-duration = "0.2.0"
 chrono = "0.4.24"
 webm-iterable = "0.5.4"
+ebml-iterable = "0.5.0-patch"
+
+[patch.crates-io]
+ebml-iterable = { git = 'https://github.com/madiele/ebml-iterable.git', branch = 'main' }
 
 [dev-dependencies]
 temp-env ={ version = "0.3.4", features = ["async_closure"] }

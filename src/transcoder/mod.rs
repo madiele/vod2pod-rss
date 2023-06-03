@@ -19,7 +19,7 @@ use tokio::sync::mpsc::{Receiver, Sender, channel};
 use crate::configs::{conf, ConfName, Conf, AudioCodec};
 use crate::transcoder::remuxer::{EbmlRemuxer, Remuxer};
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct FfmpegParameters {
     pub seek_time: f32,
     pub url: Url,
@@ -37,7 +37,7 @@ impl FfmpegParameters {
 
 pub struct Transcoder {
     ffmpeg_command: Command,
-    expected_bytes_count: usize,
+    ffmpeg_params: FfmpegParameters,
 }
 
 #[io_cached(
@@ -93,7 +93,7 @@ impl Transcoder {
         };
 
 
-        Ok(Self { ffmpeg_command, expected_bytes_count: ffmpeg_paramenters.expected_bytes_count})
+        Ok(Self { ffmpeg_command, ffmpeg_params: ffmpeg_paramenters.clone()})
     }
 
     fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
@@ -128,7 +128,7 @@ impl Transcoder {
 
         async fn generetor_coroutine(
             mut command: Command,
-            expected_bytes_count: usize,
+            ffmpeg_params: FfmpegParameters,
             co: Co<Result<actix_web::web::Bytes, std::io::Error>>
         ) {
             let mut child = command
@@ -212,6 +212,9 @@ impl Transcoder {
 
                 let mut buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
                 let mut remuxer = EbmlRemuxer::new(VecDeque::new());
+                if ffmpeg_params.seek_time != 0.0 {
+                    remuxer.skip_header(true);
+                }
                 loop {
                     match out.read(&mut buff) {
                         Ok(readed) => {
@@ -220,9 +223,9 @@ impl Transcoder {
 
                             //TODO: as an experiment try to rewrite the ebml with Cue and overwrite the original buffer (check that the new buffer is < than BUFFER_SIZE) then see if seeking works
                             //TODO: if it works refactor and abstract this so that the MP3 codec is left untouched
-                            if sent_bytes_count + readed > expected_bytes_count {
+                            if sent_bytes_count + readed > ffmpeg_params.expected_bytes_count {
                                 //partial request is fulfilled we only need to send the remaining data
-                                let bytes_remaining = expected_bytes_count - sent_bytes_count;
+                                let bytes_remaining = ffmpeg_params.expected_bytes_count - sent_bytes_count;
                                 _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&buff[..bytes_remaining])));
                                 info!("transcoded everything in partial request");
                                 _ = child.kill();
@@ -233,27 +236,27 @@ impl Transcoder {
                             if readed == 0 {
                                 const NULL_BUFF: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
                                 info!("transcoded everything");
-                                _ = remuxer.flush();
+                                _ = remuxer.internal_writer.flush();
 
-                                //FIX: block just for testing, it works! but due to a limitation of can only flush the buffer if the whole file is read
-                                {
-                                    let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect();
-                                    debug!("2: {:?}", collect);
-                                    if collect.first().is_none() {continue;}
-                                    let send_res = tx_stdout.blocking_send(Ok(collect));
-                                    if let Err(e) = send_res {
-                                        debug!("{}", e);
-                                        info!("connection to client dropped, stopping transcode");
-                                        _ = child.kill();
-                                        _ = child.wait();
-                                        break;
-                                    };
-                                }
+                                ////FIX: block just for testing, it works! but due to a limitation of can only flush the buffer if the whole file is read
+                                //{
+                                //    let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect();
+                                //    debug!("2: {:?}", collect);
+                                //    if collect.first().is_none() {continue;}
+                                //    let send_res = tx_stdout.blocking_send(Ok(collect));
+                                //    if let Err(e) = send_res {
+                                //        debug!("{}", e);
+                                //        info!("connection to client dropped, stopping transcode");
+                                //        _ = child.kill();
+                                //        _ = child.wait();
+                                //        break;
+                                //    };
+                                //}
 
                                 //pad end of stream with 00000000 bytes if client expects more data to be sent
-                                debug!("sending {} bytes of padding", expected_bytes_count - sent_bytes_count);
-                                while sent_bytes_count < expected_bytes_count {
-                                    let padding_bytes = expected_bytes_count - sent_bytes_count;
+                                debug!("sending {} bytes of padding", ffmpeg_params.expected_bytes_count - sent_bytes_count);
+                                while sent_bytes_count < ffmpeg_params.expected_bytes_count {
+                                    let padding_bytes = ffmpeg_params.expected_bytes_count - sent_bytes_count;
                                     if padding_bytes >= BUFFER_SIZE {
                                         _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF)));
                                         sent_bytes_count += BUFFER_SIZE;
@@ -267,10 +270,15 @@ impl Transcoder {
                             }
 
                             //debug!("1: {:?}", buff);
+
+
                             _ = remuxer.write(&buff);
-                            let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect(); //FIX: due to a limitation in TagWriter this is always empty, an incomplete flush is needed
-                            debug!("2: {:?}", collect);
-                            if collect.first().is_none() {continue;} //TODO: remove just for testing
+
+                            _ = remuxer.flush();
+                            let collect: actix_web::web::Bytes = remuxer.internal_writer.get_mut().drain(..).collect(); //FIX: due to a limitation in TagWriter this is always empty, an incomplete flush is needed
+                            //debug!("{:?}", collect.is_empty());
+                            debug!("{:?}", collect);
+                            //if collect.first().is_none() {continue;} //TODO: remove just for testing
                             let send_res = tx_stdout.blocking_send(Ok(collect));
                             if let Err(e) = send_res {
                                 debug!("{}", e);
@@ -300,7 +308,7 @@ impl Transcoder {
                 }
             }
         }
-        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, self.expected_bytes_count, co))
+        Gen::new(|co| generetor_coroutine(self.ffmpeg_command, self.ffmpeg_params, co))
     }
 }
 
