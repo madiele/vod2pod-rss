@@ -174,44 +174,8 @@ impl Transcoder {
                 const BUFFER_SIZE: usize = 1024*100;
                 //let mut tries = 0;
                 let mut sent_bytes_count: usize = 0;
-                //let mut first_cluster_passed = false;
-                //let ffmpeg_out_webm = WebmIterator::new(out, &[]);
-
-                //let (remuxed_in , mut remuxed_out) = channel(1000);
-                //std::thread::spawn(move || {
-                //    for tag in ffmpeg_out_webm {
-                //        if let Ok(tag) = tag {
-                //            match tag {
-                //                MatroskaSpec::Cluster(Master::Start) => {
-                //                    if true {
-                //                        _ = remuxed_in.blocking_send(tag);
-                //                        continue;
-                //                    }
-                //                    first_cluster_passed = true;
-                //                    _ = remuxed_in.blocking_send(MatroskaSpec::Cues(Master::Start));
-                //                    //timestap are in nanoseconds so 1000 == 1 second, testing a 150 seconds clip
-                //                    //at 192k each second is 192000/8 bytes
-                //                    for i in 0..149 {
-                //                        let cluster_position = (i + 1) * (192000/8);
-                //                        let cluster_timestamp = (i + 1) * 1000;
-                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CuePoint(Master::Start));
-                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueTime(cluster_timestamp));
-                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueTrackPositions(Master::Start));
-                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueTrack(1));
-                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CueClusterPosition(cluster_position));
-                //                        _ = remuxed_in.blocking_send(MatroskaSpec::CuePoint(Master::End));
-                //                    }
-                //                    _ = remuxed_in.blocking_send(MatroskaSpec::Cues(Master::End));
-                //                    _ = remuxed_in.blocking_send(MatroskaSpec::Cluster(Master::Start));
-                //                },
-                //                tag => _ = remuxed_in.blocking_send(tag),
-                //            };
-                //        } else { break; }
-                //    }
-                //});
-
                 let mut buff: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-                let mut remuxer = EbmlRemuxer::new(VecDeque::new());
+                let mut remuxer = EbmlRemuxer::new(Vec::new());
                 if ffmpeg_params.seek_time != 0.0 {
                     remuxer.skip_header(true);
                 }
@@ -255,16 +219,20 @@ impl Transcoder {
 
                                 //pad end of stream with 00000000 bytes if client expects more data to be sent
                                 debug!("sending {} bytes of padding", ffmpeg_params.expected_bytes_count - sent_bytes_count);
-                                while sent_bytes_count < ffmpeg_params.expected_bytes_count {
-                                    let padding_bytes = ffmpeg_params.expected_bytes_count - sent_bytes_count;
-                                    if padding_bytes >= BUFFER_SIZE {
-                                        _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF)));
-                                        sent_bytes_count += BUFFER_SIZE;
-                                    } else {
-                                        _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)])));
-                                        sent_bytes_count += padding_bytes;
-                                    }
-                                }
+                                //while sent_bytes_count < ffmpeg_params.expected_bytes_count {
+                                //    let padding_bytes = ffmpeg_params.expected_bytes_count - sent_bytes_count;
+                                //    if padding_bytes >= BUFFER_SIZE {
+                                //        _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF)));
+                                //        sent_bytes_count += BUFFER_SIZE;
+                                //    } else {
+                                //        _ = tx_stdout.blocking_send(Ok(actix_web::web::Bytes::copy_from_slice(&NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)])));
+                                //        sent_bytes_count += padding_bytes;
+                                //    }
+                                //}
+                                _ = remuxer.write_padding(ffmpeg_params.expected_bytes_count - sent_bytes_count);
+                                _ = remuxer.flush();
+                                let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect();
+                                _ = tx_stdout.blocking_send(Ok(collect)).map_err(|e| error!("Error: {:?}", e));
                                 _ = child.wait();
                                 break;
                             }
@@ -272,12 +240,37 @@ impl Transcoder {
                             //debug!("1: {:?}", buff);
 
 
-                            _ = remuxer.write(&buff);
-
+                            _ = remuxer.write(&buff[..readed]);
                             _ = remuxer.flush();
-                            let collect: actix_web::web::Bytes = remuxer.internal_writer.get_mut().drain(..).collect(); //FIX: due to a limitation in TagWriter this is always empty, an incomplete flush is needed
-                            //debug!("{:?}", collect.is_empty());
-                            debug!("{:?}", collect);
+                            let collect: actix_web::web::Bytes = remuxer.get_mut().drain(..).collect();
+                            let remuxed_bytes_count = collect.len();
+                            if collect.is_empty() {
+                                debug!("The `collect` vector is empty");
+                            } else {
+                                //debug!("sent bytes: {:?}", collect.len());
+                                let diff = collect.len() as isize - readed as isize;
+                                debug!("diff: {:?}", diff);
+                                //if diff > 0 {
+                                //    let original_buff: Vec<u8> = buff[..readed].to_vec().clone();
+                                //    let sent_buff: Vec<u8> = collect.clone().to_vec();
+
+                                //    let mut diff_vec: Vec<u8> = Vec::new();
+
+                                //        for i in 0..original_buff.len().max(sent_buff.len()) - 1 {
+                                //            if i >= original_buff.len() {
+                                //                diff_vec.push(sent_buff[i]);
+                                //            } else if i >= sent_buff.len() {
+                                //                diff_vec.push(original_buff[i]);
+                                //            } else if original_buff[i] != sent_buff[i] {
+                                //                diff_vec.push(sent_buff[i]);
+                                //            }
+                                //        }
+
+                                //    debug!("{:?}", diff_vec);
+
+                                //}
+                            }
+                            //debug!("{:?}", collect);
                             //if collect.first().is_none() {continue;} //TODO: remove just for testing
                             let send_res = tx_stdout.blocking_send(Ok(collect));
                             if let Err(e) = send_res {
@@ -289,7 +282,7 @@ impl Transcoder {
                             };
 
 
-                            sent_bytes_count += readed;
+                            sent_bytes_count += remuxed_bytes_count;
                         }
                         Err(_e) => {
                             panic!();
