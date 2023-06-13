@@ -1,4 +1,4 @@
-FROM rust:1.68 as builder
+FROM rust:1.70 as builder
 
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod

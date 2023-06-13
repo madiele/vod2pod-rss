@@ -1,3 +1,6 @@
+use log::warn;
+use serde::Serialize;
+
 pub fn conf() -> impl Conf {
     EnvConf {}
 }
@@ -19,6 +22,7 @@ pub enum ConfName {
     TranscodingEnabled,
     SubfolderPath,
     ValidUrlDomains,
+    AudioCodec,
 }
 
 struct EnvConf { }
@@ -57,6 +61,75 @@ impl Conf for EnvConf {
                 Ok(folder)
             },
             ConfName::ValidUrlDomains => Ok(std::env::var("VALID_URL_DOMAINS").unwrap_or_else(|_| "https://*.youtube.com/,https://youtube.com/,https://youtu.be/,https://*.youtu.be/,https://*.twitch.tv/,https://twitch.tv/,https://*.googlevideo.com/,https://*.cloudfront.net/".to_string())),
+            ConfName::AudioCodec => Ok(std::env::var("AUDIO_CODEC").map(|c| {
+                match c.as_str() {
+                    "MP3" => c,
+                    "OPUS" => c,
+                    "OGG" => "OGG_VORBIS".to_string(),
+                    "VORBIS" => "OGG_VORBIS".to_string(),
+                    "OGG_VORBIS" => c,
+                    _ => {
+                        warn!("Unrecognized codec \"{c}\". Defaulting to MP3.");
+                        "MP3".to_string()
+                    }
+                }
+            }).unwrap_or_else(|_| "MP3".to_string())),
         }
+    }
+}
+
+#[derive(Serialize,Clone, Copy)]
+pub enum AudioCodec {
+    MP3,
+    Opus,
+    OGGVorbis,
+}
+
+impl AudioCodec {
+    pub fn get_ffmpeg_codec_str(&self) -> &'static str {
+        match self {
+            AudioCodec::MP3 => "libmp3lame",
+            AudioCodec::Opus => {
+                warn!("seeking is not supported with OPUS codec  ");
+                "libopus"
+            },
+            AudioCodec::OGGVorbis => {
+                warn!("seeking is not supported with OGG_VORBIS codec ... ");
+                "libvorbis"
+            },
+        }
+    }
+
+    pub fn get_extension_str(&self) -> &'static str {
+        match self {
+            AudioCodec::MP3 => "mp3",
+            AudioCodec::Opus => "webm",
+            AudioCodec::OGGVorbis => "webm",
+        }
+    }
+
+    pub fn get_mime_type_str(&self) -> &'static str {
+        match self {
+            AudioCodec::MP3 => "audio/mpeg",
+            AudioCodec::Opus => "audio/webm",
+            AudioCodec::OGGVorbis => "audio/webm",
+        }
+    }
+}
+
+impl From<String> for AudioCodec {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "MP3" => AudioCodec::MP3,
+            "OPUS" => AudioCodec::Opus,
+            "OGG_VORBIS" => AudioCodec::OGGVorbis,
+            _ => AudioCodec::MP3,
+        }
+    }
+}
+
+impl Default for AudioCodec {
+    fn default() -> Self {
+        Self::MP3
     }
 }
