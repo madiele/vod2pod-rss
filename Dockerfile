@@ -31,7 +31,7 @@ ARG TARGETPLATFORM
 COPY requirements.txt ./
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 curl ca-certificates ffmpeg && \
-    export YT_DLP_VERSION=$(cat requirements.txt | grep yt-dlp | cut -d "=" -f3) && \
+    export YT_DLP_VERSION=$(cat requirements.txt | grep yt-dlp | cut -d "=" -f3 | awk -F. '{printf "%d.%02d.%02d\n", $1, $2, $3}') && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/download/$YT_DLP_VERSION/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
     apt-get -y purge curl && \
