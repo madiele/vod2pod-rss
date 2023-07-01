@@ -59,8 +59,6 @@ async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
             Ok(0)
         }
     }
-
-
 }
 
 //TODO: refactor in to cache abstraction a module
