@@ -19,6 +19,7 @@ macro_rules! dispatch_if_match {
         let provider = $provider::new($url);
         for regex in provider.domain_whitelist_regexes() {
             if regex.is_match(&$url.to_string()) {
+                debug!("using {}" , stringify!($provider));
                 return Box::new(provider);
             }
         }
@@ -28,6 +29,7 @@ macro_rules! dispatch_if_match {
 pub fn new(url: &Url) -> Box<dyn MediaProvider> {
     dispatch_if_match!(url, YoutubeProvider);
     dispatch_if_match!(url, TwitchProvider);
+    debug!("using GenericProvider as provider");
     return Box::new(GenericProvider { url: url.clone() })
 }
 
@@ -164,15 +166,15 @@ impl MediaProvider for GenericProvider {
 }
 
 fn get_generic_whitelist() -> Vec<Regex> {
-        let binding = conf().get(ConfName::ValidUrlDomains).unwrap();
-        let patterns: Vec<&str> = binding.split(",").collect();
+    let binding = conf().get(ConfName::ValidUrlDomains).unwrap();
+    let patterns: Vec<&str> = binding.split(",").filter(|e| e.trim().len() > 0).collect();
 
-        let mut regexes: Vec<Regex> = Vec::with_capacity(patterns.len());
-        for pattern in patterns {
-            regexes.push(Regex::new(&pattern.to_string().replace("*", ".+").replace(".", "\\.")).unwrap())
-        }
+    let mut regexes: Vec<Regex> = Vec::with_capacity(patterns.len());
+    for pattern in patterns {
+        regexes.push(Regex::new(&pattern.to_string().replace(".", "\\.").replace("*", ".+")).unwrap())
+    }
 
-        return regexes;
+    return regexes;
 }
 
 struct YoutubeProvider {

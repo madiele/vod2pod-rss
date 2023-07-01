@@ -98,6 +98,7 @@ async fn transcodize_rss(
     };
 
     let provider = provider::new(&parsed_url);
+    log::error!("{:?}", provider.domain_whitelist_regexes());
 
     if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&parsed_url.to_string())) {
         error!("supplied url ({parsed_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");

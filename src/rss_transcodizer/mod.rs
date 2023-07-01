@@ -75,7 +75,6 @@ impl Display for TranscodeParams {
 ))]
 async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     let transcode_service_url = Url::parse(&input.transcode_service_url_str).unwrap();
-    error!("{:?}", input.feed_url);
     let rss_body = (async { reqwest::get(input.feed_url.clone()).await?.bytes().await }).await?;
     let feed = match parser::parse(&rss_body[..]) {
         Ok(x) => {
