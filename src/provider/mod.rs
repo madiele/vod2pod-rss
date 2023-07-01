@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, str::FromStr};
 #[allow(unused_imports)]
 use cached::AsyncRedisCache;
 #[allow(unused_imports)]
@@ -56,7 +56,7 @@ pub fn new(url: &Url) -> Box<dyn MediaProvider> {
 ///     async fn get_item_duration(&self, _url: &Url) -> eyre::Result<Option<u64>> {
 ///         Ok(None)
 ///     }
-///     async fn filter_item(&self, _rss_item: Entry) -> bool {
+///     async fn filter_item(&self, _rss_item: &Entry) -> bool {
 ///         false
 ///     }
 ///     fn media_url_regex() -> Vec<Regex> {
@@ -82,6 +82,20 @@ pub trait MediaProvider {
     /// TODO
     async fn get_item_duration(&self, media_url: &Url) -> eyre::Result<Option<u64>>;
 
+    /// Takes an URL and returns the stream URL
+    /// Only run when trancoding, if URL can't be converted to a sreamable URL will return an error
+    ///
+    /// example: https://www.youtube.com/watch?v=UMO52N2vfk0 -> https://googlevideo.com/....
+    ///
+    /// # Arguments
+    ///
+    /// * `media_url` - The original URL found inside the RSS that should be streamed.
+    ///
+    /// # Examples
+    ///
+    /// TODO
+    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url>;
+
     /// Run on each rss item and decides if item should be ignored
     ///
     /// # Arguments
@@ -91,7 +105,7 @@ pub trait MediaProvider {
     /// # Examples
     ///
     /// TODO
-    async fn filter_item(&self, rss_item: Entry) -> bool;
+    async fn filter_item(&self, rss_item: &Entry) -> bool;
 
     /// Returns the regular expressions for matching media URLs.
     ///
@@ -137,7 +151,11 @@ impl MediaProvider for GenericProvider {
 
     async fn get_item_duration(&self, _url: &Url) -> eyre::Result<Option<u64>> { Ok(None) }
 
-    async fn filter_item(&self, _rss_item: Entry) -> bool { false }
+    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
+        Ok(media_url.to_owned())
+    }
+
+    async fn filter_item(&self, _rss_item: &Entry) -> bool { false }
 
     fn media_url_regex(&self) -> Vec<Regex> { get_generic_whitelist() }
 
@@ -169,7 +187,11 @@ impl MediaProvider for YoutubeProvider {
         get_youtube_video_duration(url).await
     }
 
-    async fn filter_item(&self, rss_item: Entry) -> bool {
+    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
+        get_youtube_stream_url(media_url).await
+    }
+
+    async fn filter_item(&self, rss_item: &Entry) -> bool {
         if let Some(community) = rss_item.media.first().and_then(|media| media.community.as_ref()) {
             if community.stats_views == Some(0) {
                 debug!("ignoring item with 0 views (probably youtube preview) with name: {:?}", rss_item.title);
@@ -206,6 +228,41 @@ impl MediaProvider for YoutubeProvider {
             path if path.starts_with("/@") => feed_url_for_yt_channel(&self.url).await,
             _ => Err(eyre!("unsupported youtube url")),
         }
+    }
+}
+
+#[io_cached(
+    map_error = r##"|e| eyre::Error::new(e)"##,
+    type = "AsyncRedisCache<Url, Url>",
+    create = r##" {
+        AsyncRedisCache::new("cached_yt_stream_url=", 18000)
+            .set_refresh(false)
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
+            .build()
+            .await
+            .expect("get_youtube_stream_url cache")
+} "##
+)]
+async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
+    debug!("getting stream_url for yt video: {}", url);
+    let output = tokio::process::Command::new("yt-dlp")
+        .arg("-x")
+        .arg("--get-url")
+        .arg(url.as_str())
+        .output().await;
+
+    match output {
+        Ok(x) => {
+            let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default();
+            match Url::from_str(raw_url) {
+                Ok(url) => Ok(url),
+                Err(e) => {
+                    warn!("error while parsing stream url:\ninput: {}\nerror: {}", raw_url, e.to_string());
+                    Err(eyre::eyre!(e))
+                },
+            }
+        }
+        Err(e) => Err(eyre::eyre!(e)),
     }
 }
 
@@ -438,7 +495,11 @@ impl MediaProvider for TwitchProvider {
         Ok(None)
     }
 
-    async fn filter_item(&self, _rss_item: Entry) -> bool {
+    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
+        Ok(media_url.to_owned())
+    }
+
+    async fn filter_item(&self, _rss_item: &Entry) -> bool {
         false
     }
 
@@ -465,5 +526,147 @@ impl MediaProvider for TwitchProvider {
         feed_url.query_pairs_mut().append_pair("transcode", "false");
         info!("converted to {feed_url}");
         Ok(feed_url)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_twitch_to_feed() {
+        std::env::set_var("TWITCH_TO_PODCAST_URL", "ttprss");
+        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+        println!("{:?}", url);
+        let feed_url = new(&url).feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+    }
+
+    #[tokio::test]
+    async fn test_http_ttprss_twitch_to_feed() {
+        std::env::set_var("TWITCH_TO_PODCAST_URL", "http://ttprss");
+        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+        println!("{:?}", url);
+        let feed_url = new(&url).feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+    }
+
+    #[tokio::test]
+    async fn test_ssl_ttprss_twitch_to_feed() {
+        std::env::set_var("TWITCH_TO_PODCAST_URL", "https://ttprss");
+        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+        println!("{:?}", url);
+        let feed_url = new(&url).feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "https://ttprss/vod/andersonjph?transcode=false");
+    }
+
+
+    #[tokio::test]
+    async fn test_youtube_to_feed() {
+
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("")),
+            ("PODTUBE_URL", None)
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
+            println!("{:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_youtube_playlist_to_feed() {
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("")),
+            ("PODTUBE_URL", None)
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/playlist?list=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD").unwrap();
+            println!("{:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?playlist_id=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_youtube_to_feed_already_atom_feed() {
+        let url = Url::parse("https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
+        println!("{:?}", url);
+        let feed_url = new(&url).feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+    }
+
+    #[tokio::test]
+    async fn test_generic_to_feed() {
+        let url = Url::parse("https://feeds.simplecast.com/aU_RzZ7j").unwrap();
+        println!("{:?}", url);
+        let feed_url = new(&url).feed_url().await.unwrap();
+        println!("{:?}", feed_url);
+        assert_eq!(feed_url.as_str(), "https://feeds.simplecast.com/aU_RzZ7j");
+    }
+
+    #[tokio::test]
+    async fn test_youtube_to_feed_api_key_present() {
+
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("1234567890123456780")),
+            ("PODTUBE_URL", Some("http://podtube"))
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
+            println!("{:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "http://podtube/youtube/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_youtube_playlist_to_feed_api_key_present() {
+
+        temp_env::async_with_vars([
+            ("YT_API_KEY", Some("1234567890123456780")),
+            ("PODTUBE_URL", Some("http://podtube"))
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.youtube.com/playlist?list=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD").unwrap();
+            println!("{:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("{:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "http://podtube/youtube/playlist/PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD");
+        }
+    }
+
+    #[test]
+    fn test_parse_duration_hhmmss() {
+        assert_eq!(parse_duration("01:02:03").unwrap(), Duration::from_secs(3723));
+    }
+
+    #[test]
+    fn test_parse_duration_mmss() {
+        assert_eq!(parse_duration("30:45").unwrap(), Duration::from_secs(1845));
+    }
+
+    #[test]
+    fn test_parse_duration_ss() {
+        assert_eq!(parse_duration("15").unwrap(), Duration::from_secs(15));
+        assert_eq!(parse_duration("45").unwrap(), Duration::from_secs(45));
+    }
+
+    #[test]
+    fn test_parse_duration_wrong_format() {
+        assert_eq!(parse_duration("invalid").unwrap_err(), "Invalid format".to_string());
     }
 }

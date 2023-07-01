@@ -1,11 +1,11 @@
-use std::str::FromStr;
-use std::{ error::Error, time::Duration };
-use std::{io::Read, process::{ Command, Stdio }};
+use std::error::Error;
+use std::process::Command;
+use std::io::Read;
+use std::thread::sleep;
+use std::time::Duration;
+use std::process::Stdio;
 
-use cached::AsyncRedisCache;
-use actix_rt::time::sleep;
 use actix_web::web::Bytes;
-use cached::proc_macro::io_cached;
 use futures::Future;
 use genawaiter::sync::{ Gen, Co };
 use log::info;
@@ -16,7 +16,8 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;
 
-use crate::configs::{conf, ConfName, Conf, AudioCodec};
+use crate::configs::AudioCodec;
+use crate::provider;
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {
@@ -39,60 +40,18 @@ pub struct Transcoder {
     expected_bytes_count: usize,
 }
 
-#[io_cached(
-    map_error = r##"|e| eyre::Error::new(e)"##,
-    type = "AsyncRedisCache<Url, Url>",
-    create = r##" {
-        AsyncRedisCache::new("cached_yt_stream_url=", 18000)
-            .set_refresh(false)
-            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
-            .build()
-            .await
-            .expect("get_youtube_stream_url cache")
-} "##
-)]
-//TODO: refactor in to cache abstraction a module
-async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
-    debug!("getting stream_url for yt video: {}", url);
-    let output = tokio::process::Command::new("yt-dlp")
-        .arg("-x")
-        .arg("--get-url")
-        .arg(url.as_str())
-        .output().await;
-
-    match output {
-        Ok(x) => {
-            let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default();
-            match Url::from_str(raw_url) {
-                Ok(url) => Ok(url),
-                Err(e) => {
-                    warn!("error while parsing stream url:\ninput: {}\nerror: {}", raw_url, e.to_string());
-                    Err(eyre::eyre!(e))
-                },
-            }
-        }
-        Err(e) => Err(eyre::eyre!(e)),
-    }
-}
-
 impl Transcoder {
     pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
-        //TODO: refactor in to cache abstraction a module
-        let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
-        let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
-                info!("detected youtube url, need to find the stream url if not in cache");
-                Self::get_ffmpeg_command(&FfmpegParameters {
-                    seek_time: ffmpeg_paramenters.seek_time,
-                    url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
-                    audio_codec: ffmpeg_paramenters.audio_codec.to_owned(),
-                    bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
-                    max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
-                    expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
-                })
-            } else {
-                Self::get_ffmpeg_command(ffmpeg_paramenters)
-            };
+        let provider = provider::new(&ffmpeg_paramenters.url);
 
+        let ffmpeg_command = Self::get_ffmpeg_command(&FfmpegParameters {
+            seek_time: ffmpeg_paramenters.seek_time,
+            url: provider.get_stream_url(&ffmpeg_paramenters.url).await?,
+            audio_codec: ffmpeg_paramenters.audio_codec.to_owned(),
+            bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
+            max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
+            expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
+        });
 
         Ok(Self { ffmpeg_command, expected_bytes_count: ffmpeg_paramenters.expected_bytes_count})
     }
