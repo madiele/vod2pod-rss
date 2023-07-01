@@ -29,9 +29,10 @@ pub fn from(url: &Url) -> Box<dyn MediaProvider> {
     return Box::new(GenericProvider::new(url))
 }
 
-/// This trait rappresent a provider offering a media stream (youtube, twitch, etc...)
-/// You can implement your own by implement this trait and edit the from(...) fn in the provider module
-/// to add a new provider
+/// This trait rappresent a provider offering a media stream (youtube, twitch, etc...).
+/// to add a new provider impelment this trait and add `dispatch_if_match!(url, YourProvider);` inside
+/// src/provider/mod.rs -> from(...)
+/// RSS feed should be generated in a separate webserver and then added inside the docker-compose.yml
 ///
 /// # Examples
 ///
@@ -73,24 +74,16 @@ pub trait MediaProvider {
     /// # Arguments
     ///
     /// * `url` - The URL of the item.
-    ///
-    /// # Examples
-    ///
-    /// TODO
     async fn get_item_duration(&self, media_url: &Url) -> eyre::Result<Option<u64>>;
 
     /// Takes an URL and returns the stream URL
-    /// Only run when trancoding, if URL can't be converted to a sreamable URL will return an error
+    /// Only run when trancoding, if URL can't be converted to a streamable URL will return an error
     ///
     /// example: https://www.youtube.com/watch?v=UMO52N2vfk0 -> https://googlevideo.com/....
     ///
     /// # Arguments
     ///
     /// * `media_url` - The original URL found inside the RSS that should be streamed.
-    ///
-    /// # Examples
-    ///
-    /// TODO
     async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url>;
 
     /// Run on each rss item and decides if item should be ignored
@@ -98,43 +91,23 @@ pub trait MediaProvider {
     /// # Arguments
     ///
     /// * `rss_item` - The RSS item to filter.
-    ///
-    /// # Examples
-    ///
-    /// TODO
     async fn filter_item(&self, rss_item: &Entry) -> bool;
 
     /// Returns the regular expressions for matching media URLs.
-    ///
-    /// # Examples
-    ///
-    /// TODO
     fn media_url_regexes(&self) -> Vec<Regex>;
 
     /// Returns the regular expressions that will match all urls offered by the provider.
     /// This are the url associated with the provider es:
     /// for youtube you would need to match https://youtube\.com, https://youtu\.be, and https://.*\.googlevideo\.com/ (used to host the videos).
     /// If this returns None then you would need to use the VALID_URL_DOMAINS env variable to add the allowed domains
-    ///
-    /// # Examples
-    ///
-    /// TODO
     fn domain_whitelist_regexes(&self) -> Vec<Regex>;
 
     /// Constructs the struct for the MediaProvider
-    ///
-    /// # Examples
-    ///
-    /// TODO
     fn new(url: &Url) -> Self where Self: Sized;
 
-    /// if possible this will return the url of the rss/atom feed
+    /// This will return the url of the rss/atom feed
     /// this is run only during feed generation and should error if the provider is called with a media url
-    ///
-    ///
-    /// # Examples
-    ///
-    /// TODO
+    /// es: youtube channel url -> url to the rss feed of it
     async fn feed_url(&self) -> eyre::Result<Url>;
 }
 
