@@ -51,6 +51,7 @@ pub struct Transcoder {
             .expect("get_youtube_stream_url cache")
 } "##
 )]
+//TODO: refactor in to cache abstraction a module
 async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let output = tokio::process::Command::new("yt-dlp")
@@ -76,20 +77,21 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
 
 impl Transcoder {
     pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
+        //TODO: refactor in to cache abstraction a module
         let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
         let ffmpeg_command = if youtube_regex.is_match(&ffmpeg_paramenters.url.to_string()) {
-            info!("detected youtube url, need to find the stream url if not in cache");
-            Self::get_ffmpeg_command(&FfmpegParameters {
-                seek_time: ffmpeg_paramenters.seek_time,
-                url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
-                audio_codec: ffmpeg_paramenters.audio_codec.to_owned(),
-                bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
-                max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
-                expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
-            })
-        } else {
-            Self::get_ffmpeg_command(ffmpeg_paramenters)
-        };
+                info!("detected youtube url, need to find the stream url if not in cache");
+                Self::get_ffmpeg_command(&FfmpegParameters {
+                    seek_time: ffmpeg_paramenters.seek_time,
+                    url: get_youtube_stream_url(&ffmpeg_paramenters.url).await?,
+                    audio_codec: ffmpeg_paramenters.audio_codec.to_owned(),
+                    bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
+                    max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
+                    expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
+                })
+            } else {
+                Self::get_ffmpeg_command(ffmpeg_paramenters)
+            };
 
 
         Ok(Self { ffmpeg_command, expected_bytes_count: ffmpeg_paramenters.expected_bytes_count})

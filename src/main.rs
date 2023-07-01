@@ -107,7 +107,7 @@ async fn transcodize_rss(
         Err(e) => {error!("fail when trying to convert channel {e}"); return HttpResponse::BadRequest().body(e.to_string())},
     };
 
-    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url, should_transcode).await;
+    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url, should_transcode);
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,

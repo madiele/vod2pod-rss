@@ -36,6 +36,7 @@ io_cached(
             .expect("youtube_duration cache")
 } "##
 ))]
+//TODO: refactor into provider trait
 async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
     debug!("getting duration for yt video: {}", url);
 
@@ -86,6 +87,7 @@ async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<(
     Ok(())
 }
 
+//TODO: refactor in to cache abstraction a module
 async fn release_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
     let redis_url = conf().get(ConfName::RedisUrl)?;
     let client = redis::Client::open(redis_url)?;
@@ -200,8 +202,7 @@ pub struct RssTranscodizer {
 
 
 impl RssTranscodizer {
-    pub async fn new(url: Url, transcode_service_url: Url, should_transcode: bool) -> Self {
-
+    pub fn new(url: Url, transcode_service_url: Url, should_transcode: bool) -> Self {
         Self { feed_url: url, transcode_service_url, should_transcode}
     }
 
@@ -325,6 +326,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     let item = params.item;
     let transcode_service_url = params.transcode_service_url;
 
+    //TODO: refactor into a custom filter
     //needed for youtube: if views are 0 it indicates a premiere
     if let Some(community) = item.media.first().and_then(|media| media.community.as_ref()) {
         if community.stats_views == Some(0) {
@@ -377,6 +379,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         _ => {
             let url_link = item.links.iter().find(|x| {
                 debug!("pondering on link {:?}", x);
+                //TODO: refactor into the provider trait
                 let youtube_regex = regex::Regex::new("^(https?://)?(www\\.youtube\\.com|youtu\\.be)/.+$").unwrap();
                 let audio_or_video_regex = regex::Regex::new("^(https?://)?.+\\.(mp3|mp4|wav|avi|mov|flv|wmv|mkv|aac|ogg|webm|3gp|3g2|asf|m4a|mpg|mpeg|ts|m3u|m3u8|pls)$").unwrap();
                 youtube_regex.is_match(x.href.as_str()) || audio_or_video_regex.is_match(x.href.as_str())
@@ -419,6 +422,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         },
         None => {
             debug!("runnign regex on url: {}", media_url.as_str());
+            //TODO: refactor into the provider trait
             let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
             if youtube_regex.is_match(media_url.as_str()) {
                 let duration = match get_youtube_video_duration(&media_url).await {
@@ -444,8 +448,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
     itunes_builder.duration(Some(duration_string));
     let mut transcode_service_url = transcode_service_url;
-    let bitrate: u64 = conf().get(ConfName::Mp3Bitrate).unwrap()
-        .parse()
+    let bitrate: u64 = conf().get(ConfName::Mp3Bitrate).unwrap().parse()
         .expect("MP3_BITRATE must be a number");
     let generation_uuid  = uuid::Uuid::new_v4().to_string();
     let codec: AudioCodec = conf().get(ConfName::AudioCodec).unwrap().into();
@@ -582,7 +585,7 @@ mod test {
         let rss_url = Url::parse("http://127.0.0.1:9872/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
         let res = validate_must_have_props(rss_transcodizer).await;
 
@@ -598,7 +601,7 @@ mod test {
         let rss_url = Url::parse("http://127.0.0.1:9871/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9871/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
 
         let res = validate_must_have_props(rss_transcodizer).await;
@@ -615,7 +618,7 @@ mod test {
         let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
         let res = validate_must_have_props(rss_transcodizer).await;
 
