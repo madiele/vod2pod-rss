@@ -14,11 +14,16 @@ pub fn from(url: &Url) -> Box<dyn MediaProvider> {
 /// # Examples
 ///
 /// ```
+/// use vod2pod_rss::provider::MediaProvider;
+/// use async_trait::async_trait;
+/// use feed_rs::model::Entry;
+/// use regex::Regex;
+/// use reqwest::Url;
 /// struct GenericProvider {
 ///     pub url: Url
 /// }
 ///
-/// #[[async_trait]]
+/// #[async_trait]
 /// impl MediaProvider for GenericProvider {
 ///     async fn get_item_duration(&self, _url: &Url) -> eyre::Result<Option<u64>> {
 ///         Ok(None)
@@ -29,7 +34,7 @@ pub fn from(url: &Url) -> Box<dyn MediaProvider> {
 ///     fn media_url_regex(&self) -> Option<Regex> {
 ///         None
 ///     }
-///     fn url_whitelist_regex (&self) -> Option<Regex> {
+///     fn domain_whitelist_regex(&self) -> Option<Regex> {
 ///         None
 ///     }
 /// }
@@ -46,9 +51,7 @@ pub trait MediaProvider {
     ///
     /// # Examples
     ///
-    /// ```
     /// TODO
-    /// ```
     async fn get_item_duration(&self, media_url: &Url) -> eyre::Result<Option<u64>>;
 
     /// Run on each rss item and decides if item should be ignored
@@ -59,18 +62,14 @@ pub trait MediaProvider {
     ///
     /// # Examples
     ///
-    /// ```
     /// TODO
-    /// ```
     async fn filter_item(&self, rss_item: Entry) -> bool;
 
     /// Returns the regular expression for matching media URLs.
     ///
     /// # Examples
     ///
-    /// ```
     /// TODO
-    /// ```
     fn media_url_regex(&self) -> Option<Regex>;
 
     /// Returns the regular expression that will match all urls offered by the provider.
@@ -80,9 +79,7 @@ pub trait MediaProvider {
     ///
     /// # Examples
     ///
-    /// ```
     /// TODO
-    /// ```
     fn domain_whitelist_regex(&self) -> Option<Regex>;
 }
 
@@ -101,7 +98,7 @@ impl MediaProvider for GenericProvider {
     fn media_url_regex(&self) -> Option<Regex> {
         None
     }
-    fn domain_whitelist_regex (&self) -> Option<Regex> {
+    fn domain_whitelist_regex(&self) -> Option<Regex> {
         None
     }
 }
