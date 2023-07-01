@@ -97,7 +97,7 @@ async fn transcodize_rss(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    let provider = provider::new(&parsed_url);
+    let provider = provider::from(&parsed_url);
     log::error!("{:?}", provider.domain_whitelist_regexes());
 
     if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&parsed_url.to_string())) {
@@ -176,7 +176,7 @@ async fn transcode_to_mp3(
         }
     }
 
-    let provider = provider::new(&stream_url);
+    let provider = provider::from(&stream_url);
 
     if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&stream_url.to_string())) {
         error!("supplied url ({stream_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");

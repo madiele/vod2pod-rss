@@ -164,7 +164,7 @@ struct ConvertItemsParams {
 async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     let item = params.item;
     let transcode_service_url = params.transcode_service_url;
-    let provider = provider::new(&params.feed_url);
+    let provider = provider::from(&params.feed_url);
 
     if provider.filter_item(&item).await { return None; }
 
