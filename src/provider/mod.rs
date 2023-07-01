@@ -28,7 +28,6 @@ macro_rules! dispatch_if_match {
 pub fn new(url: &Url) -> Box<dyn MediaProvider> {
     dispatch_if_match!(url, YoutubeProvider);
     dispatch_if_match!(url, TwitchProvider);
-
     return Box::new(GenericProvider { url: url.clone() })
 }
 
@@ -44,27 +43,27 @@ pub fn new(url: &Url) -> Box<dyn MediaProvider> {
 /// use feed_rs::model::Entry;
 /// use regex::Regex;
 /// use reqwest::Url;
-
 /// struct GenericProvider {
+///     url: Url
 /// }
 ///
 /// #[async_trait]
 /// impl MediaProvider for GenericProvider {
-///     fn new(_url: &Url) -> Self {
-///         GenericProvider { }
+///     fn new(url: &Url) -> Self { GenericProvider { url: url.clone() } }
+///
+///     async fn get_item_duration(&self, _url: &Url) -> eyre::Result<Option<u64>> { Ok(None) }
+///
+///     async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
+///         Ok(media_url.to_owned())
 ///     }
-///     async fn get_item_duration(&self, _url: &Url) -> eyre::Result<Option<u64>> {
-///         Ok(None)
-///     }
-///     async fn filter_item(&self, _rss_item: &Entry) -> bool {
-///         false
-///     }
-///     fn media_url_regex() -> Vec<Regex> {
-///         vec!()
-///     }
-///     fn domain_whitelist_regex() -> Vec<Regex> {
-///         vec!()
-///     }
+///
+///     async fn filter_item(&self, _rss_item: &Entry) -> bool { false }
+///
+///     fn media_url_regex(&self) -> Vec<Regex> { vec!() }
+///
+///     fn domain_whitelist_regexes(&self) -> Vec<Regex> { vec!() }
+///
+///     async fn feed_url(&self) -> eyre::Result<Url> { Ok(self.url.clone()) }
 /// }
 /// ```
 #[async_trait]
@@ -206,13 +205,19 @@ impl MediaProvider for YoutubeProvider {
     }
 
     fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-        return vec!(
+
+        let youtube_whitelist = vec!(
             regex::Regex::new(r"^https://.*\.youtube\.com/").unwrap(),
             regex::Regex::new(r"^https://youtube\.com/").unwrap(),
             regex::Regex::new(r"^https://youtu\.be/").unwrap(),
             regex::Regex::new(r"^https://.*\.youtu\.be/").unwrap(),
             regex::Regex::new(r"^https://.*\.googlevideo\.com/").unwrap(),
         );
+
+        #[cfg(not(test))]
+        return youtube_whitelist;
+        #[cfg(test)] //this will allow test to use localhost ad still work
+        return [youtube_whitelist, vec!(regex::Regex::new(r"^http://127\.0\.0\.1").unwrap())].concat();
     }
     fn new(url: &Url) -> Self {
         YoutubeProvider { url: url.clone() }
@@ -324,6 +329,25 @@ async fn feed_url_for_yt_atom(url: &Url) -> eyre::Result<Url> {
         Ok(url.clone())
 }
 
+async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
+    info!("trying to convert youtube channel url {}", url);
+    if url.to_string().contains("feeds/videos.xml") {
+        return Ok(url.to_owned());
+    }
+    let url_with_channel_id = find_yt_channel_url_with_c_id(&url).await?;
+    let channel_id = url_with_channel_id.path_segments().unwrap().last().unwrap();
+    let podtube_api_key = conf().get(ConfName::YoutubeApiKey).ok();
+    if let (Ok(mut podtube_url), Some(_)) = (Url::parse(&conf().get(ConfName::PodTubeUrl).unwrap_or_default()), podtube_api_key) {
+        podtube_url.set_path(format!("/youtube/channel/{channel_id}").as_str());
+        Ok(podtube_url)
+    } else {
+        let mut feed_url = Url::parse("https://www.youtube.com/feeds/videos.xml")?;
+        feed_url.query_pairs_mut().append_pair("channel_id", channel_id);
+        info!("converted to {feed_url}");
+        Ok(feed_url)
+    }
+}
+
 #[cfg_attr(not(test),
 io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
@@ -337,7 +361,7 @@ io_cached(
             .expect("youtube_channel_username_to_id cache")
 } "##
 ))]
-async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
+async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
     info!("conversion not in cache, using yt-dlp for conversion...");
     let output = Command::new("yt-dlp")
         .arg("--playlist-items")
@@ -535,38 +559,53 @@ mod tests {
 
     #[tokio::test]
     async fn test_twitch_to_feed() {
-        std::env::set_var("TWITCH_TO_PODCAST_URL", "ttprss");
-        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
-        println!("{:?}", url);
-        let feed_url = new(&url).feed_url().await.unwrap();
-        println!("{:?}", feed_url);
-        assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+        temp_env::async_with_vars([
+            ("TWITCH_TO_PODCAST_URL", Some("http://ttprss")),
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+            println!("url: {:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("feed_url: {:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+        }
     }
 
     #[tokio::test]
     async fn test_http_ttprss_twitch_to_feed() {
-        std::env::set_var("TWITCH_TO_PODCAST_URL", "http://ttprss");
-        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
-        println!("{:?}", url);
-        let feed_url = new(&url).feed_url().await.unwrap();
-        println!("{:?}", feed_url);
-        assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+        temp_env::async_with_vars([
+            ("TWITCH_TO_PODCAST_URL", Some("http://ttprss")),
+        ], test()).await;
+
+        async fn test() {
+            let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+            println!("url: {:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("feed_url: {:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "http://ttprss/vod/andersonjph?transcode=false");
+        }
     }
 
     #[tokio::test]
     async fn test_ssl_ttprss_twitch_to_feed() {
-        std::env::set_var("TWITCH_TO_PODCAST_URL", "https://ttprss");
-        let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
-        println!("{:?}", url);
-        let feed_url = new(&url).feed_url().await.unwrap();
-        println!("{:?}", feed_url);
-        assert_eq!(feed_url.as_str(), "https://ttprss/vod/andersonjph?transcode=false");
+        temp_env::async_with_vars([
+            ("TWITCH_TO_PODCAST_URL", Some("http://ttprss")),
+        ], test()).await;
+
+        async fn test() {
+            std::env::set_var("TWITCH_TO_PODCAST_URL", "https://ttprss");
+            let url = Url::parse("https://www.twitch.tv/andersonjph").unwrap();
+            println!("url: {:?}", url);
+            let feed_url = new(&url).feed_url().await.unwrap();
+            println!("feed_url: {:?}", feed_url);
+            assert_eq!(feed_url.as_str(), "https://ttprss/vod/andersonjph?transcode=false");
+        }
     }
 
 
     #[tokio::test]
     async fn test_youtube_to_feed() {
-
         temp_env::async_with_vars([
             ("YT_API_KEY", Some("")),
             ("PODTUBE_URL", None)
@@ -574,9 +613,9 @@ mod tests {
 
         async fn test() {
             let url = Url::parse("https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
-            println!("{:?}", url);
+            println!("url: {:?}", url);
             let feed_url = new(&url).feed_url().await.unwrap();
-            println!("{:?}", feed_url);
+            println!("feed_url: {:?}", feed_url);
             assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
         }
     }
@@ -590,9 +629,9 @@ mod tests {
 
         async fn test() {
             let url = Url::parse("https://www.youtube.com/playlist?list=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD").unwrap();
-            println!("{:?}", url);
+            println!("url: {:?}", url);
             let feed_url = new(&url).feed_url().await.unwrap();
-            println!("{:?}", feed_url);
+            println!("feed_url: {:?}", feed_url);
             assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?playlist_id=PLm323Lc7iSW9Qw_iaorhwG2WtVXuL9WBD");
         }
     }
@@ -600,18 +639,18 @@ mod tests {
     #[tokio::test]
     async fn test_youtube_to_feed_already_atom_feed() {
         let url = Url::parse("https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
-        println!("{:?}", url);
+        println!("url: {:?}", url);
         let feed_url = new(&url).feed_url().await.unwrap();
-        println!("{:?}", feed_url);
+        println!("feed_url: {:?}", feed_url);
         assert_eq!(feed_url.as_str(), "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw");
     }
 
     #[tokio::test]
     async fn test_generic_to_feed() {
         let url = Url::parse("https://feeds.simplecast.com/aU_RzZ7j").unwrap();
-        println!("{:?}", url);
+        println!("url: {:?}", url);
         let feed_url = new(&url).feed_url().await.unwrap();
-        println!("{:?}", feed_url);
+        println!("feed_url: {:?}", feed_url);
         assert_eq!(feed_url.as_str(), "https://feeds.simplecast.com/aU_RzZ7j");
     }
 
@@ -625,9 +664,9 @@ mod tests {
 
         async fn test() {
             let url = Url::parse("https://www.youtube.com/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw").unwrap();
-            println!("{:?}", url);
+            println!("url: {:?}", url);
             let feed_url = new(&url).feed_url().await.unwrap();
-            println!("{:?}", feed_url);
+            println!("feed_url: {:?}", feed_url);
             assert_eq!(feed_url.as_str(), "http://podtube/youtube/channel/UC-lHJZR3Gqxm24_Vd_AJ5Yw");
         }
     }

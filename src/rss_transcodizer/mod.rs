@@ -35,7 +35,6 @@ impl RssTranscodizer {
         Self { feed_url: url, transcode_service_url, should_transcode}
     }
 
-
     pub async fn transcodize(&self) -> eyre::Result<String> {
 
         cached_transcodize(TranscodeParams {
@@ -435,19 +434,27 @@ mod test {
     }
 
     #[test(actix_web::test)]
-    async fn rss_youtube_feed() -> Result<(), String> {
-        let handle = startup_test("youtube".to_string(), 9870).await;
+    async fn rss_youtube_feed() {
+        temp_env::async_with_vars([
+            ("VALID_URL_DOMAINS", Some("http://127.0.0.1")),
+        ], test()).await;
 
-        let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
-        println!("testing feed {rss_url}");
-        let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
+        async fn test() {
+            let handle = startup_test("youtube".to_string(), 9870).await;
 
-        let res = validate_must_have_props(rss_transcodizer).await;
+            let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
+            println!("testing feed {rss_url}");
+            let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
+            let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
-        stop_test(handle).await;
+            let res = validate_must_have_props(rss_transcodizer).await;
 
-        res
+            stop_test(handle).await;
+
+            if let Err(e) = res {
+                panic!("{e}");
+            }
+        }
     }
 
     async fn startup_test(type_test: String, port: u16) -> ServerHandle {
