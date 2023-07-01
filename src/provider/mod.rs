@@ -59,7 +59,7 @@ pub fn new(url: &Url) -> Box<dyn MediaProvider> {
 ///
 ///     async fn filter_item(&self, _rss_item: &Entry) -> bool { false }
 ///
-///     fn media_url_regex(&self) -> Vec<Regex> { vec!() }
+///     fn media_url_regexes(&self) -> Vec<Regex> { vec!() }
 ///
 ///     fn domain_whitelist_regexes(&self) -> Vec<Regex> { vec!() }
 ///
@@ -111,7 +111,7 @@ pub trait MediaProvider {
     /// # Examples
     ///
     /// TODO
-    fn media_url_regex(&self) -> Vec<Regex>;
+    fn media_url_regexes(&self) -> Vec<Regex>;
 
     /// Returns the regular expressions that will match all urls offered by the provider.
     /// This are the url associated with the provider es:
@@ -156,7 +156,7 @@ impl MediaProvider for GenericProvider {
 
     async fn filter_item(&self, _rss_item: &Entry) -> bool { false }
 
-    fn media_url_regex(&self) -> Vec<Regex> { get_generic_whitelist() }
+    fn media_url_regexes(&self) -> Vec<Regex> { get_generic_whitelist() }
 
     fn domain_whitelist_regexes(&self) -> Vec<Regex> { get_generic_whitelist() }
 
@@ -200,18 +200,21 @@ impl MediaProvider for YoutubeProvider {
         return false;
     }
 
-    fn media_url_regex(&self) -> Vec<Regex> {
-        return vec!(regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap());
+    fn media_url_regexes(&self) -> Vec<Regex> {
+        return vec!(
+            regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap(),
+        );
     }
 
     fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-
         let youtube_whitelist = vec!(
-            regex::Regex::new(r"^https://.*\.youtube\.com/").unwrap(),
-            regex::Regex::new(r"^https://youtube\.com/").unwrap(),
-            regex::Regex::new(r"^https://youtu\.be/").unwrap(),
-            regex::Regex::new(r"^https://.*\.youtu\.be/").unwrap(),
-            regex::Regex::new(r"^https://.*\.googlevideo\.com/").unwrap(),
+            regex::Regex::new(r"^(https://)?.*\.youtube\.com/").unwrap(),
+            regex::Regex::new(r"^(https://)?youtube\.com/").unwrap(),
+            regex::Regex::new(r"^(https://)?youtu\.be/").unwrap(),
+            regex::Regex::new(r"^(https://)?.*\.youtu\.be/").unwrap(),
+            regex::Regex::new(r"^(https://)?.*\.googlevideo\.com/").unwrap(),
+            regex::Regex::new(r"^http://localhost:15000/youtube").unwrap(),
+            regex::Regex::new(r"^http://podtube(:[0-9]+)?/youtube").unwrap(),
         );
 
         #[cfg(not(test))]
@@ -527,7 +530,7 @@ impl MediaProvider for TwitchProvider {
         false
     }
 
-    fn media_url_regex(&self) -> Vec<Regex> {
+    fn media_url_regexes(&self) -> Vec<Regex> {
         return vec!(
             regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap()
         );
@@ -535,7 +538,9 @@ impl MediaProvider for TwitchProvider {
     fn domain_whitelist_regexes(&self) -> Vec<Regex> {
         return vec!(
             regex::Regex::new(r"^https?://(.*\.)?twitch\.tv/").unwrap(),
-            regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap()
+            regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap(),
+            regex::Regex::new(r"^http://ttprss(:[0-9]+)?/").unwrap(),
+            regex::Regex::new(r"^http://localhost:8085/vod/").unwrap(),
         );
     }
     async fn feed_url(&self) -> eyre::Result<Url> {

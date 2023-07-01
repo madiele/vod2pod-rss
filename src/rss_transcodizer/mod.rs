@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::time::Duration;
 
 #[allow(unused_imports)]
@@ -73,7 +75,8 @@ impl Display for TranscodeParams {
 ))]
 async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     let transcode_service_url = Url::parse(&input.transcode_service_url_str).unwrap();
-    let rss_body = (async { reqwest::get(input.feed_url).await?.bytes().await }).await?;
+    error!("{:?}", input.feed_url);
+    let rss_body = (async { reqwest::get(input.feed_url.clone()).await?.bytes().await }).await?;
     let feed = match parser::parse(&rss_body[..]) {
         Ok(x) => {
             debug!("parsed feed");
@@ -122,9 +125,17 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
 
 
     let futures = FuturesUnordered::new();
+    let service_url_rc = Rc::new(transcode_service_url);
+    let feed_url_rc = Rc::new(input.feed_url);
     for entry in feed.entries.iter() {
-        let ser_url = transcode_service_url.clone();
-        futures.push(async move { convert_item(ConvertItemsParams { item: entry.to_owned(), transcode_service_url: ser_url, should_transcode: input.should_transcode}).await });
+        let ser_url = service_url_rc.clone();
+        let f_url = feed_url_rc.clone();
+        futures.push(async move { convert_item(ConvertItemsParams {
+            item: entry.to_owned(),
+            transcode_service_url: ser_url,
+            should_transcode: input.should_transcode,
+            feed_url: f_url,
+        }).await });
     }
 
     let item_futures: Vec<_> =  futures.collect().await;
@@ -146,14 +157,15 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
 
 struct ConvertItemsParams {
     item: Entry,
-    transcode_service_url: Url,
-    should_transcode: bool
+    transcode_service_url: Rc<Url>,
+    should_transcode: bool,
+    feed_url: Rc<Url>
 }
 
 async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     let item = params.item;
     let transcode_service_url = params.transcode_service_url;
-    let provider = provider::new(&transcode_service_url);
+    let provider = provider::new(&params.feed_url);
 
     if provider.filter_item(&item).await { return None; }
 
@@ -199,17 +211,21 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
             x
         },
         _ => {
-            let url_link = item.links.iter().find(|x| {
-                debug!("pondering on link {:?}", x);
 
-                let provider_regexes = provider.media_url_regex();
+            let url_link = item.links.iter().find(|x| {
+                debug!("pondering on link {:?}", x.href.as_str());
+                let provider_regexes = provider.media_url_regexes();
                 let audio_or_video_regex = regex::Regex::new("^(https?://)?.+\\.(mp3|mp4|wav|avi|mov|flv|wmv|mkv|aac|ogg|webm|3gp|3g2|asf|m4a|mpg|mpeg|ts|m3u|m3u8|pls)$").unwrap();
-                provider_regexes.iter().any(|y| y.is_match(x.href.as_str())) || audio_or_video_regex.is_match(x.href.as_str())
+                return
+                    audio_or_video_regex.is_match(x.href.as_str())
+                     || provider_regexes.iter().any(|y| y.is_match(x.href.as_str()))
             });
+
             if let Some(url) = url_link {
                 debug!("media url found inside links: {:?}", url_link);
                 Url::parse(url.href.to_string().as_str()).unwrap()
             } else {
+                warn!("skipping item as no url was found, item: {:?}", item);
                 //give-up on item since no url found
                 return None;
             }
@@ -244,7 +260,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         },
         None => {
             debug!("runnign regex on url: {}", media_url.as_str());
-            let regexes = provider.media_url_regex();
+            let regexes = provider.media_url_regexes();
             if regexes.iter().any(|x| x.is_match(media_url.as_str())) {
                 let duration = match provider.get_item_duration(&media_url).await {
                     Ok(Some(dur)) => Duration::from_secs(dur),
@@ -269,7 +285,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     }
     let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
     itunes_builder.duration(Some(duration_string));
-    let mut transcode_service_url = transcode_service_url;
+    let mut transcode_service_url = transcode_service_url.deref().clone();
     let bitrate: u64 = conf().get(ConfName::Mp3Bitrate).unwrap().parse()
         .expect("MP3_BITRATE must be a number");
     let generation_uuid  = uuid::Uuid::new_v4().to_string();
