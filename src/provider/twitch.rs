@@ -37,12 +37,16 @@ impl MediaProvider for TwitchProvider {
         );
     }
     fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-        return vec!(
+        let twitch_whitelist =  vec!(
             regex::Regex::new(r"^https?://(.*\.)?twitch\.tv/").unwrap(),
             regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap(),
             regex::Regex::new(r"^http://ttprss(:[0-9]+)?/").unwrap(),
             regex::Regex::new(r"^http://localhost:8085/vod/").unwrap(),
         );
+        #[cfg(not(test))]
+        return twitch_whitelist;
+        #[cfg(test)] //this will allow test to use localhost ad still work
+        return [twitch_whitelist, vec!(regex::Regex::new(r"^http://127\.0\.0\.1:9871").unwrap())].concat();
     }
     async fn feed_url(&self) -> eyre::Result<Url> {
         info!("trying to convert twitch channel url {}", self.url);

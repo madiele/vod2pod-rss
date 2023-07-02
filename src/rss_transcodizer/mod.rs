@@ -199,7 +199,9 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     });
 
     let Some(media_url) = selected_url else {
-        log::warn!("no media_url found out of:\n{:?}", all_items_iter.map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
+        log::warn!("no media_url found out of:\n{:?}", all_items_iter.clone().map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
+        log::warn!("links analyzed:\n{:?}", all_items_iter.map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
+        log::warn!("regex used:\n{:?}", provider.media_url_regexes().iter().map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
         return None
     };
 
@@ -422,25 +424,19 @@ mod test {
 
     #[test(actix_web::test)]
     async fn rss_youtube_feed() {
-        temp_env::async_with_vars([
-            ("VALID_URL_DOMAINS", Some("http://127.0.0.1")),
-        ], test()).await;
+        let handle = startup_test("youtube".to_string(), 9870).await;
 
-        async fn test() {
-            let handle = startup_test("youtube".to_string(), 9870).await;
+        let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
+        println!("testing feed {rss_url}");
+        let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
-            let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
-            println!("testing feed {rss_url}");
-            let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
-            let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
+        let res = validate_must_have_props(rss_transcodizer).await;
 
-            let res = validate_must_have_props(rss_transcodizer).await;
+        stop_test(handle).await;
 
-            stop_test(handle).await;
-
-            if let Err(e) = res {
-                panic!("{e}");
-            }
+        if let Err(e) = res {
+            panic!("{e}");
         }
     }
 

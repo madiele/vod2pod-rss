@@ -61,7 +61,7 @@ impl MediaProvider for YoutubeProvider {
         #[cfg(not(test))]
         return youtube_whitelist;
         #[cfg(test)] //this will allow test to use localhost ad still work
-        return [youtube_whitelist, vec!(regex::Regex::new(r"^http://127\.0\.0\.1").unwrap())].concat();
+        return [youtube_whitelist, vec!(regex::Regex::new(r"^http://127\.0\.0\.1:9870").unwrap())].concat();
     }
     fn new(url: &Url) -> Self {
         YoutubeProvider { url: url.clone() }
