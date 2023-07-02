@@ -12,7 +12,7 @@ updates:
     schedule:
       interval: "daily"
     groups:
-      all:
+      rust-dependecies:
         patterns:
           - "*"
   - package-ecosystem: "pip"
