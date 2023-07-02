@@ -10,7 +10,7 @@ updates:
     allow: 
       - dependency-type: "direct"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       rust-dependencies:
         patterns:
