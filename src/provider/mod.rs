@@ -73,13 +73,16 @@ pub trait MediaProvider {
     ///
     /// # Arguments
     ///
-    /// * `url` - The URL of the item.
+    /// * `media_url` - The URL of the item.
     async fn get_item_duration(&self, media_url: &Url) -> eyre::Result<Option<u64>>;
 
-    /// Takes an URL and returns the stream URL
+    /// Takes an URL and returns the stream URL, this will be passed to ffmpeg to start the
+    /// transcoding process
     /// Only run when trancoding, if URL can't be converted to a streamable URL will return an error
     ///
     /// example: https://www.youtube.com/watch?v=UMO52N2vfk0 -> https://googlevideo.com/....
+    ///
+    /// for some provider conversion might not be needed, in that case just return the input
     ///
     /// # Arguments
     ///
@@ -91,22 +94,46 @@ pub trait MediaProvider {
     /// # Arguments
     ///
     /// * `rss_item` - The RSS item to filter.
+    /// # Examples
+    /// The YoutubeProvider uses this to filter out premieres
     async fn filter_item(&self, rss_item: &Entry) -> bool;
 
-    /// Returns the regular expressions for matching media URLs.
+    /// Returns the regular expressions for matching media URLs during RSS/atom parsing.
+    /// this will eventually be passed to the get_stream_url()
     fn media_url_regexes(&self) -> Vec<Regex>;
 
     /// Returns the regular expressions that will match all urls offered by the provider.
-    /// This are the url associated with the provider es:
-    /// for youtube you would need to match https://youtube\.com, https://youtu\.be, and https://.*\.googlevideo\.com/ (used to host the videos).
-    /// If this returns None then you would need to use the VALID_URL_DOMAINS env variable to add the allowed domains
+    /// This are the url associated with the provider
+    /// es: for youtube you would need to match
+    /// https://youtube\.com, https://youtu\.be, and https://.*\.googlevideo\.com/ (used to host the videos).
+    ///
+    /// if you need this to be user configurable then you need to create a ENV var, check the GenericProvider
+    /// implementation for hints on how to do it
+    ///
+    /// # IMPORTANT
+    /// this list is used to dinamically dispatch the provider, so the regex written here should
+    /// never match what is already matched by other providers, if this for some reason is a huge
+    /// limitation open an issue with a change request and why you need it to change.
+    /// Also be warned missing a match here will cause the server to use the GenericProvider instead
     fn domain_whitelist_regexes(&self) -> Vec<Regex>;
 
     /// Constructs the struct for the MediaProvider
+    ///
+    /// # Arguments
+    ///
+    /// * `url` -   The URL pointing to the feed URL (this can be both the original public feed URL
+    ///             or the URL of the internal feed generation service (es: podtube, ttprss))
+    ///
+    /// # Returns
+    ///
+    /// The constructed struct for the media provider.
+    ///
+    /// Only used for dynamic dispatching
     fn new(url: &Url) -> Self where Self: Sized;
 
     /// This will return the url of the rss/atom feed
-    /// this is run only during feed generation and should error if the provider is called with a media url
+    /// this is run only during feed generation and normally should use the url given by the new(...)
+    /// for conversion
     /// es: youtube channel url -> url to the rss feed of it
     async fn feed_url(&self) -> eyre::Result<Url>;
 }

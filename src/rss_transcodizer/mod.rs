@@ -25,6 +25,9 @@ use std::str;
 use crate::configs::{conf, ConfName, Conf, AudioCodec};
 use crate::provider;
 
+/// This module takes in an URL to an rss/atom feed, fetches it and converts it to a
+/// RSS feed with it's links rewritten to call the transcoder urls of the app,
+/// it will also edit and insert fields like description and thumbnails if possible
 pub struct RssTranscodizer {
     feed_url: Url,
     transcode_service_url: Url,
