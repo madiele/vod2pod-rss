@@ -391,18 +391,26 @@ mod test {
 
     #[test(actix_web::test)]
     async fn rss_podcast_feed() -> Result<(), String> {
-        let handle = startup_test("podcast".to_string() , 9872).await;
+        temp_env::async_with_vars([
+            ("VALID_URL_DOMAINS", Some("https://*.simplecast.com")),
+        ], test()).await;
 
-        let rss_url = Url::parse("http://127.0.0.1:9872/feed.rss").unwrap();
-        println!("testing feed {rss_url}");
-        let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
+        async fn test() {
+            let handle = startup_test("podcast".to_string() , 9872).await;
 
-        let res = validate_must_have_props(rss_transcodizer).await;
+            let rss_url = Url::parse("http://127.0.0.1:9872/feed.rss").unwrap();
+            println!("testing feed {rss_url}");
+            let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
+            let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
-        stop_test(handle).await;
+            let res = validate_must_have_props(rss_transcodizer).await;
 
-        res
+            stop_test(handle).await;
+            if let Err(e) = res {
+                panic!("{e}");
+            }
+        }
+        Ok(())
     }
 
     #[test(actix_web::test)]
