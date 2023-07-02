@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::time::Duration;
 
 #[allow(unused_imports)]
@@ -17,180 +19,11 @@ use rss::extension::itunes::ITunesChannelExtensionBuilder;
 use rss::{GuidBuilder, Guid};
 use rss::{ Enclosure, ItemBuilder, Item, extension::itunes::ITunesItemExtensionBuilder };
 use feed_rs::parser;
-use tokio::process::Command;
 
 use std::str;
 
 use crate::configs::{conf, ConfName, Conf, AudioCodec};
-
-#[cfg_attr(not(test),
-io_cached(
-    map_error = r##"|e| eyre::Error::new(e)"##,
-    type = "AsyncRedisCache<Url, u64>",
-    create = r##" {
-        AsyncRedisCache::new("cached_yt_video_duration=", 86400)
-            .set_refresh(false)
-            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
-            .build()
-            .await
-            .expect("youtube_duration cache")
-} "##
-))]
-async fn get_youtube_video_duration(url: &Url) -> eyre::Result<u64> {
-    debug!("getting duration for yt video: {}", url);
-
-    if let Ok(_) = conf().get(ConfName::YoutubeApiKey) {
-        let id = url.query_pairs().find(|(key, _)| key == "v").map(|(_, value)| {value}).unwrap().to_string();
-        Ok(get_yotube_duration_with_apikey(&id).await?.as_secs())
-    } else {
-        acquire_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
-        let output = Command::new("yt-dlp")
-            .arg("--get-duration")
-            .arg(url.to_string())
-            .output()
-        .await;
-        release_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
-        if let Ok(x) = output {
-            let duration_str = str::from_utf8(&x.stdout).unwrap().trim().to_string();
-            Ok(parse_duration(&duration_str).unwrap_or_default().as_secs())
-        } else {
-            warn!("could not parse youtube video duration");
-            Ok(0)
-        }
-    }
-
-
-}
-
-//TODO: refactor in to cache abstraction a module
-async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
-    let redis_url = conf().get(ConfName::RedisUrl)?;
-    let client = redis::Client::open(redis_url)?;
-    let mut con = client.get_tokio_connection().await?;
-    let unix_timestamp_now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-
-    let mut pipe = redis::pipe();
-
-    pipe.zrembyscore(&semaphore_name, "-inf", unix_timestamp_now - 600);
-
-    pipe.zadd(&semaphore_name, &id, unix_timestamp_now);
-
-    pipe.query_async(&mut con).await?;
-
-    loop {
-        let count: u64 = redis::cmd("ZRANK").arg(&semaphore_name).arg(&id).query_async(&mut con).await?;
-        if count <= 4 { debug!("semaphore {count} <= 4 letting {id} in"); break; }
-        actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-
-    Ok(())
-}
-
-async fn release_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
-    let redis_url = conf().get(ConfName::RedisUrl)?;
-    let client = redis::Client::open(redis_url)?;
-    let mut con = client.get_tokio_connection().await?;
-
-    debug!("releasing semaphore for {id}");
-    _ = redis::cmd("ZREM").arg(semaphore_name).arg(id).query_async(&mut con).await?;
-
-    Ok(())
-}
-
-//I know this code is over-engineered to hell, please don't judge me. I just wanted play around with redis
-async fn get_yotube_duration_with_apikey(id: &String) -> eyre::Result<Duration> {
-    let redis_url = conf().get(ConfName::RedisUrl)?;
-    let client = redis::Client::open(redis_url)?;
-    let mut con = client.get_tokio_connection().await?;
-    let lock_key = "youtube_duration_lock";
-    let queue_key = "youtube_duration_queue";
-    let hash_key = "youtube_duration_batch";
-    let lock_duration_secs = 10;
-    let batch_size = 50;
-    let sleep_duration = 300;
-
-    let _: i64 = redis::cmd("RPUSH").arg(queue_key).arg(&id)
-        .query_async(&mut con).await?;
-    debug!("Inserted video with ID {} into Redis queue", &id);
-
-    let lock: bool = redis::cmd("SET").arg(lock_key).arg("1").arg("NX").arg("EX").arg(lock_duration_secs)
-        .query_async(&mut con).await?;
-
-    if lock {
-        debug!("Redis lock has been acquired successfully");
-        actix_rt::time::sleep(std::time::Duration::from_millis(sleep_duration)).await;
-
-        while let Ok(queue_len)  = redis::cmd("LLEN").arg(queue_key).query_async::<_,i64>(&mut con).await {
-            if queue_len == 0 {break};
-            let batch_end = queue_len - 1;
-            let batch_start = batch_end - batch_size + 1;
-            let batch: Vec<String> = redis::cmd("LRANGE").arg(queue_key).arg(batch_start).arg(batch_end)
-                .query_async(&mut con).await?;
-            debug!("Processing batch of {} items from Redis queue", batch.len());
-
-            let api_key = conf().get(ConfName::YoutubeApiKey)?;
-            let mut url = Url::parse("https://www.googleapis.com/youtube/v3/videos")?;
-            url.query_pairs_mut()
-                .append_pair("id", &batch.join(","))
-                .append_pair("part", "contentDetails")
-                .append_pair("key", &api_key);
-
-            let response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
-            debug!("retrived video infos from youtube apis");
-
-            let items = response["items"].as_array().unwrap();
-            let mut durations_by_id = Vec::new();
-            for item in items {
-                let id = item["id"].as_str().ok_or_else(|| eyre!("Failed to retrieve ID from item"))?.to_owned();
-                let duration_str = item["contentDetails"]["duration"].as_str().ok_or_else(|| eyre!("Failed to retrieve duration string from item."))?;
-                let duration = iso8601_duration::Duration::parse(duration_str).map_err(|_| eyre!("could not parse yotube duration"))?;
-                durations_by_id.push((id, duration));
-            }
-
-            let mut pipe = redis::pipe();
-            for (id, duration) in durations_by_id {
-                pipe.hset(hash_key, id, duration.num_seconds().unwrap_or(0.0).round() as i32).ignore();
-            }
-            pipe.ltrim(queue_key, 0, (batch_start - 1).try_into()?).ignore();
-            pipe.del(lock_key).ignore();
-            let _: () = pipe.query_async(&mut con).await?;
-            debug!("finished retriving batch of durations with youtube api");
-        }
-    }
-
-    let mut duration_secs_str: Option<String> = None;
-    let mut count = 0;
-    while duration_secs_str.is_none() && count < 100 {
-        duration_secs_str = redis::cmd("HGET").arg(hash_key).arg(id).query_async(&mut con).await.ok();
-        if duration_secs_str.is_none() {actix_rt::time::sleep(Duration::from_millis(sleep_duration / 2)).await};
-        count += 1;
-    }
-    debug!("duration found for {id}: {}", duration_secs_str.clone().unwrap_or("???".to_string()));
-    let duration = Duration::from_secs(duration_secs_str.ok_or_else(|| eyre!("duration_secs_str is None"))?.parse()?);
-    return Ok(duration);
-}
-
-fn parse_duration(duration_str: &str) -> Result<Duration, String> {
-    let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
-
-    let seconds = match duration_parts.get(0) {
-        Some(sec_str) => sec_str.parse().map_err(|_| "Invalid format".to_string())?,
-        None => 0,
-    };
-
-    let minutes = match duration_parts.get(1) {
-        Some(min_str) => min_str.parse().map_err(|_| "Invalid format".to_string())?,
-        None => 0,
-    };
-
-    let hours= match duration_parts.get(2) {
-        Some(hour_str) => hour_str.parse().map_err(|_| "Invalid format".to_string())?,
-        None => 0,
-    };
-
-    let duration_secs= hours * 3600 + minutes * 60 + seconds;
-    Ok(Duration::from_secs(duration_secs))
-}
+use crate::provider;
 
 pub struct RssTranscodizer {
     feed_url: Url,
@@ -200,11 +33,9 @@ pub struct RssTranscodizer {
 
 
 impl RssTranscodizer {
-    pub async fn new(url: Url, transcode_service_url: Url, should_transcode: bool) -> Self {
-
+    pub fn new(url: Url, transcode_service_url: Url, should_transcode: bool) -> Self {
         Self { feed_url: url, transcode_service_url, should_transcode}
     }
-
 
     pub async fn transcodize(&self) -> eyre::Result<String> {
 
@@ -244,7 +75,7 @@ impl Display for TranscodeParams {
 ))]
 async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
     let transcode_service_url = Url::parse(&input.transcode_service_url_str).unwrap();
-    let rss_body = (async { reqwest::get(input.feed_url).await?.bytes().await }).await?;
+    let rss_body = (async { reqwest::get(input.feed_url.clone()).await?.bytes().await }).await?;
     let feed = match parser::parse(&rss_body[..]) {
         Ok(x) => {
             debug!("parsed feed");
@@ -293,9 +124,17 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
 
 
     let futures = FuturesUnordered::new();
+    let service_url_rc = Rc::new(transcode_service_url);
+    let feed_url_rc = Rc::new(input.feed_url);
     for entry in feed.entries.iter() {
-        let ser_url = transcode_service_url.clone();
-        futures.push(async move { convert_item(ConvertItemsParams { item: entry.to_owned(), transcode_service_url: ser_url, should_transcode: input.should_transcode}).await });
+        let ser_url = service_url_rc.clone();
+        let f_url = feed_url_rc.clone();
+        futures.push(async move { convert_item(ConvertItemsParams {
+            item: entry.to_owned(),
+            transcode_service_url: ser_url,
+            should_transcode: input.should_transcode,
+            feed_url: f_url,
+        }).await });
     }
 
     let item_futures: Vec<_> =  futures.collect().await;
@@ -317,21 +156,17 @@ async fn cached_transcodize(input: TranscodeParams) -> eyre::Result<String> {
 
 struct ConvertItemsParams {
     item: Entry,
-    transcode_service_url: Url,
-    should_transcode: bool
+    transcode_service_url: Rc<Url>,
+    should_transcode: bool,
+    feed_url: Rc<Url>
 }
 
 async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     let item = params.item;
     let transcode_service_url = params.transcode_service_url;
+    let provider = provider::from(&params.feed_url);
 
-    //needed for youtube: if views are 0 it indicates a premiere
-    if let Some(community) = item.media.first().and_then(|media| media.community.as_ref()) {
-        if community.stats_views == Some(0) {
-            debug!("ignoring item with 0 views (probably youtube preview) with name: {:?}", item.title);
-            return None;
-        }
-    }
+    if provider.filter_item(&item).await { return None; }
 
     let mut item_builder = ItemBuilder::default();
     let mut itunes_builder = ITunesItemExtensionBuilder::default();
@@ -375,16 +210,21 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
             x
         },
         _ => {
+
             let url_link = item.links.iter().find(|x| {
-                debug!("pondering on link {:?}", x);
-                let youtube_regex = regex::Regex::new("^(https?://)?(www\\.youtube\\.com|youtu\\.be)/.+$").unwrap();
+                debug!("pondering on link {:?}", x.href.as_str());
+                let provider_regexes = provider.media_url_regexes();
                 let audio_or_video_regex = regex::Regex::new("^(https?://)?.+\\.(mp3|mp4|wav|avi|mov|flv|wmv|mkv|aac|ogg|webm|3gp|3g2|asf|m4a|mpg|mpeg|ts|m3u|m3u8|pls)$").unwrap();
-                youtube_regex.is_match(x.href.as_str()) || audio_or_video_regex.is_match(x.href.as_str())
+                return
+                    audio_or_video_regex.is_match(x.href.as_str())
+                     || provider_regexes.iter().any(|y| y.is_match(x.href.as_str()))
             });
+
             if let Some(url) = url_link {
                 debug!("media url found inside links: {:?}", url_link);
                 Url::parse(url.href.to_string().as_str()).unwrap()
             } else {
+                warn!("skipping item as no url was found, item: {:?}", item);
                 //give-up on item since no url found
                 return None;
             }
@@ -419,14 +259,15 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         },
         None => {
             debug!("runnign regex on url: {}", media_url.as_str());
-            let youtube_regex = regex::Regex::new(r#"^(https?://)?(www\.)?(youtu\.be/|youtube\.com/)"#).unwrap();
-            if youtube_regex.is_match(media_url.as_str()) {
-                let duration = match get_youtube_video_duration(&media_url).await {
-                    Ok(dur) => Duration::from_secs(dur),
+            let regexes = provider.media_url_regexes();
+            if regexes.iter().any(|x| x.is_match(media_url.as_str())) {
+                let duration = match provider.get_item_duration(&media_url).await {
+                    Ok(Some(dur)) => Duration::from_secs(dur),
                     Err(e) => {
                         error!("Error getting youtube video duration: {:?}", e);
                         Duration::default()
                     }
+                    _ => Duration::default()
                 };
                 duration
             } else {
@@ -443,9 +284,8 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     }
     let duration_string = format!("{:02}:{:02}:{:02}", duration_secs / 3600, (duration_secs % 3600) / 60, (duration_secs % 60));
     itunes_builder.duration(Some(duration_string));
-    let mut transcode_service_url = transcode_service_url;
-    let bitrate: u64 = conf().get(ConfName::Mp3Bitrate).unwrap()
-        .parse()
+    let mut transcode_service_url = transcode_service_url.deref().clone();
+    let bitrate: u64 = conf().get(ConfName::Mp3Bitrate).unwrap().parse()
         .expect("MP3_BITRATE must be a number");
     let generation_uuid  = uuid::Uuid::new_v4().to_string();
     let codec: AudioCodec = conf().get(ConfName::AudioCodec).unwrap().into();
@@ -582,7 +422,7 @@ mod test {
         let rss_url = Url::parse("http://127.0.0.1:9872/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9872/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
         let res = validate_must_have_props(rss_transcodizer).await;
 
@@ -598,7 +438,7 @@ mod test {
         let rss_url = Url::parse("http://127.0.0.1:9871/feed.rss").unwrap();
         println!("testing feed {rss_url}");
         let transcode_service_url = "http://127.0.0.1:9871/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
+        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
 
         let res = validate_must_have_props(rss_transcodizer).await;
@@ -609,19 +449,27 @@ mod test {
     }
 
     #[test(actix_web::test)]
-    async fn rss_youtube_feed() -> Result<(), String> {
-        let handle = startup_test("youtube".to_string(), 9870).await;
+    async fn rss_youtube_feed() {
+        temp_env::async_with_vars([
+            ("VALID_URL_DOMAINS", Some("http://127.0.0.1")),
+        ], test()).await;
 
-        let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
-        println!("testing feed {rss_url}");
-        let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true).await;
+        async fn test() {
+            let handle = startup_test("youtube".to_string(), 9870).await;
 
-        let res = validate_must_have_props(rss_transcodizer).await;
+            let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
+            println!("testing feed {rss_url}");
+            let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
+            let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true);
 
-        stop_test(handle).await;
+            let res = validate_must_have_props(rss_transcodizer).await;
 
-        res
+            stop_test(handle).await;
+
+            if let Err(e) = res {
+                panic!("{e}");
+            }
+        }
     }
 
     async fn startup_test(type_test: String, port: u16) -> ServerHandle {
@@ -644,26 +492,5 @@ mod test {
         let handle = fake_server.handle();
         rt::spawn(fake_server);
         handle
-    }
-
-    #[test]
-    fn test_parse_duration_hhmmss() {
-        assert_eq!(parse_duration("01:02:03").unwrap(), Duration::from_secs(3723));
-    }
-
-    #[test]
-    fn test_parse_duration_mmss() {
-        assert_eq!(parse_duration("30:45").unwrap(), Duration::from_secs(1845));
-    }
-
-    #[test]
-    fn test_parse_duration_ss() {
-        assert_eq!(parse_duration("15").unwrap(), Duration::from_secs(15));
-        assert_eq!(parse_duration("45").unwrap(), Duration::from_secs(45));
-    }
-
-    #[test]
-    fn test_parse_duration_wrong_format() {
-        assert_eq!(parse_duration("invalid").unwrap_err(), "Invalid format".to_string());
     }
 }

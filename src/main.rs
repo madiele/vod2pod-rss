@@ -6,7 +6,7 @@ use serde::Deserialize;
 use simple_logger::SimpleLogger;
 use std::{collections::HashMap, time::Instant};
 use vod2pod_rss::{
-    transcoder::{ Transcoder, FfmpegParameters }, rss_transcodizer::RssTranscodizer, url_convert, configs::{Conf, conf, ConfName },
+    transcoder::{ Transcoder, FfmpegParameters }, rss_transcodizer::RssTranscodizer, configs::{Conf, conf, ConfName }, provider,
 };
 
 #[actix_web::main]
@@ -97,17 +97,19 @@ async fn transcodize_rss(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    if !url_convert::check_if_in_whitelist(&parsed_url) {
+    let provider = provider::from(&parsed_url);
+
+    if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&parsed_url.to_string())) {
         error!("supplied url ({parsed_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
 
-    let converted_url = match url_convert::from(parsed_url).to_feed_url().await {
+    let converted_url = match provider.feed_url().await {
         Ok(x) => x,
         Err(e) => {error!("fail when trying to convert channel {e}"); return HttpResponse::BadRequest().body(e.to_string())},
     };
 
-    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url, should_transcode).await;
+    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url, should_transcode);
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,
@@ -173,7 +175,9 @@ async fn transcode_to_mp3(
         }
     }
 
-    if !url_convert::check_if_in_whitelist(&stream_url) {
+    let provider = provider::from(&stream_url);
+
+    if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&stream_url.to_string())) {
         error!("supplied url ({stream_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
