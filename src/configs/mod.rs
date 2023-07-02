@@ -23,6 +23,7 @@ pub enum ConfName {
     SubfolderPath,
     ValidUrlDomains,
     AudioCodec,
+    PeerTubeValidHosts,
 }
 
 struct EnvConf { }
@@ -74,6 +75,7 @@ impl Conf for EnvConf {
                     }
                 }
             }).unwrap_or_else(|_| "MP3".to_string())),
+            ConfName::PeerTubeValidHosts => Ok(std::env::var("PEERTUBE_VALID_DOMAINS").unwrap_or_else(|_| "".to_string())),
         }
     }
 }

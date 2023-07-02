@@ -1,6 +1,7 @@
 mod generic;
 mod youtube;
 mod twitch;
+mod peertube;
 
 use async_trait::async_trait;
 use feed_rs::model::Entry;
@@ -8,7 +9,7 @@ use log::debug;
 use regex::Regex;
 use reqwest::Url;
 
-use crate::provider::{generic::GenericProvider, youtube::YoutubeProvider, twitch::TwitchProvider};
+use crate::provider::{generic::GenericProvider, youtube::YoutubeProvider, twitch::TwitchProvider, peertube::PeertubeProvider};
 
 macro_rules! dispatch_if_match {
     ($url: expr, $provider: ident) => {
@@ -25,6 +26,7 @@ macro_rules! dispatch_if_match {
 pub fn from(url: &Url) -> Box<dyn MediaProvider> {
     dispatch_if_match!(url, YoutubeProvider);
     dispatch_if_match!(url, TwitchProvider);
+    dispatch_if_match!(url, PeertubeProvider);
     debug!("using GenericProvider as provider");
     return Box::new(GenericProvider::new(url))
 }

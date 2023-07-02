@@ -34,10 +34,13 @@ fn get_generic_whitelist() -> Vec<Regex> {
     let binding = conf().get(ConfName::ValidUrlDomains).unwrap();
     let patterns: Vec<&str> = binding.split(",").filter(|e| e.trim().len() > 0).collect();
 
-    let mut regexes: Vec<Regex> = Vec::with_capacity(patterns.len());
+    let mut regexes: Vec<Regex> = Vec::with_capacity(patterns.len() + 1);
     for pattern in patterns {
         regexes.push(Regex::new(&pattern.to_string().replace(".", "\\.").replace("*", ".+")).unwrap())
     }
+
+    let match_extensions = regex::Regex::new("^(https?://)?.+\\.(mp3|mp4|wav|avi|mov|flv|wmv|mkv|aac|ogg|webm|3gp|3g2|asf|m4a|mpg|mpeg|ts|m3u|m3u8|pls)$").unwrap();
+    regexes.push(match_extensions);
 
     return regexes;
 }

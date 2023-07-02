@@ -179,59 +179,28 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
         item_builder.title(Some(x.content.clone()));
     }
 
-    let found_url: Option<Url> = { //FIX: when I stop sucking at rust
-        debug!("searching for stream url: {:?}", item.media);
-        let mut media_links = Vec::new();
-        for x in item.media.iter() {
-            let mut found_url: Option<Url> = None;
-            for y in x.content.iter() {
-                let content_t = y.content_type.clone();
-                match content_t.unwrap().to_string() == "audio/mpeg".to_string() {
-                    true => {
-                        found_url = y.url.clone();
-                        break;
-                    }
-                    false => (),
-                }
-            }
-            if let Some(url) = found_url {
-                media_links.push(url);
-            }
-        }
-        let first_link = media_links.first();
-        let url: Option<Url> = match first_link {
-            Some(x) => Some(x.clone()),
-            _ => None,
-        };
-        debug!("stream url found: {:?}", url);
-        url
-    };
+    let media_links = item.media.iter()
+        .map(|f| f.to_owned().content).flatten()
+        .filter_map(|x| x.url);
 
-    let media_url: Url = match found_url {
-        Some(x) => {
-            debug!("media url found: {:?}", x);
-            x
-        },
-        _ => {
+    let item_links = item.links.iter()
+        .map(|x| x.to_owned().href)
+        .filter_map(|a| Url::parse(a.as_str()).ok());
 
-            let url_link = item.links.iter().find(|x| {
-                debug!("pondering on link {:?}", x.href.as_str());
-                let provider_regexes = provider.media_url_regexes();
-                let audio_or_video_regex = regex::Regex::new("^(https?://)?.+\\.(mp3|mp4|wav|avi|mov|flv|wmv|mkv|aac|ogg|webm|3gp|3g2|asf|m4a|mpg|mpeg|ts|m3u|m3u8|pls)$").unwrap();
-                return
-                    audio_or_video_regex.is_match(x.href.as_str())
-                     || provider_regexes.iter().any(|y| y.is_match(x.href.as_str()))
-            });
+    let content_links = item.content.iter()
+        .filter_map(|x| x.to_owned().src).map(|x| x.href)
+        .filter_map(|a| Url::parse(a.as_str()).ok());
 
-            if let Some(url) = url_link {
-                debug!("media url found inside links: {:?}", url_link);
-                Url::parse(url.href.to_string().as_str()).unwrap()
-            } else {
-                warn!("skipping item as no url was found, item: {:?}", item);
-                //give-up on item since no url found
-                return None;
-            }
-        }
+    let mut all_items_iter = media_links.chain(item_links).chain(content_links);
+
+    let selected_url = all_items_iter.find(|x| {
+        let provider_regexes = provider.media_url_regexes();
+        return provider_regexes.iter().any(|y| y.is_match(&x.to_string()));
+    });
+
+    let Some(media_url) = selected_url else {
+        log::warn!("no media_url found out of:\n{:?}", all_items_iter.map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
+        return None
     };
 
     let media_element = match item.media.first() {
@@ -274,7 +243,7 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
                 };
                 duration
             } else {
-                warn!("no duration found");
+                warn!("no duration find using following regexs: {:?}", regexes.iter().map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
                 Duration::default()
             }
         }
