@@ -14,13 +14,13 @@ path = "src/main.rs"
 [dependencies]
 actix-rt = "=2.8.0"
 actix-web = "=4.3.1"
-async-trait = "=0.1.71"
+async-trait = "=0.1.72"
 url = { version="*", features = ["serde"]}
 futures = "=0.3.28"
 log = "=0.4.19"
 regex = "=1.9.1"
 reqwest = { version = "=0.11.18", features = ["json"] }
-serde = "=1.0.171"
+serde = "=1.0.175"
 serde_json = "=1.0.103"
 tokio = { version = "=1.29.1" , features = ["macros", "process"]}
 uuid = { version= "=1.4.1", features = ["v4", "serde"]}
