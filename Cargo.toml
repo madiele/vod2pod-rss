@@ -12,15 +12,15 @@ name = "app"
 path = "src/main.rs"
 
 [dependencies]
-actix-rt = "=2.8.0"
+actix-rt = "=2.9.0"
 actix-web = "=4.3.1"
 async-trait = "=0.1.73"
 url = { version="*", features = ["serde"]}
 futures = "=0.3.28"
 log = "=0.4.20"
-regex = "=1.9.3"
-reqwest = { version = "=0.11.18", features = ["json"] }
-serde = "=1.0.185"
+regex = "=1.9.4"
+reqwest = { version = "=0.11.20", features = ["json"] }
+serde = "=1.0.188"
 serde_json = "=1.0.105"
 tokio = { version = "=1.32.0" , features = ["macros", "process"]}
 uuid = { version= "=1.4.1", features = ["v4", "serde"]}
