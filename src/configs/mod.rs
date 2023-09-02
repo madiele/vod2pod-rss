@@ -23,6 +23,7 @@ pub enum ConfName {
     SubfolderPath,
     ValidUrlDomains,
     AudioCodec,
+    PeerTubeValidHosts,
 }
 
 struct EnvConf { }
@@ -60,7 +61,7 @@ impl Conf for EnvConf {
                 }
                 Ok(folder)
             },
-            ConfName::ValidUrlDomains => Ok(std::env::var("VALID_URL_DOMAINS").unwrap_or_else(|_| "https://*.youtube.com/,https://youtube.com/,https://youtu.be/,https://*.youtu.be/,https://*.twitch.tv/,https://twitch.tv/,https://*.googlevideo.com/,https://*.cloudfront.net/".to_string())),
+            ConfName::ValidUrlDomains => Ok(std::env::var("VALID_URL_DOMAINS").unwrap_or_else(|_| "".to_string())),
             ConfName::AudioCodec => Ok(std::env::var("AUDIO_CODEC").map(|c| {
                 match c.as_str() {
                     "MP3" => c,
@@ -74,6 +75,7 @@ impl Conf for EnvConf {
                     }
                 }
             }).unwrap_or_else(|_| "MP3".to_string())),
+            ConfName::PeerTubeValidHosts => Ok(std::env::var("PEERTUBE_VALID_DOMAINS").unwrap_or_else(|_| "".to_string())),
         }
     }
 }

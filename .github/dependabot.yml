@@ -7,9 +7,19 @@ version: 2
 updates:
   - package-ecosystem: "cargo" # See documentation for possible values
     directory: "/" # Location of package manifests
+    allow: 
+      - dependency-type: "direct"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "daily"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

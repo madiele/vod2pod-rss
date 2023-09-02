@@ -97,6 +97,11 @@ You can set the following environment variables:
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
 - `VALID_URL_DOMAINS`: (optional) Set a comma separated list of domains urls that are allowed to be converted into RSS  (defaults to yotube and twitch urls)
 
+## Honorable mentions
+
+* Youtube support is possible thanks to the cool [podtube fork project by amckee](https://github.com/amckee/PodTube) consider dropping him a star.
+* Twitch support is possible thanks to [my fork](https://github.com/madiele/TwitchToPodcastRSS) of [lzeke0's TwitchRSS](https://github.com/lzeke0/TwitchRSS) drop a star to him too!
+
 ## Donations
 
 This is a passion project, and mostly made for personal use, but if you want to gift a pizza margherita, feel free!
