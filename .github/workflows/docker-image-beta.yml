@@ -85,9 +85,6 @@ jobs:
           uses: pierotofy/set-swap-space@v1.0
           with:
             swap-size-gb: 10
-        - run: |
-            # Workaround for https://github.com/rust-lang/cargo/issues/8719
-            export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
         - name: checkout repo
           uses: actions/checkout@v3
         - name: get version
