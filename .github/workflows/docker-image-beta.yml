@@ -120,6 +120,7 @@ jobs:
             cache-to: type=gha,mode=max,scope=main-armv7
             build-args: |
               BUILDKIT_INLINE_CACHE=1
+              CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
   merge_tags:
       needs: [push_to_Docker_Hub_arm64, push_to_Docker_Hub_arm_v7, push_to_Docker_Hub_amd64]
       runs-on: ubuntu-latest
