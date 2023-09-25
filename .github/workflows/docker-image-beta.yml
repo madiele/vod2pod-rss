@@ -85,11 +85,6 @@ jobs:
           uses: pierotofy/set-swap-space@v1.0
           with:
             swap-size-gb: 10
-        - run: |
-            # Workaround for https://github.com/rust-lang/cargo/issues/8719
-            sudo mkdir -p /var/lib/docker
-            sudo mount -t tmpfs -o size=10G none /var/lib/docker
-            sudo systemctl restart docker
         - name: checkout repo
           uses: actions/checkout@v3
         - name: get version
@@ -122,6 +117,7 @@ jobs:
             cache-to: type=gha,mode=max,scope=main-armv7
             build-args: |
               BUILDKIT_INLINE_CACHE=1
+              CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
   merge_tags:
       needs: [push_to_Docker_Hub_arm64, push_to_Docker_Hub_arm_v7, push_to_Docker_Hub_amd64]
       runs-on: ubuntu-latest

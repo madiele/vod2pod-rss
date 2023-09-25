@@ -95,7 +95,8 @@ impl MediaProvider for YoutubeProvider {
 async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let output = tokio::process::Command::new("yt-dlp")
-        .arg("-x")
+        .arg("-f")
+        .arg("bestaudio")
         .arg("--get-url")
         .arg(url.as_str())
         .output().await;

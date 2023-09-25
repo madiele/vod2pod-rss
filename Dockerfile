@@ -13,6 +13,9 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+#workaround for https://github.com/rust-lang/cargo/issues/8719
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
 RUN cargo build-deps --release
 COPY src /tmp/vod2pod/src
 
