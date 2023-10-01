@@ -11,7 +11,7 @@ jobs:
   cargo_version_bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Bump patch version
         run: |
           # Get the current version
@@ -41,7 +41,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - name: checkout repo
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: Bump patch version
           run: |
             # Get the current version
@@ -75,7 +75,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - name: checkout repo
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: Bump patch version
           run: |
             # Get the current version
@@ -115,7 +115,7 @@ jobs:
           with:
             swap-size-gb: 10
         - name: checkout repo
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: get version
           run: |
             # Get the current version
@@ -151,7 +151,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - name: checkout repo
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: get version
           run: |
             # Get the current version
