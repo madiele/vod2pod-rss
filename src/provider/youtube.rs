@@ -2,7 +2,10 @@
 use cached::proc_macro::io_cached;
 #[allow(unused_imports)]
 use cached::AsyncRedisCache;
-use google_youtube3::{api::PlaylistItem, hyper, hyper_rustls, YouTube};
+use google_youtube3::{
+    api::{self, PlaylistItem},
+    hyper, hyper_rustls, YouTube,
+};
 use std::{str::FromStr, time::Duration};
 
 use async_trait::async_trait;
@@ -71,8 +74,13 @@ impl MediaProviderV2 for YoutubeProviderV2 {
                     }
                     _ => return Err(eyre!("unsupported youtube url")),
                 };
-                let max_items = 200;
-                let videoItems = fetch_from_api(id, api_key).await?;
+                let mut video_items = fetch_from_api(id, api_key).await?;
+                feed_builder.description(video_items.0.description);
+                feed_builder.title(video_items.0.title);
+                feed_builder.language(video_items.0.language.take());
+                feed_builder.itunes_ext(video_items.0.itunes_ext.take());
+
+                feed_builder.items(video_items.1);
 
                 return Ok(feed_builder.build().to_string());
             }
@@ -139,43 +147,116 @@ impl MediaProviderV2 for YoutubeProviderV2 {
     }
 }
 
-async fn fetch_from_api(
-    id: IdType,
-    api_key: String,
-) -> eyre::Result<(Channel, Vec<Item>)> {
-    let items: Vec<Item> = match id {
+async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, Vec<Item>)> {
+    match id {
         IdType::Playlist(id) => {
             let mut playlist = fetch_playlist(id, &api_key).await?;
 
             let playlist_id = playlist.id.take().ok_or(eyre!("playlist has no id"))?;
 
-            let channel = build_channel_from_playlist(playlist);
+            let rss_channel = build_channel_from_playlist(playlist);
 
             let items = fetch_playlist_items(&playlist_id, &api_key).await?;
 
-            let mut duration_map: std::collections::HashMap<Url, Duration> = std::collections::HashMap::new();
-            for item in &items {
-                let snippet = item.snippet.to_owned().ok_or(eyre!("item has no snippet"))?;
-                let video_id = snippet.resource_id.ok_or(eyre!("snippet has no resource id"))?.video_id.ok_or(eyre!("resource id has no video id"))?;
-                let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", video_id)).ok().unwrap();
-                if let Ok(Some(duration)) = get_youtube_video_duration(&url).await {
-                    duration_map.insert(url.clone(), Duration::from_secs(duration));
-                } else {
-                    duration_map.insert(url.clone(), Duration::default());
-                }
-            }
+            let duration_map = create_duration_url_map(&items).await?;
 
             let rss_items = build_channel_items_from_playlist(items, duration_map);
 
-            return Ok((channel, rss_items));
+            return Ok((rss_channel, rss_items));
         }
         IdType::Channel(id) => {
-            todo!()
+            let mut channel = fetch_channel(id, &api_key).await?;
+
+            let upload_playlist = channel
+                .content_details
+                .take()
+                .ok_or(eyre!("content_details is None"))?
+                .related_playlists
+                .ok_or(eyre!("related_playlists is None"))?
+                .uploads
+                .ok_or(eyre!("uploads is None"))?;
+
+            let rss_channel = build_channel_from_yt_channel(channel);
+
+            let items = fetch_playlist_items(&upload_playlist, &api_key).await?;
+
+            let duration_map = create_duration_url_map(&items).await?;
+
+            let rss_items = build_channel_items_from_playlist(items, duration_map);
+
+            return Ok((rss_channel, rss_items));
         }
     };
 }
 
-fn build_channel_items_from_playlist(items: Vec<PlaylistItem>, duration_map: std::collections::HashMap<Url, Duration>) -> Vec<Item> {
+fn build_channel_from_yt_channel(channel: api::Channel) -> Channel {
+    let mut channel_builder = ChannelBuilder::default();
+    let mut itunes_channel_builder = ITunesChannelExtensionBuilder::default();
+
+    if let Some(mut snippet) = channel.snippet {
+        channel_builder.description(snippet.description.take().unwrap_or("".to_owned()));
+        channel_builder.title(snippet.title.take().unwrap_or("".to_owned()));
+        channel_builder.language(snippet.default_language.take());
+        if let Some(mut thumb) = snippet.thumbnails.and_then(|thumbs| thumbs.standard) {
+            itunes_channel_builder.image(thumb.url.take());
+        }
+        itunes_channel_builder.explicit(Some("no".to_owned()));
+    }
+
+    channel_builder.itunes_ext(Some(itunes_channel_builder.build()));
+    channel_builder.build()
+}
+
+async fn fetch_channel(id: String, api_key: &str) -> eyre::Result<api::Channel> {
+    let hub = get_youtube_hub();
+    let channel_request = hub
+        .channels()
+        .list(&vec!["snippet".into(), "contentDetails".into()])
+        .max_results(1)
+        .add_id(&id)
+        .param("key", &api_key);
+    let result = channel_request.doit().await?;
+    let channel = result
+        .1
+        .items
+        .ok_or(eyre!("youtube returned no channel with id {:?}", id))?
+        .first()
+        .ok_or(eyre!("youtube returned no channel with id {:?}", id))?
+        .clone();
+    Ok(channel)
+}
+
+async fn create_duration_url_map(
+    items: &Vec<PlaylistItem>,
+) -> Result<std::collections::HashMap<Url, Duration>, eyre::Error> {
+    let mut duration_map: std::collections::HashMap<Url, Duration> =
+        std::collections::HashMap::new();
+    for item in items {
+        let snippet = item
+            .snippet
+            .to_owned()
+            .ok_or(eyre!("item has no snippet"))?;
+        let video_id = snippet
+            .resource_id
+            .ok_or(eyre!("snippet has no resource id"))?
+            .video_id
+            .ok_or(eyre!("resource id has no video id"))?;
+        let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", video_id))
+            .ok()
+            .unwrap();
+        if let Ok(Some(duration)) = get_youtube_video_duration(&url).await {
+            duration_map.insert(url.clone(), Duration::from_secs(duration));
+        } else {
+            duration_map.insert(url.clone(), Duration::default());
+        }
+    }
+    Ok(duration_map)
+}
+
+fn build_channel_items_from_playlist(
+    items: Vec<PlaylistItem>,
+    duration_map: std::collections::HashMap<Url, Duration>,
+) -> Vec<Item> {
     let rss_item: Vec<Item> = items
         .into_iter()
         .filter_map(|item| {
@@ -189,7 +270,11 @@ fn build_channel_items_from_playlist(items: Vec<PlaylistItem>, duration_map: std
             item_builder.description(Some(description.clone()));
             item_builder.link(Some(url.to_string()));
             item_builder.guid(Some(GuidBuilder::default().value(url.to_string()).build()));
-            item_builder.pub_date(snippet.published_at.and_then(|pub_date| Some(pub_date.to_rfc2822().to_string())));
+            item_builder.pub_date(
+                snippet
+                    .published_at
+                    .and_then(|pub_date| Some(pub_date.to_rfc2822().to_string())),
+            );
             item_builder.author(Some(snippet.channel_title?));
             let duration = *duration_map.get(&url).unwrap_or(&Duration::default());
             let itunes_item_extension = ITunesItemExtensionBuilder::default()
@@ -239,10 +324,11 @@ async fn fetch_playlist_items(
             break;
         }
     }
+    fetched_playlist_items.sort_by_key(|i| i.snippet.as_ref().and_then(|s| s.published_at));
     Ok(fetched_playlist_items)
 }
 
-fn build_channel_from_playlist(playlist: google_youtube3::api::Playlist) -> Channel {
+fn build_channel_from_playlist(playlist: api::Playlist) -> Channel {
     let mut channel_builder = ChannelBuilder::default();
     let mut itunes_channel_builder = ITunesChannelExtensionBuilder::default();
 
@@ -253,17 +339,13 @@ fn build_channel_from_playlist(playlist: google_youtube3::api::Playlist) -> Chan
         if let Some(mut thumb) = snippet.thumbnails.and_then(|thumbs| thumbs.standard) {
             itunes_channel_builder.image(thumb.url.take());
         }
-        itunes_channel_builder.explicit(Some("no".to_owned()));
     }
 
     channel_builder.itunes_ext(Some(itunes_channel_builder.build()));
     channel_builder.build()
 }
 
-async fn fetch_playlist(
-    id: String,
-    api_key: &String,
-) -> Result<google_youtube3::api::Playlist, eyre::Error> {
+async fn fetch_playlist(id: String, api_key: &String) -> Result<api::Playlist, eyre::Error> {
     let hub = get_youtube_hub();
     let playlist_request = hub
         .playlists()
