@@ -113,10 +113,6 @@ impl MediaProviderV2 for YoutubeProviderV2 {
         }
     }
 
-    async fn get_item_duration(&self, url: &Url) -> eyre::Result<Option<u64>> {
-        get_youtube_video_duration(url).await
-    }
-
     async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
         get_youtube_stream_url(media_url).await
     }
@@ -142,7 +138,7 @@ impl MediaProviderV2 for YoutubeProviderV2 {
         .concat();
     }
 
-    fn new(_url: &Url) -> Self {
+    fn new() -> Self {
         YoutubeProviderV2 {}
     }
 }

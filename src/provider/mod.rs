@@ -160,17 +160,6 @@ pub trait MediaProviderV2 {
         transcode_service_url: Option<Url>,
     ) -> eyre::Result<String>;
 
-    /// TODO: might not be needed anymore
-    ///
-    /// Retrieves the duration of an item from the given URL.
-    /// Not needed if the duration is already in the rss feed offered from the provider,
-    /// in this case implement this to return None
-    ///
-    /// # Arguments
-    ///
-    /// * `media_url` - The URL of the item.
-    async fn get_item_duration(&self, media_url: &Url) -> eyre::Result<Option<u64>>;
-
     /// Takes an URL and returns the stream URL, this will be passed to ffmpeg to start the
     /// transcoding process
     /// Only run when trancoding, if URL can't be converted to a streamable URL will return an error
@@ -211,7 +200,7 @@ pub trait MediaProviderV2 {
     /// The constructed struct for the media provider.
     ///
     /// Only used for dynamic dispatching
-    fn new(url: &Url) -> Self
+    fn new() -> Self
     where
         Self: Sized;
 }
@@ -399,3 +388,4 @@ mod tests {
         }
     }
 }
+
