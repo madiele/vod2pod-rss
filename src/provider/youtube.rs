@@ -12,7 +12,8 @@ use log::{debug, error, info, warn};
 use regex::Regex;
 use reqwest::Url;
 use rss::{
-    extension::itunes::ITunesItemExtensionBuilder, Enclosure, Guid, GuidBuilder, Item, ItemBuilder,
+    extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
+    Channel, ChannelBuilder, Enclosure, Guid, GuidBuilder, Item, ItemBuilder,
 };
 use tokio::process::Command;
 
@@ -71,7 +72,7 @@ impl MediaProviderV2 for YoutubeProviderV2 {
                     _ => return Err(eyre!("unsupported youtube url")),
                 };
                 let max_items = 200;
-                let videoItems = fetch_videos_for_channel(id, api_key, max_items).await?;
+                let videoItems = fetch_from_api(id, api_key, max_items).await?;
 
                 return Ok(feed_builder.build().to_string());
             }
@@ -138,11 +139,48 @@ impl MediaProviderV2 for YoutubeProviderV2 {
     }
 }
 
-async fn fetch_videos_for_channel(
+async fn fetch_from_api(
     id: IdType,
     api_key: String,
     max_items: usize,
-) -> eyre::Result<Vec<Item>> {
+) -> eyre::Result<(Channel, Vec<Item>)> {
+    let items: Vec<Item> = match id {
+        IdType::Playlist(id) => {
+            let mut playlist = fetch_playlist(id, api_key).await?;
+
+            let playlist_id = playlist.id.take().ok_or(eyre!("playlist has no id"))?;
+            let channel = build_channel_from_playlist(playlist);
+            let items = vec![ItemBuilder::default().build()];
+            return Ok((channel, items));
+        }
+        IdType::Channel(id) => {
+            todo!()
+        }
+    };
+}
+
+fn build_channel_from_playlist(playlist: google_youtube3::api::Playlist) -> Channel {
+    let mut channel_builder = ChannelBuilder::default();
+    let mut itunes_channel_builder = ITunesChannelExtensionBuilder::default();
+
+    if let Some(mut snippet) = playlist.snippet {
+        channel_builder.description(snippet.description.take().unwrap_or("".to_owned()));
+        channel_builder.title(snippet.title.take().unwrap_or("".to_owned()));
+        channel_builder.language(snippet.default_language.take());
+        if let Some(mut thumb) = snippet.thumbnails.and_then(|thumbs| thumbs.standard) {
+            itunes_channel_builder.image(thumb.url.take());
+        }
+        itunes_channel_builder.explicit(Some("no".to_owned()));
+    }
+
+    channel_builder.itunes_ext(Some(itunes_channel_builder.build()));
+    channel_builder.build()
+}
+
+async fn fetch_playlist(
+    id: String,
+    api_key: String,
+) -> Result<google_youtube3::api::Playlist, eyre::Error> {
     let auth = google_youtube3::client::NoToken;
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
@@ -150,24 +188,21 @@ async fn fetch_videos_for_channel(
         .enable_http1()
         .build();
     let client = hyper::Client::builder().build(connector);
-
     let hub = YouTube::new(client, auth);
-
-    match id {
-        IdType::Playlist(id) => {
-            let list = hub
-                .playlists()
-                .list(&vec!["snippet".into()])
-                .add_id(&id)
-                .param("key", &api_key);
-            let result = list.doit().await?;
-            result.1.items
-            todo!()
-        }
-        IdType::Channel(id) => {
-            todo!()
-        }
-    }
+    let playlist_request = hub
+        .playlists()
+        .list(&vec!["snippet".into()])
+        .add_id(&id)
+        .param("key", &api_key);
+    let result = playlist_request.doit().await?;
+    let playlist = result
+        .1
+        .items
+        .ok_or(eyre!("youtube returned no playlist with id {:?}", id))?
+        .first()
+        .ok_or(eyre!("youtube returned no playlist with id {:?}", id))?
+        .clone();
+    Ok(playlist)
 }
 
 struct ConvertItemsParams {
@@ -825,6 +860,7 @@ fn parse_duration(duration_str: &str) -> Result<Duration, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::provider::youtube::parse_duration;
     use std::time::Duration;
 
@@ -854,4 +890,21 @@ mod tests {
             "Invalid format".to_string()
         );
     }
+
+    #[tokio::test]
+    async fn test_fetch_playlist() {
+        let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
+        let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
+
+        let result = fetch_playlist(id, api_key).await;
+
+        println!("{:?}", result);
+        assert!(result.is_ok());
+
+        if let Ok(playlist) = result {
+            assert!(playlist.id.is_some());
+            assert!(playlist.snippet.is_some());
+        }
+    }
 }
+
