@@ -2,7 +2,7 @@
 use cached::proc_macro::io_cached;
 #[allow(unused_imports)]
 use cached::AsyncRedisCache;
-use google_youtube3::{hyper, hyper_rustls, YouTube};
+use google_youtube3::{api::PlaylistItem, hyper, hyper_rustls, YouTube};
 use std::{str::FromStr, time::Duration};
 
 use async_trait::async_trait;
@@ -146,10 +146,14 @@ async fn fetch_from_api(
 ) -> eyre::Result<(Channel, Vec<Item>)> {
     let items: Vec<Item> = match id {
         IdType::Playlist(id) => {
-            let mut playlist = fetch_playlist(id, api_key).await?;
+            let mut playlist = fetch_playlist(id, &api_key).await?;
 
             let playlist_id = playlist.id.take().ok_or(eyre!("playlist has no id"))?;
+
             let channel = build_channel_from_playlist(playlist);
+
+            let items = fetch_playlist_items(&playlist_id, &api_key).await?;
+
             let items = vec![ItemBuilder::default().build()];
             return Ok((channel, items));
         }
@@ -157,6 +161,39 @@ async fn fetch_from_api(
             todo!()
         }
     };
+}
+
+async fn fetch_playlist_items(
+    playlist_id: &String,
+    api_key: &String,
+) -> eyre::Result<Vec<PlaylistItem>> {
+    let hub = get_youtube_hub();
+    let max_consecutive_requests = 5;
+    let mut fetched_playlist_items: Vec<PlaylistItem> =
+        Vec::with_capacity(max_consecutive_requests * 50);
+    let mut request_count = 0;
+    let mut next_page_token: Option<String> = None;
+    loop {
+        let mut playlist_items_request = hub
+            .playlist_items()
+            .list(&vec!["snippet".into()])
+            .playlist_id(playlist_id)
+            .param("key", &api_key)
+            .max_results(50);
+        if let Some(ref next_page_token) = next_page_token {
+            playlist_items_request = playlist_items_request.page_token(next_page_token.as_str());
+        }
+        let response = playlist_items_request.doit().await?;
+
+        fetched_playlist_items.extend(response.1.items.ok_or(eyre!("playlist has no items"))?);
+        next_page_token = response.1.next_page_token;
+
+        request_count += 1;
+        if next_page_token.is_none() || request_count > max_consecutive_requests {
+            break;
+        }
+    }
+    Ok(fetched_playlist_items)
 }
 
 fn build_channel_from_playlist(playlist: google_youtube3::api::Playlist) -> Channel {
@@ -179,16 +216,9 @@ fn build_channel_from_playlist(playlist: google_youtube3::api::Playlist) -> Chan
 
 async fn fetch_playlist(
     id: String,
-    api_key: String,
+    api_key: &String,
 ) -> Result<google_youtube3::api::Playlist, eyre::Error> {
-    let auth = google_youtube3::client::NoToken;
-    let connector = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_native_roots()
-        .https_only()
-        .enable_http1()
-        .build();
-    let client = hyper::Client::builder().build(connector);
-    let hub = YouTube::new(client, auth);
+    let hub = get_youtube_hub();
     let playlist_request = hub
         .playlists()
         .list(&vec!["snippet".into()])
@@ -203,6 +233,18 @@ async fn fetch_playlist(
         .ok_or(eyre!("youtube returned no playlist with id {:?}", id))?
         .clone();
     Ok(playlist)
+}
+
+fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
+    let auth = google_youtube3::client::NoToken;
+    let connector = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_only()
+        .enable_http1()
+        .build();
+    let client = hyper::Client::builder().build(connector);
+    let hub = YouTube::new(client, auth);
+    hub
 }
 
 struct ConvertItemsParams {
@@ -892,11 +934,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_build_items_for_playlist() {
+        let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
+        let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
+
+        let playlist = fetch_playlist(id, &api_key).await.unwrap();
+
+        println!("{:?}", &playlist.clone().id.unwrap().clone());
+        let items = fetch_playlist_items(&playlist.id.unwrap(), &api_key)
+            .await
+            .unwrap();
+
+        println!("{:?}", items);
+        assert!(items.len() > 0)
+    }
+
+    #[tokio::test]
+    async fn test_build_channel_for_playlist() {
+        let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
+        let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
+
+        let playlist = fetch_playlist(id, &api_key).await.unwrap();
+
+        let channel = build_channel_from_playlist(playlist);
+
+        println!("{:?}", channel);
+        assert!(channel.description.len() > 0);
+        assert!(channel.title.len() > 0);
+        assert!(channel.itunes_ext.unwrap().image.is_some());
+    }
+
+    #[tokio::test]
     async fn test_fetch_playlist() {
         let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
 
-        let result = fetch_playlist(id, api_key).await;
+        let result = fetch_playlist(id, &api_key).await;
 
         println!("{:?}", result);
         assert!(result.is_ok());
