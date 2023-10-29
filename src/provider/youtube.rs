@@ -2,16 +2,12 @@
 use cached::proc_macro::io_cached;
 #[allow(unused_imports)]
 use cached::AsyncRedisCache;
-use chrono::DateTime;
+use google_youtube3::{hyper, hyper_rustls, YouTube};
 use std::{str::FromStr, time::Duration};
 
 use async_trait::async_trait;
 use eyre::eyre;
-use feed_rs::{
-    model::{Entry, MediaObject},
-    parser,
-};
-use futures::stream::FuturesUnordered;
+use feed_rs::model::{Entry, MediaObject};
 use log::{debug, error, info, warn};
 use regex::Regex;
 use reqwest::Url;
@@ -31,8 +27,11 @@ pub(super) struct YoutubeProvider {
     url: Url,
 }
 
-pub(super) struct YoutubeProviderV2 {
-    url: Url,
+pub(super) struct YoutubeProviderV2 {}
+
+enum IdType {
+    Playlist(String),
+    Channel(String),
 }
 
 #[async_trait]
@@ -42,76 +41,67 @@ impl MediaProviderV2 for YoutubeProviderV2 {
         channel_url: Url,
         transcode_service_url: Option<Url>,
     ) -> eyre::Result<String> {
-        let mut feed_builder = provider::build_default_rss_structure();
         let youtube_api_key = conf().get(ConfName::YoutubeApiKey).ok();
 
-        let atom_feed = match channel_url.path() {
-            path if path.starts_with("/playlist") => feed_url_for_yt_playlist(&channel_url).await,
-            path if path.starts_with("/feeds/") => feed_url_for_yt_atom(&channel_url).await,
-            path if path.starts_with("/channel/") => feed_url_for_yt_channel(&channel_url).await,
-            path if path.starts_with("/user/") => feed_url_for_yt_channel(&channel_url).await,
-            path if path.starts_with("/c/") => feed_url_for_yt_channel(&channel_url).await,
-            path if path.starts_with("/@") => feed_url_for_yt_channel(&channel_url).await,
-            _ => Err(eyre!("unsupported youtube url")),
-        }
-        .ok();
+        match youtube_api_key {
+            Some(api_key) => {
+                let mut feed_builder = provider::build_default_rss_structure();
 
-        if let Some(atom_feed) = atom_feed {
-            let response = reqwest::get(atom_feed).await?.text().await?;
-            return Ok(response);
-        }
+                let id = match channel_url.path() {
+                    path if path.starts_with("/playlist") => {
+                        let playlist_id = channel_url
+                            .query_pairs()
+                            .find(|(key, _)| key == "list")
+                            .map(|(_, value)| value)
+                            .ok_or_else(|| {
+                                eyre::eyre!("Failed to parse playlist ID from URL: {}", channel_url)
+                            })?;
+                        IdType::Playlist(playlist_id.into())
+                    }
+                    path if path.starts_with("/channel/")
+                        || path.starts_with("/user/")
+                        || path.starts_with("/c/")
+                        || path.starts_with("/c/")
+                        || path.starts_with("/@") =>
+                    {
+                        let url = find_yt_channel_url_with_c_id(&channel_url).await?;
+                        let channel_id = url.path_segments().unwrap().last().unwrap();
+                        IdType::Channel(channel_id.into())
+                    }
+                    _ => return Err(eyre!("unsupported youtube url")),
+                };
+                let max_items = 200;
+                let videoItems = fetch_videos_for_channel(id, api_key, max_items).await?;
 
-        //fetch all videos from channel, handle pagination, and filter out livestreams
-        let mut videos = vec![];
-        let mut next_page_token: Option<String> = None;
-        loop {
-            let mut url = Url::parse("https://www.googleapis.com/youtube/v3/search")?;
-            url.query_pairs_mut()
-                .append_pair(
-                    "channelId",
-                    channel_url.path_segments().unwrap().last().unwrap(),
-                )
-                .append_pair("part", "snippet")
-                .append_pair("maxResults", "50")
-                .append_pair("type", "video")
-                .append_pair("key", youtube_api_key.as_ref().unwrap());
-            if let Some(next_page_token) = next_page_token {
-                url.query_pairs_mut()
-                    .append_pair("pageToken", &next_page_token);
+                return Ok(feed_builder.build().to_string());
             }
-            let response = reqwest::get(url).await?.text().await?;
-            let json: serde_json::Value = serde_json::from_str(&response)?;
-            let items = json["items"].as_array().unwrap();
+            None => {
+                let feed = match channel_url.path() {
+                    path if path.starts_with("/playlist") => {
+                        feed_url_for_yt_playlist(&channel_url).await
+                    }
+                    path if path.starts_with("/feeds/") => feed_url_for_yt_atom(&channel_url).await,
+                    path if path.starts_with("/channel/") => {
+                        feed_url_for_yt_channel(&channel_url).await
+                    }
+                    path if path.starts_with("/user/") => {
+                        feed_url_for_yt_channel(&channel_url).await
+                    }
+                    path if path.starts_with("/c/") => feed_url_for_yt_channel(&channel_url).await,
+                    path if path.starts_with("/@") => feed_url_for_yt_channel(&channel_url).await,
+                    _ => Err(eyre!("unsupported youtube url")),
+                }
+                .ok();
 
-            next_page_token = json
-                .get("nextPageToken")
-                .map(|x| x.as_str().unwrap().to_string());
-
-            let videos_in_page = items
-                .iter()
-                .filter(|x| {
-                    //let video_id = x["id"]["videoId"].as_str().unwrap();
-                    //let url = format!("https://www.youtube.com/watch?v={}", video_id);
-                    let is_livestream = x["snippet"]["liveBroadcastContent"]
-                        .as_str()
-                        .unwrap()
-                        .to_lowercase()
-                        .contains("live");
-                    !is_livestream
-                })
-                .map(|x| {
-                    let video_id = x["id"]["videoId"].as_str().unwrap();
-                    let url = format!("https://www.youtube.com/watch?v={}", video_id);
-                    url
-                })
-                .collect::<Vec<String>>();
-            videos.extend(videos_in_page);
-            if next_page_token.is_none() {
-                break;
+                match feed {
+                    Some(atom_feed) => {
+                        let response = reqwest::get(atom_feed).await?.text().await?;
+                        return Ok(response);
+                    }
+                    _ => return Err(eyre!("could not find strategy to get youtube feed")),
+                }
             }
         }
-
-        return Ok(feed_builder.build().to_string());
     }
 
     async fn get_item_duration(&self, url: &Url) -> eyre::Result<Option<u64>> {
@@ -143,20 +133,40 @@ impl MediaProviderV2 for YoutubeProviderV2 {
         .concat();
     }
 
-    fn new(url: &Url) -> Self {
-        YoutubeProviderV2 { url: url.clone() }
+    fn new(_url: &Url) -> Self {
+        YoutubeProviderV2 {}
     }
 }
 
-async fn feed_url(url: &Url) -> eyre::Result<Url> {
-    match url.path() {
-        path if path.starts_with("/playlist") => feed_url_for_yt_playlist(url).await,
-        path if path.starts_with("/feeds/") => feed_url_for_yt_atom(url).await,
-        path if path.starts_with("/channel/") => feed_url_for_yt_channel(url).await,
-        path if path.starts_with("/user/") => feed_url_for_yt_channel(url).await,
-        path if path.starts_with("/c/") => feed_url_for_yt_channel(url).await,
-        path if path.starts_with("/@") => feed_url_for_yt_channel(url).await,
-        _ => Err(eyre!("unsupported youtube url")),
+async fn fetch_videos_for_channel(
+    id: IdType,
+    api_key: String,
+    max_items: usize,
+) -> eyre::Result<Vec<Item>> {
+    let auth = google_youtube3::client::NoToken;
+    let connector = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_only()
+        .enable_http1()
+        .build();
+    let client = hyper::Client::builder().build(connector);
+
+    let hub = YouTube::new(client, auth);
+
+    match id {
+        IdType::Playlist(id) => {
+            let list = hub
+                .playlists()
+                .list(&vec!["snippet".into()])
+                .add_id(&id)
+                .param("key", &api_key);
+            let result = list.doit().await?;
+            result.1.items
+            todo!()
+        }
+        IdType::Channel(id) => {
+            todo!()
+        }
     }
 }
 
@@ -221,10 +231,30 @@ async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
     });
 
     let Some(media_url) = selected_url else {
-        log::warn!("no media_url found out of:\n{:?}", all_items_iter.clone().map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
-        log::warn!("links analyzed:\n{:?}", all_items_iter.map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
-        log::warn!("regex used:\n{:?}", vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()].iter().map(|x| x.to_string()).collect::<Vec<String>>().join("\n"));
-        return None
+        log::warn!(
+            "no media_url found out of:\n{:?}",
+            all_items_iter
+                .clone()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+        log::warn!(
+            "links analyzed:\n{:?}",
+            all_items_iter
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+        log::warn!(
+            "regex used:\n{:?}",
+            vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()]
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+        return None;
     };
 
     let media_element = match item.media.first() {
