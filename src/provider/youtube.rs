@@ -72,7 +72,7 @@ impl MediaProviderV2 for YoutubeProviderV2 {
                     _ => return Err(eyre!("unsupported youtube url")),
                 };
                 let max_items = 200;
-                let videoItems = fetch_from_api(id, api_key, max_items).await?;
+                let videoItems = fetch_from_api(id, api_key).await?;
 
                 return Ok(feed_builder.build().to_string());
             }
@@ -142,7 +142,6 @@ impl MediaProviderV2 for YoutubeProviderV2 {
 async fn fetch_from_api(
     id: IdType,
     api_key: String,
-    max_items: usize,
 ) -> eyre::Result<(Channel, Vec<Item>)> {
     let items: Vec<Item> = match id {
         IdType::Playlist(id) => {
@@ -154,13 +153,60 @@ async fn fetch_from_api(
 
             let items = fetch_playlist_items(&playlist_id, &api_key).await?;
 
-            let items = vec![ItemBuilder::default().build()];
-            return Ok((channel, items));
+            let mut duration_map: std::collections::HashMap<Url, Duration> = std::collections::HashMap::new();
+            for item in &items {
+                let snippet = item.snippet.to_owned().ok_or(eyre!("item has no snippet"))?;
+                let video_id = snippet.resource_id.ok_or(eyre!("snippet has no resource id"))?.video_id.ok_or(eyre!("resource id has no video id"))?;
+                let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", video_id)).ok().unwrap();
+                if let Ok(Some(duration)) = get_youtube_video_duration(&url).await {
+                    duration_map.insert(url.clone(), Duration::from_secs(duration));
+                } else {
+                    duration_map.insert(url.clone(), Duration::default());
+                }
+            }
+
+            let rss_items = build_channel_items_from_playlist(items, duration_map);
+
+            return Ok((channel, rss_items));
         }
         IdType::Channel(id) => {
             todo!()
         }
     };
+}
+
+fn build_channel_items_from_playlist(items: Vec<PlaylistItem>, duration_map: std::collections::HashMap<Url, Duration>) -> Vec<Item> {
+    let rss_item: Vec<Item> = items
+        .into_iter()
+        .filter_map(|item| {
+            let snippet = item.snippet?;
+            let title = snippet.title.unwrap_or("".to_owned());
+            let description = snippet.description.unwrap_or("".to_owned());
+            let video_id = snippet.resource_id?.video_id?;
+            let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", video_id)).ok()?;
+            let mut item_builder = ItemBuilder::default();
+            item_builder.title(Some(title));
+            item_builder.description(Some(description.clone()));
+            item_builder.link(Some(url.to_string()));
+            item_builder.guid(Some(GuidBuilder::default().value(url.to_string()).build()));
+            item_builder.pub_date(snippet.published_at.and_then(|pub_date| Some(pub_date.to_rfc2822().to_string())));
+            item_builder.author(Some(snippet.channel_title?));
+            let duration = *duration_map.get(&url).unwrap_or(&Duration::default());
+            let itunes_item_extension = ITunesItemExtensionBuilder::default()
+                .summary(Some(description))
+                .duration(Some({
+                    let hours = duration.as_secs() / 3600;
+                    let minutes = (duration.as_secs() / 60) % 60;
+                    let seconds = duration.as_secs() % 60;
+                    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+                }))
+                .image(snippet.thumbnails.and_then(|t| t.high).and_then(|h| h.url))
+                .build();
+            item_builder.itunes_ext(Some(itunes_item_extension));
+            Some(item_builder.build())
+        })
+        .collect();
+    rss_item
 }
 
 async fn fetch_playlist_items(
