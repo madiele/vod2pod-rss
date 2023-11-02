@@ -2,7 +2,6 @@
 use cached::proc_macro::io_cached;
 #[allow(unused_imports)]
 use cached::AsyncRedisCache;
-use futures::future::ok;
 use google_youtube3::{
     api::{self, PlaylistItem},
     hyper, hyper_rustls, YouTube,
@@ -14,7 +13,7 @@ use eyre::eyre;
 use feed_rs::model::{Entry, MediaObject};
 use log::{debug, error, info, warn};
 use regex::Regex;
-use reqwest::{StatusCode, Url};
+use reqwest::Url;
 use rss::{
     extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
     Channel, ChannelBuilder, Enclosure, Guid, GuidBuilder, Item, ItemBuilder,
@@ -41,15 +40,15 @@ enum IdType {
 
 #[async_trait]
 impl MediaProviderV2 for YoutubeProviderV2 {
-    async fn generate_rss_feed(
-        &self,
-        channel_url: Url,
-        transcode_service_url: Option<Url>,
-    ) -> eyre::Result<String> {
+    async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
         let youtube_api_key = conf().get(ConfName::YoutubeApiKey).ok();
 
         match youtube_api_key {
             Some(api_key) => {
+                info!(
+                    "starting youtube feed generation for {} with API key",
+                    channel_url
+                );
                 let mut feed_builder = provider::build_default_rss_structure();
 
                 let id = match channel_url.path() {
@@ -88,6 +87,10 @@ impl MediaProviderV2 for YoutubeProviderV2 {
                 return Ok(feed_builder.build().to_string());
             }
             None => {
+                info!(
+                    "starting youtube feed generation for {} using atom feed",
+                    channel_url
+                );
                 let feed = match channel_url.path() {
                     path if path.starts_with("/playlist") => {
                         feed_url_for_yt_playlist(&channel_url).await
@@ -142,6 +145,7 @@ impl MediaProviderV2 for YoutubeProviderV2 {
 async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, Vec<Item>)> {
     match id {
         IdType::Playlist(id) => {
+            info!("fetching playlist {}", id);
             let mut playlist = fetch_playlist(id, &api_key).await?;
 
             let playlist_id = playlist.id.take().ok_or(eyre!("playlist has no id"))?;
@@ -157,6 +161,7 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
             return Ok((rss_channel, rss_items));
         }
         IdType::Channel(id) => {
+            info!("fetching channel {}", id);
             let mut channel = fetch_channel(id, &api_key).await?;
 
             let upload_playlist = channel
@@ -245,6 +250,12 @@ async fn create_duration_url_map(
         return video_info_request.doit();
     });
 
+    info!(
+        "fetching video info for {} videos in {} batches",
+        items.len(),
+        videos_requests.len()
+    );
+
     let video_infos = futures::future::join_all(videos_requests)
         .await
         .into_iter()
@@ -316,7 +327,7 @@ fn build_channel_items_from_playlist(
                     let seconds = video_infos.duration.second;
                     format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
                 }))
-                .image(snippet.thumbnails.and_then(|t| t.high).and_then(|h| h.url))
+                .image(snippet.thumbnails.and_then(|t| t.high?.url))
                 .build();
             item_builder.itunes_ext(Some(itunes_item_extension));
             Some(item_builder.build())
@@ -335,6 +346,7 @@ async fn fetch_playlist_items(
         Vec::with_capacity(max_consecutive_requests * 50);
     let mut request_count = 0;
     let mut next_page_token: Option<String> = None;
+    debug!("fetching items from playlist {}", playlist_id);
     loop {
         let mut playlist_items_request = hub
             .playlist_items()
@@ -352,9 +364,18 @@ async fn fetch_playlist_items(
 
         request_count += 1;
         if next_page_token.is_none() || request_count > max_consecutive_requests {
+            info!(
+                "fetched {} items, channel too large, stopping",
+                fetched_playlist_items.len()
+            );
             break;
         }
     }
+    info!(
+        "fetched {} items, in {} requests",
+        fetched_playlist_items.len(),
+        request_count
+    );
     fetched_playlist_items.sort_by_key(|i| i.snippet.as_ref().and_then(|s| s.published_at));
     Ok(fetched_playlist_items)
 }
@@ -1048,7 +1069,7 @@ mod tests {
     use super::*;
     use crate::provider::youtube::parse_duration;
     use std::time::Duration;
-    use test_log::test as logtest;
+    use test_log::test;
 
     #[test]
     fn test_parse_duration_hhmmss() {
@@ -1093,7 +1114,7 @@ mod tests {
         assert!(items.len() > 0)
     }
 
-    #[logtest(tokio::test)]
+    #[test(tokio::test)]
     async fn test_build_channel_for_playlist() {
         let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
@@ -1108,7 +1129,7 @@ mod tests {
         assert!(channel.itunes_ext.unwrap().image.is_some());
     }
 
-    #[logtest(tokio::test)]
+    #[test(tokio::test)]
     async fn test_fetch_playlist() {
         let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
@@ -1124,23 +1145,28 @@ mod tests {
         }
     }
 
-    #[logtest(tokio::test)]
-    async fn test_fetch_youtube() {
+    #[test(tokio::test)]
+    async fn test_fetch_youtube_channel_by_name() {
         std::env::set_var("RUST_LOG", "DEBUG");
         let provider = YoutubeProviderV2::new();
-        let key = conf().get(ConfName::YoutubeApiKey).ok();
-        println!("{:?}", key);
-        println!("--------------");
+        let Ok(_api_key) = conf().get(ConfName::YoutubeApiKey) else {
+            panic!("to run this test you need to set an api key for youtube.");
+        };
 
         let result = provider
-            .generate_rss_feed(
-                Url::parse("https://www.youtube.com/@weirdquietgirl").unwrap(),
-                Some(Url::parse("https://www.youtube.com/@LegalEagle").unwrap()),
-            )
+            .generate_rss_feed(Url::parse("https://www.youtube.com/@LegalEagle").unwrap())
             .await;
 
-        println!("{:?}", result);
-        assert!(result.is_ok())
+        assert!(result.is_ok());
+        let feed = feed_rs::parser::parse(&result.unwrap().into_bytes()[..]).unwrap();
+
+        assert!(feed.entries.len() > 50);
+        for entry in &feed.entries {
+            for media in &entry.media {
+                let duration = media.duration.unwrap();
+                assert!(duration > Duration::default());
+            }
+        }
     }
 }
 

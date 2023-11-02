@@ -153,12 +153,7 @@ pub trait MediaProviderV2 {
     /// # Arguments
     ///
     /// * `channel_url` - The URL of channel for wich the rss will be generated.
-    /// * `transcode_service_url` - the absolute URL to the trancode service, needed to set the enclosure correctly if trancoding is needed
-    async fn generate_rss_feed(
-        &self,
-        channel_url: Url,
-        transcode_service_url: Option<Url>,
-    ) -> eyre::Result<String>;
+    async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String>;
 
     /// Takes an URL and returns the stream URL, this will be passed to ffmpeg to start the
     /// transcoding process
@@ -205,6 +200,7 @@ pub trait MediaProviderV2 {
         Self: Sized;
 }
 
+/// This is the default rss structure used as a base for all the providers,
 pub fn build_default_rss_structure() -> rss::ChannelBuilder {
     let mut feed_builder = rss::ChannelBuilder::default();
 
