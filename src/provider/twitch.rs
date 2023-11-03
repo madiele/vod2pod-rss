@@ -326,65 +326,62 @@ pub async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAu
 }
 
 fn build_items_from_vods(items: Vec<Video>) -> Vec<Item> {
-    let rss_item: Vec<Item> = items
-        .into_iter()
-        .map(|vod| {
-            let video_id = vod.id;
-            let title = vod.title;
-            let description = title.clone();
-            let published_at = vod.created_at;
-            let mut item_builder = ItemBuilder::default();
-            item_builder.title(Some(title.clone()));
-            item_builder.description(Some(description.clone()));
-            item_builder.link(Some(video_id.clone()));
-            item_builder.guid(Some(GuidBuilder::default().value(video_id.clone()).build()));
-            item_builder.pub_date(Some(
-                match DateTime::parse_from_rfc3339(published_at.as_str()) {
-                    Ok(publish_date) => publish_date.to_string(),
-                    Err(_) => {
-                        warn!(
-                            "Using default DateTime due to parsing error. {published_at} could not be parsed"
-                        );
-                        let default_date: DateTime<FixedOffset> = DateTime::default();
-                        default_date.to_string()
-                    }
-                },
-            )); //BUG: possible bug here
+    items.into_iter().map(vod_to_rss_item_converter).collect()
+}
 
-            let itunes_item_extension = ITunesItemExtensionBuilder::default()
-                .summary(Some(description))
-                .duration(Some({
-                    let duration_as_string = vod
-                        .duration
-                        .replace("h", ":")
-                        .replace("m", ":")
-                        .replace("s", "");
+fn vod_to_rss_item_converter(vod: Video) -> Item {
+    let video_id = vod.id;
+    let title = vod.title;
+    let description = title.clone();
+    let published_at = vod.created_at;
+    let mut item_builder = ItemBuilder::default();
+    item_builder.title(Some(title.clone()));
+    item_builder.description(Some(description.clone()));
+    item_builder.link(Some(video_id.clone()));
+    item_builder.guid(Some(GuidBuilder::default().value(video_id.clone()).build()));
+    item_builder.pub_date(Some(
+        match DateTime::parse_from_rfc3339(published_at.as_str()) {
+            Ok(publish_date) => publish_date.to_string(),
+            Err(_) => {
+                warn!(
+                    "Using default DateTime due to parsing error. {published_at} could not be parsed"
+                );
+                let default_date: DateTime<FixedOffset> = DateTime::default();
+                default_date.to_string()
+            }
+        },
+    ));
+    let itunes_item_extension = ITunesItemExtensionBuilder::default()
+        .summary(Some(description))
+        .duration(Some({
+            let duration_as_string = vod
+                .duration
+                .replace("h", ":")
+                .replace("m", ":")
+                .replace("s", "");
 
-                    let duration_parts: Vec<&str> = duration_as_string.split(':').collect();
+            let duration_parts: Vec<&str> = duration_as_string.split(':').collect();
 
-                    match duration_parts.len() {
-                        3 => format!(
-                            "{:02}:{:02}:{:02}",
-                            duration_parts[0], duration_parts[1], duration_parts[2]
-                        ),
-                        2 => format!("00:{:02}:{:02}", duration_parts[0], duration_parts[1]),
-                        1 => format!("00:00:{:02}", duration_parts[0]),
-                        _ => {
-                            info!(
-                                "vod {} has invalid duration {}",
-                                video_id, duration_as_string
-                            );
-                            String::from("00:00:00")
-                        }
-                    }
-                }))
-                .image(Some(vod.thumbnail_url))
-                .build();
-            item_builder.itunes_ext(Some(itunes_item_extension));
-            item_builder.build()
-        })
-        .collect();
-    rss_item
+            match duration_parts.len() {
+                3 => format!(
+                    "{:02}:{:02}:{:02}",
+                    duration_parts[0], duration_parts[1], duration_parts[2]
+                ),
+                2 => format!("00:{:02}:{:02}", duration_parts[0], duration_parts[1]),
+                1 => format!("00:00:{:02}", duration_parts[0]),
+                _ => {
+                    info!(
+                        "vod {} has invalid duration {}",
+                        video_id, duration_as_string
+                    );
+                    String::from("00:00:00")
+                }
+            }
+        }))
+        .image(Some(vod.thumbnail_url))
+        .build();
+    item_builder.itunes_ext(Some(itunes_item_extension));
+    item_builder.build()
 }
 
 #[cfg(test)]
