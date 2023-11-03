@@ -337,7 +337,7 @@ fn vod_to_rss_item_converter(vod: Video) -> Item {
     let mut item_builder = ItemBuilder::default();
     item_builder.title(Some(title.clone()));
     item_builder.description(Some(description.clone()));
-    item_builder.link(Some(video_id.clone()));
+    item_builder.link(Some(format!("https://www.twitch.tv/videos/{video_id}")));
     item_builder.guid(Some(GuidBuilder::default().value(video_id.clone()).build()));
     item_builder.pub_date(Some(
         match DateTime::parse_from_rfc3339(published_at.as_str()) {
