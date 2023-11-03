@@ -378,7 +378,11 @@ fn vod_to_rss_item_converter(vod: Video) -> Item {
                 }
             }
         }))
-        .image(Some(vod.thumbnail_url))
+        .image(Some(
+            vod.thumbnail_url
+                .replace("%{width}", "512")
+                .replace("%{height}", "288"),
+        ))
         .build();
     item_builder.itunes_ext(Some(itunes_item_extension));
     item_builder.build()
@@ -411,8 +415,8 @@ mod tests {
             for media in &entry.media {
                 let duration = media.duration.unwrap();
                 assert!(duration > std::time::Duration::default());
-                assert!(!media.thumbnails[0].image.uri.contains("{width}"));
-                assert!(!media.thumbnails[0].image.uri.contains("{height}"));
+                assert!(!media.thumbnails[0].image.uri.contains("%{width}"));
+                assert!(!media.thumbnails[0].image.uri.contains("%{height}"));
             }
             assert!(entry.title.is_some());
             assert!(entry.summary.is_some());
