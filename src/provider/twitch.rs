@@ -8,13 +8,16 @@ use regex::Regex;
 use reqwest::Url;
 use rss::{
     extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
-    Channel, ChannelBuilder, GuidBuilder, Item, ItemBuilder,
+    GuidBuilder, Item, ItemBuilder,
 };
 use serde::Deserialize;
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::configs::{conf, Conf, ConfName};
+use crate::{
+    configs::{conf, Conf, ConfName},
+    provider,
+};
 
 use super::{MediaProvider, MediaProviderV2};
 
@@ -88,7 +91,73 @@ struct TwitchProviderV2 {}
 #[async_trait]
 impl MediaProviderV2 for TwitchProviderV2 {
     async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
-        todo!()
+        info!("trying to convert twitch channel url {}", channel_url);
+        let username = channel_url
+            .path_segments()
+            .ok_or_else(|| eyre::eyre!("Unable to get path segments"))?
+            .last()
+            .ok_or_else(|| eyre::eyre!("Unable to get last path segment"))?;
+
+        debug!("parsed username {}", username);
+
+        let client_id = &conf().get(ConfName::TwitchClientId)?;
+        let client_secret = &conf().get(ConfName::TwitchSecretKey)?;
+        debug!("fetching oauth token");
+        let oauth_credentials = authorize(client_id, client_secret).await?;
+
+        // add bearer token to request
+        let client = reqwest::Client::new();
+        let data = client
+            .get(format!(
+                "https://api.twitch.tv/helix/users?login={}",
+                username
+            ))
+            .bearer_auth(oauth_credentials.oauth_token.clone())
+            .header("Client-Id", client_id)
+            .send()
+            .await?
+            .json::<UserData>()
+            .await?
+            .data;
+
+        let channel = data
+            .get(0)
+            .ok_or_else(|| eyre::eyre!("No twitch user found"))?;
+
+        debug!("fetched twitch channel: {:?}", channel);
+
+        let vods_data: VodsData = client
+            .get(format!(
+                "https://api.twitch.tv/helix/videos?user_id={}",
+                channel.id
+            ))
+            .bearer_auth(oauth_credentials.oauth_token)
+            .header("Client-Id", client_id)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let vods = vods_data.data;
+
+        debug!("fetched vods: {:?}", vods);
+
+        let mut channel_builder = provider::build_default_rss_structure();
+
+        channel_builder
+            .title(channel.display_name.clone())
+            .link(channel_url.clone())
+            .description(channel.description.clone())
+            .itunes_ext(Some(
+                ITunesChannelExtensionBuilder::default()
+                    .image(Some(channel.profile_image_url.clone()))
+                    .author(Some(channel.display_name.clone()))
+                    .build(),
+            ));
+
+        let rss_items = build_items_from_vods(vods);
+
+        Ok(channel_builder.items(rss_items).build().to_string())
     }
 
     async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
@@ -116,6 +185,64 @@ impl MediaProviderV2 for TwitchProviderV2 {
     {
         TwitchProviderV2 {}
     }
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct User {
+    id: String,
+    login: String,
+    display_name: String,
+    #[serde(rename = "type")]
+    type_field: String,
+    broadcaster_type: String,
+    description: String,
+    profile_image_url: String,
+    offline_image_url: String,
+    view_count: i64,
+    created_at: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct UserData {
+    data: Vec<User>,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct MutedSegments {
+    pub duration: i32,
+    pub offset: i32,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct Video {
+    id: String,
+    stream_id: Option<String>,
+    user_id: String,
+    user_login: String,
+    user_name: String,
+    title: String,
+    description: String,
+    created_at: String,
+    published_at: String,
+    url: String,
+    thumbnail_url: String,
+    viewable: String,
+    view_count: i32,
+    language: String,
+    #[serde(rename = "type")]
+    type_field: String,
+    duration: String,
+    muted_segments: Option<Vec<MutedSegments>>,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct VodsData {
+    pub data: Vec<Video>,
+    pub pagination: serde_json::Value,
 }
 
 async fn get_twitch_stream_url(url: &Url) -> eyre::Result<Url> {
@@ -147,12 +274,14 @@ async fn get_twitch_stream_url(url: &Url) -> eyre::Result<Url> {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct OAuthCredentials {
     oauth_token: String,
     oauth_expire_epoch: u64,
 }
 
+//TODO: cache oauth credentials
 pub async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAuthCredentials> {
     let base_url = "https://id.twitch.tv/oauth2/token";
     let client = reqwest::Client::new();
@@ -196,38 +325,14 @@ pub async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAu
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct User {
-    login: String,
-    display_name: String,
-    profile_image_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Vod {
-    id: String,
-    thumbnail_url: Option<String>,
-    title: Option<String>,
-    url: Option<String>,
-    description: Option<String>,
-    stream_id: Option<String>,
-    created_at: Option<String>,
-    duration: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Stream {
-    id: String,
-}
-
-fn build_items_from_vods(items: Vec<Vod>) -> Vec<Item> {
+fn build_items_from_vods(items: Vec<Video>) -> Vec<Item> {
     let rss_item: Vec<Item> = items
         .into_iter()
         .filter_map(|vod| {
             let video_id = vod.id;
-            let title = vod.title.unwrap_or("".to_owned());
+            let title = vod.title;
             let description = title.clone();
-            let published_at = vod.created_at.unwrap_or("".to_owned());
+            let published_at = vod.created_at;
             let mut item_builder = ItemBuilder::default();
             item_builder.title(Some(title.clone()));
             item_builder.description(Some(description.clone()));
@@ -250,7 +355,7 @@ fn build_items_from_vods(items: Vec<Vod>) -> Vec<Item> {
                 .summary(Some(description))
                 .duration(Some({
                     let duration_as_string = vod
-                        .duration?
+                        .duration
                         .replace("h", ":")
                         .replace("m", ":")
                         .replace("s", "");
@@ -273,12 +378,49 @@ fn build_items_from_vods(items: Vec<Vod>) -> Vec<Item> {
                         }
                     }
                 }))
-                .image(vod.thumbnail_url)
+                .image(Some(vod.thumbnail_url))
                 .build();
             item_builder.itunes_ext(Some(itunes_item_extension));
             Some(item_builder.build())
         })
         .collect();
     rss_item
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_log::test;
+
+    #[test(tokio::test)]
+    async fn fetch_twitch_channel() {
+        let provider = TwitchProviderV2::new();
+        conf()
+            .get(ConfName::TwitchSecretKey)
+            .expect("to run this test set TWITCH_SECRET env var");
+
+        conf()
+            .get(ConfName::TwitchClientId)
+            .expect("to run this test set TWITCH_CLIENT_ID env var");
+
+        let url = Url::parse("https://www.twitch.tv/tumblurr").unwrap();
+        let rss = provider.generate_rss_feed(url).await.unwrap();
+
+        let feed = feed_rs::parser::parse(&rss.into_bytes()[..]).unwrap();
+
+        println!("{:#?}", feed);
+        assert!(feed.entries.len() > 1);
+        for entry in &feed.entries {
+            for media in &entry.media {
+                let duration = media.duration.unwrap();
+                assert!(duration > std::time::Duration::default());
+                assert!(!media.thumbnails[0].image.uri.contains("{width}"));
+                assert!(!media.thumbnails[0].image.uri.contains("{height}"));
+            }
+            assert!(entry.title.is_some());
+            assert!(entry.summary.is_some());
+            assert!(entry.published.is_some());
+        }
+    }
 }
 
