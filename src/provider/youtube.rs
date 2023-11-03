@@ -1147,7 +1147,6 @@ mod tests {
 
     #[test(tokio::test)]
     async fn test_fetch_youtube_channel_by_name() {
-        std::env::set_var("RUST_LOG", "DEBUG");
         let provider = YoutubeProviderV2::new();
         let Ok(_api_key) = conf().get(ConfName::YoutubeApiKey) else {
             panic!("to run this test you need to set an api key for youtube.");
@@ -1166,6 +1165,8 @@ mod tests {
                 let duration = media.duration.unwrap();
                 assert!(duration > Duration::default());
             }
+            assert!(entry.title.is_some());
+            assert!(entry.summary.is_some());
         }
     }
 }
