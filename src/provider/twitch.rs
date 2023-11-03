@@ -328,7 +328,7 @@ pub async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAu
 fn build_items_from_vods(items: Vec<Video>) -> Vec<Item> {
     let rss_item: Vec<Item> = items
         .into_iter()
-        .filter_map(|vod| {
+        .map(|vod| {
             let video_id = vod.id;
             let title = vod.title;
             let description = title.clone();
@@ -381,7 +381,7 @@ fn build_items_from_vods(items: Vec<Video>) -> Vec<Item> {
                 .image(Some(vod.thumbnail_url))
                 .build();
             item_builder.itunes_ext(Some(itunes_item_extension));
-            Some(item_builder.build())
+            item_builder.build()
         })
         .collect();
     rss_item
