@@ -86,10 +86,14 @@ impl MediaProvider for TwitchProvider {
     }
 }
 
-struct TwitchProviderV2 {}
+pub struct TwitchProviderV2 {}
 
 #[async_trait]
 impl MediaProviderV2 for TwitchProviderV2 {
+    fn media_url_regexes(&self) -> Vec<Regex> {
+        return vec![regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap()];
+    }
+
     async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
         info!("trying to convert twitch channel url {}", channel_url);
         let username = channel_url

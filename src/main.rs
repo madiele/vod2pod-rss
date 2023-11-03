@@ -1,39 +1,55 @@
-use actix_web::{ middleware, HttpServer, web, App, HttpResponse, guard, HttpRequest };
-use log::{ error, debug, info };
+use actix_web::{guard, middleware, web, App, HttpRequest, HttpResponse, HttpServer};
+use log::{debug, error, info};
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
 use simple_logger::SimpleLogger;
 use std::{collections::HashMap, time::Instant};
 use vod2pod_rss::{
-    transcoder::{ Transcoder, FfmpegParameters }, rss_transcodizer::RssTranscodizer, configs::{Conf, conf, ConfName }, provider,
+    configs::{conf, Conf, ConfName},
+    provider,
+    rss_transcodizer::RssTranscodizer,
+    transcoder::{FfmpegParameters, Transcoder},
 };
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .env()
+        .init()
+        .unwrap();
     let root = conf().get(ConfName::SubfolderPath).unwrap();
 
     if let Err(err) = flush_redis_on_new_version().await {
-        panic!("Error interacting with Redis (redis is required): {:?}", err);
+        panic!(
+            "Error interacting with Redis (redis is required): {:?}",
+            err
+        );
     }
 
     info!("starting server at http://0.0.0.0:8080{}", root);
     HttpServer::new(move || {
         App::new()
-            .wrap(middleware::NormalizePath::new(middleware::TrailingSlash::MergeOnly))
-            .service(web::scope(&root)
-                .service(web::resource("transcode_media/to_mp3")
-                    .name("transcode_mp3")
-                    .guard(guard::Get())
-                    .to(transcode_to_mp3))
-                .route("transcodize_rss", web::get().to(transcodize_rss))
-                .route("/", web::get().to(index))
-                .route("", web::get().to(index))
+            .wrap(middleware::NormalizePath::new(
+                middleware::TrailingSlash::MergeOnly,
+            ))
+            .service(
+                web::scope(&root)
+                    .service(
+                        web::resource("transcode_media/to_mp3")
+                            .name("transcode_mp3")
+                            .guard(guard::Get())
+                            .to(transcode_to_mp3),
+                    )
+                    .route("transcodize_rss", web::get().to(transcodize_rss))
+                    .route("/", web::get().to(index))
+                    .route("", web::get().to(index)),
             )
     })
-        .bind(("0.0.0.0", 8080))?
-        .run().await
+    .bind(("0.0.0.0", 8080))?
+    .run()
+    .await
 }
 
 async fn flush_redis_on_new_version() -> eyre::Result<()> {
@@ -45,36 +61,50 @@ async fn flush_redis_on_new_version() -> eyre::Result<()> {
     let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
     let mut con = client.get_tokio_connection().await?;
 
-    let cached_version : Option<String> = redis::cmd("GET").arg("version").query_async(&mut con).await?;
+    let cached_version: Option<String> = redis::cmd("GET")
+        .arg("version")
+        .query_async(&mut con)
+        .await?;
     debug!("cached app version {:?}", cached_version);
 
     if let Some(ref cached_version) = cached_version {
         if cached_version != app_version {
             info!("detected version change ({cached_version} != {app_version}) flushing redis DB");
-            let _ : () = redis::cmd("FLUSHDB").query_async(&mut con).await?;
+            let _: () = redis::cmd("FLUSHDB").query_async(&mut con).await?;
         }
     }
 
-
-    let _ : () = redis::cmd("SET").arg("version").arg(app_version).query_async(&mut con).await?;
+    let _: () = redis::cmd("SET")
+        .arg("version")
+        .arg(app_version)
+        .query_async(&mut con)
+        .await?;
     debug!("set cached app version to {app_version}");
 
     Ok(())
 }
 
 async fn index(req: HttpRequest) -> HttpResponse {
-    if let (Some(user_agent), Some(remote_addr), Some(referer)) = (req.headers().get("User-Agent"), req.connection_info().peer_addr(), req.headers().get("Referer")) {
-        info!("serving homepage - User-Agent: {}, Remote Address: {}, Referer: {}", user_agent.to_str().unwrap(), remote_addr.to_string(), referer.to_str().unwrap());
+    if let (Some(user_agent), Some(remote_addr), Some(referer)) = (
+        req.headers().get("User-Agent"),
+        req.connection_info().peer_addr(),
+        req.headers().get("Referer"),
+    ) {
+        info!(
+            "serving homepage - User-Agent: {}, Remote Address: {}, Referer: {}",
+            user_agent.to_str().unwrap(),
+            remote_addr.to_string(),
+            referer.to_str().unwrap()
+        );
     }
 
     let html = std::fs::read_to_string("./templates/index.html").unwrap();
     HttpResponse::Ok().content_type("text/html").body(html)
 }
 
-
 async fn transcodize_rss(
     req: HttpRequest,
-    query: web::Query<HashMap<String, String>>
+    query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
     let start_time = Instant::now();
 
@@ -97,19 +127,30 @@ async fn transcodize_rss(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    let provider = provider::from(&parsed_url);
+    let provider = provider::from_v2(&parsed_url);
 
-    if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&parsed_url.to_string())) {
+    if !provider
+        .domain_whitelist_regexes()
+        .iter()
+        .any(|r| r.is_match(&parsed_url.to_string()))
+    {
         error!("supplied url ({parsed_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
 
-    let converted_url = match provider.feed_url().await {
-        Ok(x) => x,
-        Err(e) => {error!("fail when trying to convert channel {e}"); return HttpResponse::BadRequest().body(e.to_string())},
+    let raw_rss = match provider.generate_rss_feed(parsed_url.clone()).await {
+        Ok(raw_rss) => raw_rss,
+        Err(e) => {
+            error!("could not generate rss feed for {parsed_url}:\n{e}");
+            return HttpResponse::Conflict().finish();
+        }
     };
-
-    let rss_transcodizer = RssTranscodizer::new(converted_url, transcode_service_url, should_transcode);
+    let rss_transcodizer = RssTranscodizer::new(
+        parsed_url.clone(),
+        transcode_service_url,
+        should_transcode,
+        raw_rss,
+    );
 
     let body = match rss_transcodizer.transcodize().await {
         Ok(body) => body,
@@ -124,9 +165,10 @@ async fn transcodize_rss(
     let duration = end_time - start_time;
     debug!("rss generation took {} seconds", duration.as_secs_f32());
 
-    HttpResponse::Ok().content_type("application/xml").body(body)
+    HttpResponse::Ok()
+        .content_type("application/xml")
+        .body(body)
 }
-
 
 #[derive(Deserialize)]
 struct TranscodizeQuery {
@@ -135,9 +177,14 @@ struct TranscodizeQuery {
     duration: usize,
 }
 
-fn parse_range_header(content_range_str: &str, bytes_count: usize) -> eyre::Result<(usize, usize, usize)> {
+fn parse_range_header(
+    content_range_str: &str,
+    bytes_count: usize,
+) -> eyre::Result<(usize, usize, usize)> {
     let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?")?;
-    let captures = if let Some(x) = re.captures_iter(content_range_str).next() { x } else {
+    let captures = if let Some(x) = re.captures_iter(content_range_str).next() {
+        x
+    } else {
         return Err(eyre::eyre!("content range regex failed"));
     };
 
@@ -151,18 +198,17 @@ fn parse_range_header(content_range_str: &str, bytes_count: usize) -> eyre::Resu
     }
 
     if end == start {
-        return Err(eyre::eyre!("The requested Rage header with a length of 0 is invalid: {content_range_str}"));
+        return Err(eyre::eyre!(
+            "The requested Rage header with a length of 0 is invalid: {content_range_str}"
+        ));
     }
 
-    let expected = (end + 1) - start ;
+    let expected = (end + 1) - start;
 
     Ok((start, end, expected))
 }
 
-async fn transcode_to_mp3(
-    req: HttpRequest,
-    query: web::Query<TranscodizeQuery>,
-) -> HttpResponse {
+async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>) -> HttpResponse {
     let stream_url = &query.url;
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
@@ -177,7 +223,11 @@ async fn transcode_to_mp3(
 
     let provider = provider::from(&stream_url);
 
-    if !provider.domain_whitelist_regexes().iter().any(|r| r.is_match(&stream_url.to_string())) {
+    if !provider
+        .domain_whitelist_regexes()
+        .iter()
+        .any(|r| r.is_match(&stream_url.to_string()))
+    {
         error!("supplied url ({stream_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
@@ -191,11 +241,11 @@ async fn transcode_to_mp3(
 
     debug!("received content range {content_range_str}");
 
-
-    let (start_bytes, end_bytes, expected_bytes) = match parse_range_header(content_range_str, total_streamable_bytes) {
-        Ok((start, end, expected)) => (start, end, expected),
-        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
-    };
+    let (start_bytes, end_bytes, expected_bytes) =
+        match parse_range_header(content_range_str, total_streamable_bytes) {
+            Ok((start, end, expected)) => (start, end, expected),
+            Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+        };
 
     debug!("requested content-range: bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}");
 
@@ -203,7 +253,8 @@ async fn transcode_to_mp3(
         return HttpResponse::RangeNotSatisfiable().finish();
     }
 
-    let seek_secs = ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
+    let seek_secs =
+        ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
     debug!("choosen seek_time: {seek_secs}");
     let codec = conf().get(ConfName::AudioCodec).unwrap().into();
     let ffmpeg_paramenters = FfmpegParameters {
@@ -220,17 +271,23 @@ async fn transcode_to_mp3(
         Ok(transcoder) => {
             let stream = transcoder.get_transcode_stream();
 
-            let mut response_builder = if ffmpeg_paramenters.seek_time <= 0.1 { HttpResponse::Ok() } else { HttpResponse::PartialContent() };
+            let mut response_builder = if ffmpeg_paramenters.seek_time <= 0.1 {
+                HttpResponse::Ok()
+            } else {
+                HttpResponse::PartialContent()
+            };
 
-            response_builder.insert_header(("Accept-Ranges", "bytes"))
-                .insert_header(("Content-Range", format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}")))
+            response_builder
+                .insert_header(("Accept-Ranges", "bytes"))
+                .insert_header((
+                    "Content-Range",
+                    format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}"),
+                ))
                 .content_type(codec.get_mime_type_str())
                 .no_chunking((expected_bytes).try_into().unwrap())
                 .streaming(stream)
         }
-        Err(e) => {
-            HttpResponse::ServiceUnavailable().body(e.to_string())
-        },
+        Err(e) => HttpResponse::ServiceUnavailable().body(e.to_string()),
     }
 }
 

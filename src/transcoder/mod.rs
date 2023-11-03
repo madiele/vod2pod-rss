@@ -1,20 +1,20 @@
 use std::error::Error;
-use std::process::Command;
 use std::io::Read;
+use std::process::Command;
+use std::process::Stdio;
 use std::thread::sleep;
 use std::time::Duration;
-use std::process::Stdio;
 
 use actix_web::web::Bytes;
 use futures::Future;
-use genawaiter::sync::{ Gen, Co };
+use genawaiter::sync::{Co, Gen};
 use log::info;
-use log::{ debug, error, warn };
+use log::{debug, error, warn};
 use reqwest::Url;
 use serde::Serialize;
+use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::channel;
 
 use crate::configs::AudioCodec;
 use crate::provider;
@@ -42,7 +42,7 @@ pub struct Transcoder {
 
 impl Transcoder {
     pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
-        let provider = provider::from(&ffmpeg_paramenters.url);
+        let provider = provider::from_v2(&ffmpeg_paramenters.url);
 
         let ffmpeg_command = Self::get_ffmpeg_command(&FfmpegParameters {
             seek_time: ffmpeg_paramenters.seek_time,
@@ -50,10 +50,13 @@ impl Transcoder {
             audio_codec: ffmpeg_paramenters.audio_codec.to_owned(),
             bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
             max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
-            expected_bytes_count: ffmpeg_paramenters.expected_bytes_count
+            expected_bytes_count: ffmpeg_paramenters.expected_bytes_count,
         });
 
-        Ok(Self { ffmpeg_command, expected_bytes_count: ffmpeg_paramenters.expected_bytes_count})
+        Ok(Self {
+            ffmpeg_command,
+            expected_bytes_count: ffmpeg_paramenters.expected_bytes_count,
+        })
     }
 
     fn get_ffmpeg_command(ffmpeg_paramenters: &FfmpegParameters) -> Command {
@@ -63,16 +66,31 @@ impl Transcoder {
         command_ref
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
-            .args(["-acodec", ffmpeg_paramenters.audio_codec.get_ffmpeg_codec_str()])
-            .args(["-ab", format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str()])
+            .args([
+                "-acodec",
+                ffmpeg_paramenters.audio_codec.get_ffmpeg_codec_str(),
+            ])
+            .args([
+                "-ab",
+                format!("{}k", ffmpeg_paramenters.bitrate_kbit).as_str(),
+            ])
             .args(["-f", ffmpeg_paramenters.audio_codec.get_extension_str()])
-            .args(["-bufsize", (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str()])
-            .args(["-maxrate", format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str()])
+            .args([
+                "-bufsize",
+                (ffmpeg_paramenters.bitrate_kbit * 30).to_string().as_str(),
+            ])
+            .args([
+                "-maxrate",
+                format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str(),
+            ])
             .args(["-timeout", "300"])
             .args(["-hide_banner"])
             .args(["-loglevel", "error"])
             .args(["pipe:stdout"]);
-        let args: Vec<String> = command_ref.get_args().map(|x| {x.to_string_lossy().to_string()}).collect();
+        let args: Vec<String> = command_ref
+            .get_args()
+            .map(|x| x.to_string_lossy().to_string())
+            .collect();
         info!(
             "generated ffmpeg command:\n{} {}",
             command_ref.get_program().to_string_lossy(),
@@ -84,11 +102,10 @@ impl Transcoder {
     pub fn get_transcode_stream(
         self,
     ) -> Gen<Result<Bytes, impl Error>, (), impl Future<Output = ()>> {
-
         async fn generetor_coroutine(
             mut command: Command,
             expected_bytes_count: usize,
-            co: Co<Result<Bytes, std::io::Error>>
+            co: Co<Result<Bytes, std::io::Error>>,
         ) {
             let mut child = command
                 .stdout(Stdio::piped())
@@ -100,30 +117,34 @@ impl Transcoder {
             let mut out = child.stdout.take().expect("failed to open stdout");
 
             let channel_size: usize = 10;
-            let (tx, mut rx): (Sender<Result<Bytes, std::io::Error>>,
-                                    Receiver<Result<Bytes, std::io::Error>>) = channel(channel_size);
+            let (tx, mut rx): (
+                Sender<Result<Bytes, std::io::Error>>,
+                Receiver<Result<Bytes, std::io::Error>>,
+            ) = channel(channel_size);
 
             let tx_stdout = tx.clone();
             let tx_stderr = tx;
 
             //stderr thread
-            std::thread::spawn(move || {
-                loop {
-                    let mut buf = String::new();
-                    match err.read_to_string(&mut buf) {
-                        Ok(0) => {
-                            debug!("ffmpeg stderr closed");
-                            break;
-                        },
-                        Ok(_) => {
-                            error!("{}", buf);
-                            let _ = tx_stderr.blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, buf)));
-                        },
-                        Err(e) => {
-                            error!("failed to read from stderr: {}", e);
-                            let _ = tx_stderr.blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, e)));
-                            break;
-                        }
+            std::thread::spawn(move || loop {
+                let mut buf = String::new();
+                match err.read_to_string(&mut buf) {
+                    Ok(0) => {
+                        debug!("ffmpeg stderr closed");
+                        break;
+                    }
+                    Ok(_) => {
+                        error!("{}", buf);
+                        let _ = tx_stderr.blocking_send(Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            buf,
+                        )));
+                    }
+                    Err(e) => {
+                        error!("failed to read from stderr: {}", e);
+                        let _ = tx_stderr
+                            .blocking_send(Err(std::io::Error::new(std::io::ErrorKind::Other, e)));
+                        break;
                     }
                 }
             });
@@ -137,11 +158,12 @@ impl Transcoder {
                 loop {
                     match out.read(&mut buff) {
                         Ok(read_bytes) => {
-
                             if sent_bytes_count + read_bytes > expected_bytes_count {
                                 //partial request is fulfilled we only need to send the remaining data
                                 let bytes_remaining = expected_bytes_count - sent_bytes_count;
-                                _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..bytes_remaining])));
+                                _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(
+                                    &buff[..bytes_remaining],
+                                )));
                                 info!("transcoded everything in partial request");
                                 _ = child.kill();
                                 _ = child.wait();
@@ -152,14 +174,20 @@ impl Transcoder {
                                 info!("transcoded everything");
                                 //pad end of stream with 00000000 bytes if client expects more data to be sent
                                 const NULL_BUFF: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-                                debug!("sending {} bytes of padding", expected_bytes_count - sent_bytes_count);
+                                debug!(
+                                    "sending {} bytes of padding",
+                                    expected_bytes_count - sent_bytes_count
+                                );
                                 while sent_bytes_count < expected_bytes_count {
                                     let padding_bytes = expected_bytes_count - sent_bytes_count;
                                     if padding_bytes >= BUFFER_SIZE {
-                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF)));
+                                        _ = tx_stdout
+                                            .blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF)));
                                         sent_bytes_count += BUFFER_SIZE;
                                     } else {
-                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)])));
+                                        _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(
+                                            &NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)],
+                                        )));
                                         sent_bytes_count += padding_bytes;
                                     }
                                 }
@@ -167,7 +195,8 @@ impl Transcoder {
                                 break;
                             }
 
-                            let send_res = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes])));
+                            let send_res = tx_stdout
+                                .blocking_send(Ok(Bytes::copy_from_slice(&buff[..read_bytes])));
 
                             if let Err(e) = send_res {
                                 debug!("{}", e);
@@ -178,24 +207,10 @@ impl Transcoder {
                             };
                             sent_bytes_count += read_bytes;
                         }
-                        Err(e) => {
-                            match e.kind() {
-                                std::io::ErrorKind::Interrupted => {
-                                    if tries > 10 {
-                                        error!("read was interrupted too many times");
-                                        if let Err(err) = tx_stdout.blocking_send(Err(e)) {
-                                            error!("unexpected error occured:");
-                                            error!("{}", err);
-                                            _ = child.kill();
-                                            _ = child.wait();
-                                            break;
-                                        };
-                                    }
-                                    warn!("read was interrupted, retrying in 1sec");
-                                    let _ = sleep(Duration::from_secs(1));
-                                    tries += 1;
-                                }
-                                _ => {
+                        Err(e) => match e.kind() {
+                            std::io::ErrorKind::Interrupted => {
+                                if tries > 10 {
+                                    error!("read was interrupted too many times");
                                     if let Err(err) = tx_stdout.blocking_send(Err(e)) {
                                         error!("unexpected error occured:");
                                         error!("{}", err);
@@ -203,19 +218,33 @@ impl Transcoder {
                                         _ = child.wait();
                                         break;
                                     };
-                                },
+                                }
+                                warn!("read was interrupted, retrying in 1sec");
+                                let _ = sleep(Duration::from_secs(1));
+                                tries += 1;
                             }
-                        }
+                            _ => {
+                                if let Err(err) = tx_stdout.blocking_send(Err(e)) {
+                                    error!("unexpected error occured:");
+                                    error!("{}", err);
+                                    _ = child.kill();
+                                    _ = child.wait();
+                                    break;
+                                };
+                            }
+                        },
                     };
                 }
             });
-
 
             info!("streaming to client");
             while let Some(x) = rx.recv().await {
                 match x {
                     Ok(bytes) => co.yield_(Ok(bytes)).await,
-                    Err(e) => { rx.close(); co.yield_(Err(e)).await },
+                    Err(e) => {
+                        rx.close();
+                        co.yield_(Err(e)).await
+                    }
                 }
             }
         }
@@ -225,8 +254,8 @@ impl Transcoder {
 
 #[cfg(test)]
 mod test {
-    use log::info;
     use super::*;
+    use log::info;
 
     #[tokio::test]
     async fn check_ffmpeg_command() {
@@ -301,3 +330,4 @@ mod test {
         }
     }
 }
+

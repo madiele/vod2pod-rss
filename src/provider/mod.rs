@@ -11,13 +11,27 @@ use reqwest::Url;
 use rss::extension::itunes::ITunesChannelExtensionBuilder;
 
 use crate::provider::{
-    generic::GenericProvider, peertube::PeertubeProvider, twitch::TwitchProvider,
-    youtube::YoutubeProvider,
+    generic::{GenericProvider, GenericProviderV2},
+    peertube::{PeerTubeProviderV2, PeertubeProvider},
+    twitch::{TwitchProvider, TwitchProviderV2},
+    youtube::{YoutubeProvider, YoutubeProviderV2},
 };
 
 macro_rules! dispatch_if_match {
     ($url: expr, $provider: ident) => {
         let provider = $provider::new($url);
+        for regex in provider.domain_whitelist_regexes() {
+            if regex.is_match(&$url.to_string()) {
+                debug!("using {}", stringify!($provider));
+                return Box::new(provider);
+            }
+        }
+    };
+}
+
+macro_rules! dispatch_if_match_v2 {
+    ($url: expr, $provider: ident) => {
+        let provider = $provider::new();
         for regex in provider.domain_whitelist_regexes() {
             if regex.is_match(&$url.to_string()) {
                 debug!("using {}", stringify!($provider));
@@ -33,6 +47,14 @@ pub fn from(url: &Url) -> Box<dyn MediaProvider> {
     dispatch_if_match!(url, PeertubeProvider);
     debug!("using GenericProvider as provider");
     return Box::new(GenericProvider::new(url));
+}
+
+pub fn from_v2(url: &Url) -> Box<dyn MediaProviderV2> {
+    dispatch_if_match_v2!(url, YoutubeProviderV2);
+    dispatch_if_match_v2!(url, TwitchProviderV2);
+    dispatch_if_match_v2!(url, PeerTubeProviderV2);
+    debug!("using GenericProvider as provider");
+    return Box::new(GenericProviderV2::new());
 }
 
 /// This trait rappresent a provider offering a media stream (youtube, twitch, etc...).
@@ -182,6 +204,10 @@ pub trait MediaProviderV2 {
     /// limitation open an issue with a change request and why you need it to change.
     /// Also be warned missing a match here will cause the server to use the GenericProvider instead
     fn domain_whitelist_regexes(&self) -> Vec<Regex>;
+
+    /// Returns the regular expressions for matching media URLs during RSS/atom parsing.
+    /// this will eventually be passed to the get_stream_url()
+    fn media_url_regexes(&self) -> Vec<Regex>;
 
     /// Constructs the struct for the MediaProvider
     ///
