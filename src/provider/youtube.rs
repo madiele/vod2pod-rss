@@ -10,18 +10,18 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use async_trait::async_trait;
 use eyre::eyre;
-use feed_rs::model::{Entry, MediaObject};
-use log::{debug, error, info, warn};
+use feed_rs::model::Entry;
+use log::{debug, info, warn};
 use regex::Regex;
 use reqwest::Url;
 use rss::{
     extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
-    Channel, ChannelBuilder, Enclosure, Guid, GuidBuilder, Item, ItemBuilder,
+    Channel, ChannelBuilder, GuidBuilder, Item, ItemBuilder,
 };
 use tokio::process::Command;
 
 use crate::{
-    configs::{conf, AudioCodec, Conf, ConfName},
+    configs::{conf, Conf, ConfName},
     provider,
 };
 
@@ -283,15 +283,6 @@ async fn create_duration_url_map(
     Ok(video_infos)
 }
 
-fn fun_name(item: &PlaylistItem) -> Option<&String> {
-    item.snippet
-        .as_ref()?
-        .resource_id
-        .as_ref()?
-        .video_id
-        .as_ref()
-}
-
 fn build_channel_items_from_playlist(
     items: Vec<PlaylistItem>,
     videos_infos: HashMap<String, VideoExtraInfo>,
@@ -425,237 +416,6 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
     let client = hyper::Client::builder().build(connector);
     let hub = YouTube::new(client, auth);
     hub
-}
-
-struct ConvertItemsParams {
-    item: Entry,
-    transcode_service_url: Option<Url>,
-    feed_url: Url,
-}
-
-async fn convert_item(params: ConvertItemsParams) -> Option<Item> {
-    let item = params.item;
-    let transcode_service_url = params.transcode_service_url;
-
-    if let Some(community) = item
-        .media
-        .first()
-        .and_then(|media| media.community.as_ref())
-    {
-        if community.stats_views == Some(0) {
-            debug!(
-                "ignoring item with 0 views (probably youtube preview) with name: {:?}",
-                item.title
-            );
-            return None;
-        }
-    }
-
-    let mut item_builder = ItemBuilder::default();
-    let mut itunes_builder = ITunesItemExtensionBuilder::default();
-
-    if let Some(x) = &item.title {
-        debug!("item title: {}", x.content);
-        item_builder.title(Some(x.content.clone()));
-    }
-
-    let media_links = item
-        .media
-        .iter()
-        .map(|f| f.to_owned().content)
-        .flatten()
-        .filter_map(|x| x.url);
-
-    let item_links = item
-        .links
-        .iter()
-        .map(|x| x.to_owned().href)
-        .filter_map(|a| Url::parse(a.as_str()).ok());
-
-    let content_links = item
-        .content
-        .iter()
-        .filter_map(|x| x.to_owned().src)
-        .map(|x| x.href)
-        .filter_map(|a| Url::parse(a.as_str()).ok());
-
-    let mut all_items_iter = media_links.chain(item_links).chain(content_links);
-
-    let selected_url = all_items_iter.find(|x| {
-        let provider_regexes =
-            vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()];
-        return provider_regexes.iter().any(|y| y.is_match(&x.to_string()));
-    });
-
-    let Some(media_url) = selected_url else {
-        log::warn!(
-            "no media_url found out of:\n{:?}",
-            all_items_iter
-                .clone()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("\n")
-        );
-        log::warn!(
-            "links analyzed:\n{:?}",
-            all_items_iter
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("\n")
-        );
-        log::warn!(
-            "regex used:\n{:?}",
-            vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()]
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("\n")
-        );
-        return None;
-    };
-
-    let media_element = match item.media.first() {
-        Some(x) => x,
-        None => {
-            warn!("no media element found");
-            return None;
-        }
-    };
-
-    let description = get_description(&media_element, &item, &media_url);
-    item_builder.description(Some(description));
-
-    if let Some(x) = item.published {
-        debug!("Published date found: {:?}", x.to_rfc2822());
-        item_builder.pub_date(Some(x.to_rfc2822()));
-    }
-
-    if let Some(x) = &media_element.thumbnails.first() {
-        debug!("Thumbnail image found: {:?}", x.image.uri);
-        itunes_builder.image(Some(x.image.uri.clone()));
-    }
-
-    let duration = match media_element.duration {
-        Some(x) => {
-            debug!("duration found: {} secs", x.as_secs());
-            x
-        }
-        None => {
-            debug!("runnign regex on url: {}", media_url.as_str());
-            let regexes =
-                vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()];
-            if regexes.iter().any(|x| x.is_match(media_url.as_str())) {
-                let duration = match get_youtube_video_duration(media_url.to_owned()).await {
-                    Ok(Some(dur)) => Duration::from_secs(dur),
-                    Err(e) => {
-                        error!("Error getting youtube video duration: {:?}", e);
-                        Duration::default()
-                    }
-                    _ => Duration::default(),
-                };
-                duration
-            } else {
-                warn!(
-                    "no duration find using following regexs: {:?}",
-                    regexes
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<String>>()
-                        .join("\n")
-                );
-                Duration::default()
-            }
-        }
-    };
-
-    let duration_secs = duration.as_secs();
-    if duration_secs == 0 {
-        warn!(
-            "skipping episode with 0 duration with title {}",
-            &item
-                .title
-                .map(|t| t.content.to_string())
-                .unwrap_or_default()
-        );
-        return None;
-    }
-    let duration_string = format!(
-        "{:02}:{:02}:{:02}",
-        duration_secs / 3600,
-        (duration_secs % 3600) / 60,
-        (duration_secs % 60)
-    );
-    itunes_builder.duration(Some(duration_string));
-    //let mut transcode_service_url = transcode_service_url.clone();
-    if let Some(mut url) = transcode_service_url {
-        let bitrate: u64 = conf()
-            .get(ConfName::Mp3Bitrate)
-            .unwrap()
-            .parse()
-            .expect("MP3_BITRATE must be a number");
-        let generation_uuid = uuid::Uuid::new_v4().to_string();
-        let codec: AudioCodec = conf().get(ConfName::AudioCodec).unwrap().into();
-        let ext = format!(".{}", codec.get_extension_str());
-        url.query_pairs_mut()
-            .append_pair("bitrate", bitrate.to_string().as_str())
-            .append_pair("uuid", generation_uuid.as_str())
-            .append_pair("duration", duration_secs.to_string().as_str())
-            .append_pair("url", media_url.as_str())
-            .append_pair("ext", ext.as_str()); //this should allways be last, some players refuse to play urls not ending in .mp3
-        let enclosure = Enclosure {
-            length: (bitrate * 1024 * duration_secs).to_string(),
-            url: url.to_string(),
-            mime_type: "audio/mpeg".to_string(),
-        };
-
-        debug!(
-            "setting enclosure to: \nlength: {}, url: {}, mime_type: {}",
-            enclosure.length, enclosure.url, enclosure.mime_type
-        );
-
-        let guid = generate_guid(&item.id);
-        item_builder.guid(Some(guid));
-        item_builder.enclosure(Some(enclosure));
-    }
-
-    item_builder.itunes_ext(Some(itunes_builder.build()));
-    debug!(
-        "item parsing completed!\n------------------------------\n------------------------------"
-    );
-    Some(item_builder.build())
-}
-
-fn generate_guid(url: &str) -> Guid {
-    let digest: md5::Digest = md5::compute(url);
-    let md5_bytes_from_digest = digest.0;
-    let uuid_for_item: uuid::Builder = uuid::Builder::from_md5_bytes(md5_bytes_from_digest);
-    let uuid = uuid_for_item.as_uuid().clone();
-    let mut guid_builder = GuidBuilder::default();
-    guid_builder.permalink(true).value(uuid.to_string());
-    guid_builder.build()
-}
-
-fn get_description(media_element: &MediaObject, item: &Entry, url: &Url) -> String {
-    const FOOTER: &str = concat!(
-        "<br><br>generated by vod2pod-rss ",
-        env!("CARGO_PKG_VERSION"),
-        " made by Mattia Di Eleuterio (<a href=\"https://github.com/madiele\">madiele</a>). Check out the <a href=\"https://github.com/madiele/vod2pod-rss\">GitHub repository</a>."
-    );
-    let mut description = "".to_string();
-
-    if let Some(x) = &media_element.description {
-        debug!("Description found: {:?}", x.content);
-        description = x.content.clone();
-    } else if let Some(x) = &item.content {
-        debug!("Description found: {:?}", x);
-        description = x.body.clone().unwrap_or_default();
-    } else if let Some(x) = &item.summary {
-        debug!("Description found: {:?}", x);
-        description = x.content.to_string().clone();
-    }
-
-    let original_link = format!("<br><br><a href=\"{}\"><p>link to original</p></a>", url);
-    return format!("{}{}{}", description, original_link, FOOTER);
 }
 
 #[async_trait]
