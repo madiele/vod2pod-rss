@@ -341,13 +341,13 @@ fn vod_to_rss_item_converter(vod: Video) -> Item {
     item_builder.guid(Some(GuidBuilder::default().value(video_id.clone()).build()));
     item_builder.pub_date(Some(
         match DateTime::parse_from_rfc3339(published_at.as_str()) {
-            Ok(publish_date) => publish_date.to_string(),
+            Ok(publish_date) => publish_date.to_rfc2822().to_string(),
             Err(_) => {
                 warn!(
                     "Using default DateTime due to parsing error. {published_at} could not be parsed"
                 );
                 let default_date: DateTime<FixedOffset> = DateTime::default();
-                default_date.to_string()
+                default_date.to_rfc2822().to_string()
             }
         },
     ));
