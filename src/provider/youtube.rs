@@ -6,7 +6,7 @@ use google_youtube3::{
     api::{self, PlaylistItem},
     hyper, hyper_rustls, YouTube,
 };
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{collections::HashMap, str::FromStr};
 
 use async_trait::async_trait;
 use eyre::eyre;
@@ -26,7 +26,7 @@ use crate::{
 
 use super::MediaProviderV2;
 
-pub(super) struct YoutubeProviderV2 {}
+pub(super) struct YoutubeProvider {}
 
 enum IdType {
     Playlist(String),
@@ -34,7 +34,7 @@ enum IdType {
 }
 
 #[async_trait]
-impl MediaProviderV2 for YoutubeProviderV2 {
+impl MediaProviderV2 for YoutubeProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         return vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()];
     }
@@ -147,7 +147,7 @@ impl MediaProviderV2 for YoutubeProviderV2 {
     }
 
     fn new() -> Self {
-        YoutubeProviderV2 {}
+        YoutubeProvider {}
     }
 }
 
@@ -511,52 +511,6 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    io_cached(
-        map_error = r##"|e| eyre::Error::new(e)"##,
-        type = "AsyncRedisCache<Url, Option<u64>>",
-        create = r##" {
-        AsyncRedisCache::new("cached_yt_video_duration=", 86400)
-            .set_refresh(false)
-            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
-            .build()
-            .await
-            .expect("youtube_duration cache")
-} "##
-    )
-)]
-async fn get_youtube_video_duration(url: Url) -> eyre::Result<Option<u64>> {
-    debug!("getting duration for yt video: {}", url);
-
-    if let Ok(_) = conf().get(ConfName::YoutubeApiKey) {
-        let id = url
-            .query_pairs()
-            .find(|(key, _)| key == "v")
-            .map(|(_, value)| value)
-            .unwrap()
-            .to_string();
-        Ok(Some(get_yotube_duration_with_apikey(&id).await?.as_secs()))
-    } else {
-        acquire_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
-        let output = Command::new("yt-dlp")
-            .arg("--get-duration")
-            .arg(url.to_string())
-            .output()
-            .await;
-        release_semaphore("yt_duration_semaphore".to_string(), url.to_string()).await?;
-        if let Ok(x) = output {
-            let duration_str = std::str::from_utf8(&x.stdout).unwrap().trim().to_string();
-            Ok(Some(
-                parse_duration(&duration_str).unwrap_or_default().as_secs(),
-            ))
-        } else {
-            warn!("could not parse youtube video duration");
-            Ok(Some(0))
-        }
-    }
-}
-
 async fn feed_url_for_yt_playlist(url: &Url) -> eyre::Result<Url> {
     let playlist_id = url
         .query_pairs()
@@ -619,228 +573,11 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
     Ok(Url::parse(&feed_url)?)
 }
 
-async fn acquire_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
-    let redis_url = conf().get(ConfName::RedisUrl)?;
-    let client = redis::Client::open(redis_url)?;
-    let mut con = client.get_tokio_connection().await?;
-    let unix_timestamp_now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let mut pipe = redis::pipe();
-
-    pipe.zrembyscore(&semaphore_name, "-inf", unix_timestamp_now - 600);
-
-    pipe.zadd(&semaphore_name, &id, unix_timestamp_now);
-
-    pipe.query_async(&mut con).await?;
-
-    loop {
-        let count: u64 = redis::cmd("ZRANK")
-            .arg(&semaphore_name)
-            .arg(&id)
-            .query_async(&mut con)
-            .await?;
-        if count <= 4 {
-            debug!("semaphore {count} <= 4 letting {id} in");
-            break;
-        }
-        actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-
-    Ok(())
-}
-
-async fn release_semaphore(semaphore_name: String, id: String) -> eyre::Result<()> {
-    let redis_url = conf().get(ConfName::RedisUrl)?;
-    let client = redis::Client::open(redis_url)?;
-    let mut con = client.get_tokio_connection().await?;
-
-    debug!("releasing semaphore for {id}");
-    _ = redis::cmd("ZREM")
-        .arg(semaphore_name)
-        .arg(id)
-        .query_async(&mut con)
-        .await?;
-
-    Ok(())
-}
-
-//I know this code is over-engineered to hell, please don't judge me. I just wanted play around with redis
-async fn get_yotube_duration_with_apikey(id: &String) -> eyre::Result<Duration> {
-    let redis_url = conf().get(ConfName::RedisUrl)?;
-    let client = redis::Client::open(redis_url)?;
-    let mut con = client.get_tokio_connection().await?;
-    let lock_key = "youtube_duration_lock";
-    let queue_key = "youtube_duration_queue";
-    let hash_key = "youtube_duration_batch";
-    let lock_duration_secs = 10;
-    let batch_size = 50;
-    let sleep_duration = 300;
-
-    let _: i64 = redis::cmd("RPUSH")
-        .arg(queue_key)
-        .arg(&id)
-        .query_async(&mut con)
-        .await?;
-    debug!("Inserted video with ID {} into Redis queue", &id);
-
-    let lock: bool = redis::cmd("SET")
-        .arg(lock_key)
-        .arg("1")
-        .arg("NX")
-        .arg("EX")
-        .arg(lock_duration_secs)
-        .query_async(&mut con)
-        .await?;
-
-    if lock {
-        debug!("Redis lock has been acquired successfully");
-        actix_rt::time::sleep(std::time::Duration::from_millis(sleep_duration)).await;
-
-        while let Ok(queue_len) = redis::cmd("LLEN")
-            .arg(queue_key)
-            .query_async::<_, i64>(&mut con)
-            .await
-        {
-            if queue_len == 0 {
-                break;
-            };
-            let batch_end = queue_len - 1;
-            let batch_start = batch_end - batch_size + 1;
-            let batch: Vec<String> = redis::cmd("LRANGE")
-                .arg(queue_key)
-                .arg(batch_start)
-                .arg(batch_end)
-                .query_async(&mut con)
-                .await?;
-            debug!("Processing batch of {} items from Redis queue", batch.len());
-
-            let api_key = conf().get(ConfName::YoutubeApiKey)?;
-            let mut url = Url::parse("https://www.googleapis.com/youtube/v3/videos")?;
-            url.query_pairs_mut()
-                .append_pair("id", &batch.join(","))
-                .append_pair("part", "contentDetails")
-                .append_pair("key", &api_key);
-
-            let response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
-            debug!("retrived video infos from youtube apis");
-
-            let items = response["items"].as_array().unwrap();
-            let mut durations_by_id = Vec::new();
-            for item in items {
-                let id = item["id"]
-                    .as_str()
-                    .ok_or_else(|| eyre!("Failed to retrieve ID from item"))?
-                    .to_owned();
-                let duration_str = item["contentDetails"]["duration"]
-                    .as_str()
-                    .ok_or_else(|| eyre!("Failed to retrieve duration string from item."))?;
-                let duration = iso8601_duration::Duration::parse(duration_str)
-                    .map_err(|_| eyre!("could not parse yotube duration"))?;
-                durations_by_id.push((id, duration));
-            }
-
-            let mut pipe = redis::pipe();
-            for (id, duration) in durations_by_id {
-                pipe.hset(
-                    hash_key,
-                    id,
-                    duration.num_seconds().unwrap_or(0.0).round() as i32,
-                )
-                .ignore();
-            }
-            pipe.ltrim(queue_key, 0, (batch_start - 1).try_into()?)
-                .ignore();
-            pipe.del(lock_key).ignore();
-            let _: () = pipe.query_async(&mut con).await?;
-            debug!("finished retriving batch of durations with youtube api");
-        }
-    }
-
-    let mut duration_secs_str: Option<String> = None;
-    let mut count = 0;
-    while duration_secs_str.is_none() && count < 100 {
-        duration_secs_str = redis::cmd("HGET")
-            .arg(hash_key)
-            .arg(id)
-            .query_async(&mut con)
-            .await
-            .ok();
-        if duration_secs_str.is_none() {
-            actix_rt::time::sleep(Duration::from_millis(sleep_duration / 2)).await
-        };
-        count += 1;
-    }
-    debug!(
-        "duration found for {id}: {}",
-        duration_secs_str.clone().unwrap_or("???".to_string())
-    );
-    let duration = Duration::from_secs(
-        duration_secs_str
-            .ok_or_else(|| eyre!("duration_secs_str is None"))?
-            .parse()?,
-    );
-    return Ok(duration);
-}
-
-fn parse_duration(duration_str: &str) -> Result<Duration, String> {
-    println!("duration_str: {}", duration_str);
-    let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
-
-    let seconds = match duration_parts.get(0) {
-        Some(sec_str) => sec_str.parse().map_err(|_| "Invalid format".to_string())?,
-        None => 0,
-    };
-
-    let minutes = match duration_parts.get(1) {
-        Some(min_str) => min_str.parse().map_err(|_| "Invalid format".to_string())?,
-        None => 0,
-    };
-
-    let hours = match duration_parts.get(2) {
-        Some(hour_str) => hour_str.parse().map_err(|_| "Invalid format".to_string())?,
-        None => 0,
-    };
-
-    let duration_secs = hours * 3600 + minutes * 60 + seconds;
-    Ok(Duration::from_secs(duration_secs))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::youtube::parse_duration;
     use std::time::Duration;
     use test_log::test;
-
-    #[test]
-    fn test_parse_duration_hhmmss() {
-        assert_eq!(
-            parse_duration("01:02:03").unwrap(),
-            Duration::from_secs(3723)
-        );
-    }
-
-    #[test]
-    fn test_parse_duration_mmss() {
-        assert_eq!(parse_duration("30:45").unwrap(), Duration::from_secs(1845));
-    }
-
-    #[test]
-    fn test_parse_duration_ss() {
-        assert_eq!(parse_duration("15").unwrap(), Duration::from_secs(15));
-        assert_eq!(parse_duration("45").unwrap(), Duration::from_secs(45));
-    }
-
-    #[test]
-    fn test_parse_duration_wrong_format() {
-        assert_eq!(
-            parse_duration("invalid").unwrap_err(),
-            "Invalid format".to_string()
-        );
-    }
 
     #[tokio::test]
     async fn test_build_items_for_playlist() {
@@ -891,7 +628,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn test_fetch_youtube_channel_by_name() {
-        let provider = YoutubeProviderV2::new();
+        let provider = YoutubeProvider::new();
         let Ok(_api_key) = conf().get(ConfName::YoutubeApiKey) else {
             panic!("to run this test you need to set an api key for youtube.");
         };

@@ -6,10 +6,10 @@ use crate::configs::{conf, Conf, ConfName};
 
 use super::MediaProviderV2;
 
-pub struct GenericProviderV2 {}
+pub struct GenericProvider {}
 
 #[async_trait]
-impl MediaProviderV2 for GenericProviderV2 {
+impl MediaProviderV2 for GenericProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         let generic_whitelist = get_generic_whitelist();
 
@@ -38,7 +38,7 @@ impl MediaProviderV2 for GenericProviderV2 {
     where
         Self: Sized,
     {
-        GenericProviderV2 {}
+        GenericProvider {}
     }
 }
 

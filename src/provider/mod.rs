@@ -11,11 +11,11 @@ use reqwest::Url;
 use rss::extension::itunes::ITunesChannelExtensionBuilder;
 
 use crate::provider::{
-    generic::GenericProviderV2, peertube::PeerTubeProviderV2, twitch::TwitchProviderV2,
-    youtube::YoutubeProviderV2,
+    generic::GenericProvider, peertube::PeerTubeProvider, twitch::TwitchProvider,
+    youtube::YoutubeProvider,
 };
 
-macro_rules! dispatch_if_match_v2 {
+macro_rules! dispatch_if_match {
     ($url: expr, $provider: ident) => {
         let provider = $provider::new();
         for regex in provider.domain_whitelist_regexes() {
@@ -27,12 +27,12 @@ macro_rules! dispatch_if_match_v2 {
     };
 }
 
-pub fn from_v2(url: &Url) -> Box<dyn MediaProviderV2> {
-    dispatch_if_match_v2!(url, YoutubeProviderV2);
-    dispatch_if_match_v2!(url, TwitchProviderV2);
-    dispatch_if_match_v2!(url, PeerTubeProviderV2);
+pub fn from(url: &Url) -> Box<dyn MediaProviderV2> {
+    dispatch_if_match!(url, YoutubeProvider);
+    dispatch_if_match!(url, TwitchProvider);
+    dispatch_if_match!(url, PeerTubeProvider);
     debug!("using GenericProvider as provider");
-    return Box::new(GenericProviderV2::new());
+    return Box::new(GenericProvider::new());
 }
 
 /// This trait rappresent a provider offering a media stream (youtube, twitch, etc...).

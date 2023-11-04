@@ -21,10 +21,10 @@ use crate::{
 
 use super::MediaProviderV2;
 
-pub struct TwitchProviderV2 {}
+pub struct TwitchProvider {}
 
 #[async_trait]
-impl MediaProviderV2 for TwitchProviderV2 {
+impl MediaProviderV2 for TwitchProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         return vec![regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap()];
     }
@@ -126,7 +126,7 @@ impl MediaProviderV2 for TwitchProviderV2 {
     where
         Self: Sized,
     {
-        TwitchProviderV2 {}
+        TwitchProvider {}
     }
 }
 
@@ -397,7 +397,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn fetch_twitch_channel() {
-        let provider = TwitchProviderV2::new();
+        let provider = TwitchProvider::new();
         conf()
             .get(ConfName::TwitchSecretKey)
             .expect("to run this test set TWITCH_SECRET env var");

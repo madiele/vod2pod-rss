@@ -83,7 +83,7 @@ async fn transcodize_rss(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    let provider = provider::from_v2(&parsed_url);
+    let provider = provider::from(&parsed_url);
 
     if !provider
         .domain_whitelist_regexes()
@@ -94,6 +94,26 @@ async fn transcodize_rss(
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
 
+    //check cache
+    let Ok(mut redis) = crate::get_redis_client().await else {
+        error!("could not get redis client");
+        return HttpResponse::InternalServerError().finish();
+    };
+
+    let cached_rss: Option<String> = redis::cmd("GET")
+        .arg(&parsed_url.to_string())
+        .query_async(&mut redis)
+        .await
+        .unwrap_or_default();
+
+    if let Some(cached_rss) = cached_rss {
+        debug!("serving cached rss feed for {parsed_url}");
+        return HttpResponse::Ok()
+            .content_type("application/xml")
+            .body(cached_rss);
+    }
+
+    //generate rss feed
     let raw_rss = match provider.generate_rss_feed(parsed_url.clone()).await {
         Ok(raw_rss) => raw_rss,
         Err(e) => {
@@ -101,6 +121,8 @@ async fn transcodize_rss(
             return HttpResponse::Conflict().finish();
         }
     };
+
+    // rewrite urls in feed
     let injected_feed = rss_transcodizer::inject_vod2pod_customizations(
         raw_rss,
         should_transcode.then(|| transcode_service_url),
@@ -114,6 +136,17 @@ async fn transcodize_rss(
             return HttpResponse::Conflict().finish();
         }
     };
+
+    //set cache
+    const CACHE_TTL: &str = "600";
+    let _: () = redis::cmd("SET")
+        .arg(&parsed_url.to_string())
+        .arg(&body)
+        .arg("EX")
+        .arg(CACHE_TTL)
+        .query_async(&mut redis)
+        .await
+        .unwrap_or_default();
 
     let end_time = Instant::now();
     let duration = end_time - start_time;
@@ -175,7 +208,7 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
         }
     }
 
-    let provider = provider::from_v2(&stream_url);
+    let provider = provider::from(&stream_url);
 
     if !provider
         .domain_whitelist_regexes()

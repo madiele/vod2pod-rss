@@ -42,7 +42,7 @@ pub struct Transcoder {
 
 impl Transcoder {
     pub async fn new(ffmpeg_paramenters: &FfmpegParameters) -> eyre::Result<Self> {
-        let provider = provider::from_v2(&ffmpeg_paramenters.url);
+        let provider = provider::from(&ffmpeg_paramenters.url);
 
         let ffmpeg_command = Self::get_ffmpeg_command(&FfmpegParameters {
             seek_time: ffmpeg_paramenters.seek_time,

@@ -19,10 +19,10 @@ struct StreamingPlaylist {
     playlistUrl: Url,
 }
 
-pub struct PeerTubeProviderV2 {}
+pub struct PeerTubeProvider {}
 
 #[async_trait]
-impl MediaProviderV2 for PeerTubeProviderV2 {
+impl MediaProviderV2 for PeerTubeProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         let hosts = get_peertube_hosts();
         let mut regexes: Vec<Regex> = Vec::with_capacity(hosts.len());
@@ -66,7 +66,7 @@ impl MediaProviderV2 for PeerTubeProviderV2 {
     where
         Self: Sized,
     {
-        PeerTubeProviderV2 {}
+        PeerTubeProvider {}
     }
 }
 
