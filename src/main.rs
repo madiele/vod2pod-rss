@@ -8,7 +8,7 @@ use std::{collections::HashMap, time::Instant};
 use vod2pod_rss::{
     configs::{conf, Conf, ConfName},
     provider,
-    rss_transcodizer::RssTranscodizer,
+    rss_transcodizer::{self},
     transcoder::{FfmpegParameters, Transcoder},
 };
 
@@ -145,17 +145,15 @@ async fn transcodize_rss(
             return HttpResponse::Conflict().finish();
         }
     };
-    let rss_transcodizer = RssTranscodizer::new(
-        parsed_url.clone(),
-        transcode_service_url,
-        should_transcode,
+    let injected_feed = rss_transcodizer::inject_vod2pod_customizations(
         raw_rss,
+        should_transcode.then(|| transcode_service_url),
     );
 
-    let body = match rss_transcodizer.transcodize().await {
+    let body = match injected_feed {
         Ok(body) => body,
         Err(e) => {
-            error!("could not translate rss");
+            error!("could not inject vod2pod customizations into generated feed");
             error!("{e}");
             return HttpResponse::Conflict().finish();
         }
