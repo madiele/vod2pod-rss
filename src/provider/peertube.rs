@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::configs::{conf, Conf, ConfName};
 
-use super::MediaProviderV2;
+use super::MediaProvider;
 
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
@@ -22,7 +22,7 @@ struct StreamingPlaylist {
 pub struct PeerTubeProvider {}
 
 #[async_trait]
-impl MediaProviderV2 for PeerTubeProvider {
+impl MediaProvider for PeerTubeProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         let hosts = get_peertube_hosts();
         let mut regexes: Vec<Regex> = Vec::with_capacity(hosts.len());

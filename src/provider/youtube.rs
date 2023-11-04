@@ -24,7 +24,7 @@ use crate::{
     provider,
 };
 
-use super::MediaProviderV2;
+use super::MediaProvider;
 
 pub(super) struct YoutubeProvider {}
 
@@ -34,7 +34,7 @@ enum IdType {
 }
 
 #[async_trait]
-impl MediaProviderV2 for YoutubeProvider {
+impl MediaProvider for YoutubeProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         return vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()];
     }

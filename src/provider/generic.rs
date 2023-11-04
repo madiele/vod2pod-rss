@@ -4,12 +4,12 @@ use reqwest::Url;
 
 use crate::configs::{conf, Conf, ConfName};
 
-use super::MediaProviderV2;
+use super::MediaProvider;
 
 pub struct GenericProvider {}
 
 #[async_trait]
-impl MediaProviderV2 for GenericProvider {
+impl MediaProvider for GenericProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         let generic_whitelist = get_generic_whitelist();
 

@@ -19,12 +19,12 @@ use crate::{
     provider,
 };
 
-use super::MediaProviderV2;
+use super::MediaProvider;
 
 pub struct TwitchProvider {}
 
 #[async_trait]
-impl MediaProviderV2 for TwitchProvider {
+impl MediaProvider for TwitchProvider {
     fn media_url_regexes(&self) -> Vec<Regex> {
         return vec![regex::Regex::new(r"^https?://(.*\.)?cloudfront\.net/").unwrap()];
     }
