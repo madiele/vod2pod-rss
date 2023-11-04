@@ -8,7 +8,7 @@ use regex::Regex;
 use reqwest::Url;
 use rss::{
     extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
-    GuidBuilder, Item, ItemBuilder,
+    GuidBuilder, ImageBuilder, Item, ItemBuilder,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -148,6 +148,7 @@ impl MediaProviderV2 for TwitchProviderV2 {
 
         let mut channel_builder = provider::build_default_rss_structure();
 
+        let mut image_builder = ImageBuilder::default();
         channel_builder
             .title(channel.display_name.clone())
             .link(channel_url.clone())
@@ -157,6 +158,9 @@ impl MediaProviderV2 for TwitchProviderV2 {
                     .image(Some(channel.profile_image_url.clone()))
                     .author(Some(channel.display_name.clone()))
                     .build(),
+            ))
+            .image(Some(
+                image_builder.url(channel.profile_image_url.clone()).build(),
             ));
 
         let rss_items = build_items_from_vods(vods);

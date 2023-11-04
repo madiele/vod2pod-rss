@@ -28,12 +28,17 @@ pub fn spawn_server(listener: TcpListener) -> eyre::Result<Server> {
                             .to(transcode_to_mp3),
                     )
                     .route("transcodize_rss", web::get().to(transcodize_rss))
+                    .route("health", web::get().to(health))
                     .route("/", web::get().to(index))
                     .route("", web::get().to(index)),
             )
     })
     .listen(listener)?
     .run())
+}
+
+async fn health() -> HttpResponse {
+    HttpResponse::Ok().finish()
 }
 
 async fn index(req: HttpRequest) -> HttpResponse {

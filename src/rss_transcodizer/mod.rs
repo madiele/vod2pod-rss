@@ -86,7 +86,8 @@ pub fn inject_vod2pod_customizations(
             Ok(())
         })
         .collect::<eyre::Result<_>>()?;
-    todo!()
+
+    Ok(injected_feed.to_string())
 }
 
 /// This module takes in an URL to an rss/atom feed, fetches it and converts it to a

@@ -16,7 +16,7 @@ use regex::Regex;
 use reqwest::Url;
 use rss::{
     extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
-    Channel, ChannelBuilder, GuidBuilder, Item, ItemBuilder,
+    Channel, ChannelBuilder, GuidBuilder, ImageBuilder, Item, ItemBuilder,
 };
 use tokio::process::Command;
 
@@ -83,7 +83,18 @@ impl MediaProviderV2 for YoutubeProviderV2 {
                 feed_builder.description(video_items.0.description);
                 feed_builder.title(video_items.0.title);
                 feed_builder.language(video_items.0.language.take());
+                let mut image_builder = ImageBuilder::default();
+                image_builder.url(
+                    video_items
+                        .0
+                        .itunes_ext
+                        .clone()
+                        .and_then(|it| it.image)
+                        .unwrap_or_default(),
+                );
+                feed_builder.image(Some(image_builder.build()));
                 feed_builder.itunes_ext(video_items.0.itunes_ext.take());
+                feed_builder.link(video_items.0.link);
 
                 feed_builder.items(video_items.1);
 
@@ -197,14 +208,53 @@ fn build_channel_from_yt_channel(channel: api::Channel) -> Channel {
         channel_builder.description(snippet.description.take().unwrap_or("".to_owned()));
         channel_builder.title(snippet.title.take().unwrap_or("".to_owned()));
         channel_builder.language(snippet.default_language.take());
-        if let Some(mut thumb) = snippet.thumbnails.and_then(|thumbs| thumbs.standard) {
+        if let Some(mut thumb) = get_thumb_from_channel_snippet(snippet) {
             itunes_channel_builder.image(thumb.url.take());
         }
         itunes_channel_builder.explicit(Some("no".to_owned()));
     }
+    channel_builder.link(format!(
+        "https://www.youtube.com/channel/{}",
+        channel.id.unwrap_or_default()
+    ));
 
     channel_builder.itunes_ext(Some(itunes_channel_builder.build()));
     channel_builder.build()
+}
+
+fn get_thumb_from_playlist_snippet(snippet: api::PlaylistSnippet) -> Option<api::Thumbnail> {
+    snippet.thumbnails.and_then(|thumbs| {
+        thumbs
+            .default
+            .or(thumbs.standard)
+            .or(thumbs.medium)
+            .or(thumbs.high)
+            .or(thumbs.maxres)
+    })
+}
+
+fn get_thumb_from_playlist_item_snippet(
+    snippet: api::PlaylistItemSnippet,
+) -> Option<api::Thumbnail> {
+    snippet.thumbnails.and_then(|thumbs| {
+        thumbs
+            .default
+            .or(thumbs.standard)
+            .or(thumbs.medium)
+            .or(thumbs.high)
+            .or(thumbs.maxres)
+    })
+}
+
+fn get_thumb_from_channel_snippet(snippet: api::ChannelSnippet) -> Option<api::Thumbnail> {
+    snippet.thumbnails.and_then(|thumbs| {
+        thumbs
+            .default
+            .or(thumbs.standard)
+            .or(thumbs.medium)
+            .or(thumbs.high)
+            .or(thumbs.maxres)
+    })
 }
 
 async fn fetch_channel(id: String, api_key: &str) -> eyre::Result<api::Channel> {
@@ -293,10 +343,10 @@ fn build_channel_items_from_playlist(
     let rss_item: Vec<Item> = items
         .into_iter()
         .filter_map(|item| {
-            let snippet = item.snippet?;
-            let title = snippet.title.unwrap_or("".to_owned());
-            let description = snippet.description.unwrap_or("".to_owned());
-            let video_id = snippet.resource_id?.video_id?;
+            let mut snippet = item.snippet?;
+            let title = snippet.title.take().unwrap_or("".to_owned());
+            let description = snippet.description.take().unwrap_or("".to_owned());
+            let video_id = snippet.resource_id.take()?.video_id?;
             let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", &video_id)).ok()?;
             let mut item_builder = ItemBuilder::default();
             item_builder.title(Some(title));
@@ -308,7 +358,7 @@ fn build_channel_items_from_playlist(
                     .published_at
                     .and_then(|pub_date| Some(pub_date.to_rfc2822().to_string())),
             );
-            item_builder.author(Some(snippet.channel_title?));
+            item_builder.author(snippet.channel_title.take());
             let video_infos = videos_infos.get(&video_id).or_else(|| {
                 warn!("no duration found for {:?}", &video_id);
                 None
@@ -321,7 +371,7 @@ fn build_channel_items_from_playlist(
                     let seconds = video_infos.duration.second;
                     format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
                 }))
-                .image(snippet.thumbnails.and_then(|t| t.high?.url))
+                .image(get_thumb_from_playlist_item_snippet(snippet).and_then(|t| t.url))
                 .build();
             item_builder.itunes_ext(Some(itunes_item_extension));
             Some(item_builder.build())
@@ -382,7 +432,11 @@ fn build_channel_from_playlist(playlist: api::Playlist) -> Channel {
         channel_builder.description(snippet.description.take().unwrap_or("".to_owned()));
         channel_builder.title(snippet.title.take().unwrap_or("".to_owned()));
         channel_builder.language(snippet.default_language.take());
-        if let Some(mut thumb) = snippet.thumbnails.and_then(|thumbs| thumbs.standard) {
+        channel_builder.link(format!(
+            "https://www.youtube.com/playlist?list={}",
+            playlist.id.unwrap_or_default()
+        ));
+        if let Some(mut thumb) = get_thumb_from_playlist_snippet(snippet) {
             itunes_channel_builder.image(thumb.url.take());
         }
     }
