@@ -2,11 +2,12 @@
 use cached::proc_macro::io_cached;
 #[allow(unused_imports)]
 use cached::AsyncRedisCache;
+use feed_rs::model::Feed;
 use google_youtube3::{
     api::{self, PlaylistItem},
     hyper, hyper_rustls, YouTube,
 };
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use async_trait::async_trait;
 use eyre::eyre;
@@ -116,7 +117,15 @@ impl MediaProvider for YoutubeProvider {
                     _ => Err(eyre!("unsupported youtube url")),
                 }?;
                 let raw_atom_feed = reqwest::get(feed).await?.text().await?;
-                return Ok(convert_atom_to_rss(raw_atom_feed));
+                let feed = feed_rs::parser::parse(&raw_atom_feed.into_bytes()[..]).unwrap();
+                let mut duration_map: HashMap<String, Option<usize>> = HashMap::default();
+                for link in feed.clone().entries.iter().filter_map(|e| e.links.first()) {
+                    duration_map.insert(
+                        link.clone().href,
+                        get_youtube_video_duration_with_ytdlp(&link.href.parse::<Url>()?).await?,
+                    );
+                }
+                return Ok(convert_atom_to_rss(feed, duration_map));
             }
         }
     }
@@ -220,11 +229,11 @@ fn build_channel_from_yt_channel(channel: api::Channel) -> Channel {
 fn get_thumb_from_playlist_snippet(snippet: api::PlaylistSnippet) -> Option<api::Thumbnail> {
     snippet.thumbnails.and_then(|thumbs| {
         thumbs
-            .default
-            .or(thumbs.standard)
-            .or(thumbs.medium)
+            .maxres
             .or(thumbs.high)
-            .or(thumbs.maxres)
+            .or(thumbs.medium)
+            .or(thumbs.standard)
+            .or(thumbs.default)
     })
 }
 
@@ -233,22 +242,22 @@ fn get_thumb_from_playlist_item_snippet(
 ) -> Option<api::Thumbnail> {
     snippet.thumbnails.and_then(|thumbs| {
         thumbs
-            .default
-            .or(thumbs.standard)
-            .or(thumbs.medium)
+            .maxres
             .or(thumbs.high)
-            .or(thumbs.maxres)
+            .or(thumbs.medium)
+            .or(thumbs.standard)
+            .or(thumbs.default)
     })
 }
 
 fn get_thumb_from_channel_snippet(snippet: api::ChannelSnippet) -> Option<api::Thumbnail> {
     snippet.thumbnails.and_then(|thumbs| {
         thumbs
-            .default
-            .or(thumbs.standard)
-            .or(thumbs.medium)
+            .maxres
             .or(thumbs.high)
-            .or(thumbs.maxres)
+            .or(thumbs.medium)
+            .or(thumbs.standard)
+            .or(thumbs.default)
     })
 }
 
@@ -573,8 +582,7 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
     Ok(Url::parse(&feed_url)?)
 }
 
-fn convert_atom_to_rss(raw_atom: String) -> String {
-    let feed = feed_rs::parser::parse(&raw_atom.into_bytes()[..]).unwrap();
+fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>) -> String {
     let mut feed_builder = provider::build_default_rss_structure();
     feed_builder.description(feed.description.map(|d| d.content).unwrap_or_default());
     feed_builder.title(feed.title.map(|d| d.content).unwrap_or_default());
@@ -604,7 +612,8 @@ fn convert_atom_to_rss(raw_atom: String) -> String {
                     .first()
                     .and_then(|d| Some(d.clone().description?.content)),
             );
-            item_builder.link(entry.links.first().map(|d| d.clone().href));
+            let link = entry.links.first().map(|d| d.clone().href);
+            item_builder.link(link.clone());
             let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
             let media = entry.media.first();
             itunes_item_builder.image(
@@ -612,15 +621,13 @@ fn convert_atom_to_rss(raw_atom: String) -> String {
                     .and_then(|m| m.thumbnails.first())
                     .map(|t| t.clone().image.uri),
             );
-            itunes_item_builder.duration((|| {
-                let total_seconds = media?.duration?.as_secs();
-                Some(format!(
-                    "{:02}:{:02}:{:02}",
-                    total_seconds / 3600,
-                    (total_seconds % 3600) / 60,
-                    total_seconds % 60
-                ))
-            })());
+            let duration = (|| -> Option<_> {
+                duration_map
+                    .get(&link?)
+                    .map(|s| s.map(|a| format!("{:02}:{:02}:{:02}", a / 3600, a / 60 % 60, a % 60)))
+            })()
+            .flatten();
+            itunes_item_builder.duration(duration);
             item_builder.itunes_ext(Some(itunes_item_builder.build()));
             item_builder.guid(Some(GuidBuilder::default().value(entry.id).build()));
             item_builder.build()
@@ -630,6 +637,65 @@ fn convert_atom_to_rss(raw_atom: String) -> String {
     feed_builder.build().to_string()
 }
 
+#[cfg_attr(
+    not(test),
+    io_cached(
+        map_error = r##"|e| eyre::Error::new(e)"##,
+        type = "AsyncRedisCache<Url, Option<usize>>",
+        create = r##" {
+        AsyncRedisCache::new("cached_yt_video_duration=", 86400)
+            .set_refresh(false)
+            .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
+            .build()
+            .await
+            .expect("youtube_duration cache")
+} "##
+    )
+)]
+async fn get_youtube_video_duration_with_ytdlp(url: &Url) -> eyre::Result<Option<usize>> {
+    debug!("getting duration for yt video: {}", url);
+
+    let output = Command::new("yt-dlp")
+        .arg("--get-duration")
+        .arg(url.to_string())
+        .output()
+        .await;
+    if let Ok(x) = output {
+        let duration_str = std::str::from_utf8(&x.stdout).unwrap().trim().to_string();
+        Ok(Some(
+            parse_duration(&duration_str)
+                .unwrap_or_default()
+                .as_secs()
+                .try_into()
+                .unwrap(),
+        ))
+    } else {
+        warn!("could not parse youtube video duration");
+        Ok(Some(0))
+    }
+}
+
+fn parse_duration(duration_str: &str) -> Result<Duration, String> {
+    let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
+
+    let seconds = match duration_parts.get(0) {
+        Some(sec_str) => sec_str.parse().map_err(|_| "Invalid format".to_string())?,
+        None => 0,
+    };
+
+    let minutes = match duration_parts.get(1) {
+        Some(min_str) => min_str.parse().map_err(|_| "Invalid format".to_string())?,
+        None => 0,
+    };
+
+    let hours = match duration_parts.get(2) {
+        Some(hour_str) => hour_str.parse().map_err(|_| "Invalid format".to_string())?,
+        None => 0,
+    };
+
+    let duration_secs = hours * 3600 + minutes * 60 + seconds;
+    Ok(Duration::from_secs(duration_secs))
+}
 #[cfg(test)]
 mod tests {
     use super::*;

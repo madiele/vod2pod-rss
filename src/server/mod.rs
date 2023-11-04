@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::TcpListener, time::Instant};
 
 use actix_web::{dev::Server, guard, middleware, web, App, HttpRequest, HttpResponse, HttpServer};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use serde::Deserialize;
 use url::Url;
@@ -69,6 +69,9 @@ async fn transcodize_rss(
         Err(_) => true,
     };
 
+    if !should_transcode {
+        warn!("transcoding is disabled");
+    }
     let url = if let Some(x) = query.get("url") {
         x
     } else {
