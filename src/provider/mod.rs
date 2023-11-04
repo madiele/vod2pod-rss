@@ -11,23 +11,9 @@ use reqwest::Url;
 use rss::extension::itunes::ITunesChannelExtensionBuilder;
 
 use crate::provider::{
-    generic::{GenericProvider, GenericProviderV2},
-    peertube::{PeerTubeProviderV2, PeertubeProvider},
-    twitch::{TwitchProvider, TwitchProviderV2},
-    youtube::{YoutubeProvider, YoutubeProviderV2},
+    generic::GenericProviderV2, peertube::PeerTubeProviderV2, twitch::TwitchProviderV2,
+    youtube::YoutubeProviderV2,
 };
-
-macro_rules! dispatch_if_match {
-    ($url: expr, $provider: ident) => {
-        let provider = $provider::new($url);
-        for regex in provider.domain_whitelist_regexes() {
-            if regex.is_match(&$url.to_string()) {
-                debug!("using {}", stringify!($provider));
-                return Box::new(provider);
-            }
-        }
-    };
-}
 
 macro_rules! dispatch_if_match_v2 {
     ($url: expr, $provider: ident) => {
@@ -39,14 +25,6 @@ macro_rules! dispatch_if_match_v2 {
             }
         }
     };
-}
-
-pub fn from(url: &Url) -> Box<dyn MediaProvider> {
-    dispatch_if_match!(url, YoutubeProvider);
-    dispatch_if_match!(url, TwitchProvider);
-    dispatch_if_match!(url, PeertubeProvider);
-    debug!("using GenericProvider as provider");
-    return Box::new(GenericProvider::new(url));
 }
 
 pub fn from_v2(url: &Url) -> Box<dyn MediaProviderV2> {

@@ -1,55 +1,10 @@
 use async_trait::async_trait;
-use feed_rs::model::Entry;
 use regex::Regex;
 use reqwest::Url;
 
 use crate::configs::{conf, Conf, ConfName};
 
-use super::{MediaProvider, MediaProviderV2};
-
-pub(super) struct GenericProvider {
-    url: Url,
-}
-
-#[async_trait]
-impl MediaProvider for GenericProvider {
-    fn new(url: &Url) -> Self {
-        GenericProvider { url: url.clone() }
-    }
-
-    async fn get_item_duration(&self, _url: &Url) -> eyre::Result<Option<u64>> {
-        Ok(None)
-    }
-
-    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
-        Ok(media_url.to_owned())
-    }
-
-    async fn filter_item(&self, _rss_item: &Entry) -> bool {
-        false
-    }
-
-    fn media_url_regexes(&self) -> Vec<Regex> {
-        let generic_whitelist = get_generic_whitelist();
-
-        #[cfg(not(test))]
-        return generic_whitelist;
-        #[cfg(test)] //this will allow test to use localhost ad still work
-        return [
-            generic_whitelist,
-            vec![regex::Regex::new(r"^http://127\.0\.0\.1:9872").unwrap()],
-        ]
-        .concat();
-    }
-
-    fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-        get_generic_whitelist()
-    }
-
-    async fn feed_url(&self) -> eyre::Result<Url> {
-        Ok(self.url.clone())
-    }
-}
+use super::MediaProviderV2;
 
 pub struct GenericProviderV2 {}
 

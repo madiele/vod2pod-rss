@@ -175,7 +175,7 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
         }
     }
 
-    let provider = provider::from(&stream_url);
+    let provider = provider::from_v2(&stream_url);
 
     if !provider
         .domain_whitelist_regexes()

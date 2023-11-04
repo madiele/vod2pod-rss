@@ -10,7 +10,6 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use async_trait::async_trait;
 use eyre::eyre;
-use feed_rs::model::Entry;
 use log::{debug, info, warn};
 use regex::Regex;
 use reqwest::Url;
@@ -25,11 +24,7 @@ use crate::{
     provider,
 };
 
-use super::{MediaProvider, MediaProviderV2};
-
-pub(super) struct YoutubeProvider {
-    url: Url,
-}
+use super::MediaProviderV2;
 
 pub(super) struct YoutubeProviderV2 {}
 
@@ -473,74 +468,6 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
     let client = hyper::Client::builder().build(connector);
     let hub = YouTube::new(client, auth);
     hub
-}
-
-#[async_trait]
-impl MediaProvider for YoutubeProvider {
-    async fn get_item_duration(&self, url: &Url) -> eyre::Result<Option<u64>> {
-        get_youtube_video_duration(url.to_owned()).await
-    }
-
-    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
-        get_youtube_stream_url(media_url).await
-    }
-
-    async fn filter_item(&self, rss_item: &Entry) -> bool {
-        if let Some(community) = rss_item
-            .media
-            .first()
-            .and_then(|media| media.community.as_ref())
-        {
-            if community.stats_views == Some(0) {
-                debug!(
-                    "ignoring item with 0 views (probably youtube preview) with name: {:?}",
-                    rss_item.title
-                );
-                return true;
-            }
-        }
-        return false;
-    }
-
-    fn media_url_regexes(&self) -> Vec<Regex> {
-        return vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()];
-    }
-
-    fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-        let youtube_whitelist = vec![
-            regex::Regex::new(r"^(https://)?.*\.youtube\.com/").unwrap(),
-            regex::Regex::new(r"^(https://)?youtube\.com/").unwrap(),
-            regex::Regex::new(r"^(https://)?youtu\.be/").unwrap(),
-            regex::Regex::new(r"^(https://)?.*\.youtu\.be/").unwrap(),
-            regex::Regex::new(r"^(https://)?.*\.googlevideo\.com/").unwrap(),
-            regex::Regex::new(r"^http://localhost:15000/youtube").unwrap(),
-            regex::Regex::new(r"^http://podtube(:[0-9]+)?/youtube").unwrap(),
-        ];
-
-        #[cfg(not(test))]
-        return youtube_whitelist;
-        #[cfg(test)] //this will allow test to use localhost ad still work
-        return [
-            youtube_whitelist,
-            vec![regex::Regex::new(r"^http://127\.0\.0\.1:9870").unwrap()],
-        ]
-        .concat();
-    }
-    fn new(url: &Url) -> Self {
-        YoutubeProvider { url: url.clone() }
-    }
-
-    async fn feed_url(&self) -> eyre::Result<Url> {
-        match self.url.path() {
-            path if path.starts_with("/playlist") => feed_url_for_yt_playlist(&self.url).await,
-            path if path.starts_with("/feeds/") => feed_url_for_yt_atom(&self.url).await,
-            path if path.starts_with("/channel/") => feed_url_for_yt_channel(&self.url).await,
-            path if path.starts_with("/user/") => feed_url_for_yt_channel(&self.url).await,
-            path if path.starts_with("/c/") => feed_url_for_yt_channel(&self.url).await,
-            path if path.starts_with("/@") => feed_url_for_yt_channel(&self.url).await,
-            _ => Err(eyre!("unsupported youtube url")),
-        }
-    }
 }
 
 #[io_cached(
