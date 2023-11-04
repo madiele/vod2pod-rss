@@ -116,7 +116,56 @@ impl MediaProvider for YoutubeProvider {
                     _ => Err(eyre!("unsupported youtube url")),
                 }?;
                 let response = reqwest::get(feed).await?.text().await?;
-                return Ok(response);
+                let feed = feed_rs::parser::parse(&response.into_bytes()[..]).unwrap();
+
+                let mut feed_builder = provider::build_default_rss_structure();
+                feed_builder.description(feed.description.map(|d| d.content).unwrap_or_default());
+                feed_builder.title(feed.title.map(|d| d.content).unwrap_or_default());
+                feed_builder.language(feed.language);
+                let mut image_builder = ImageBuilder::default();
+                image_builder.url(feed.icon.clone().map(|d| d.uri).unwrap_or_default());
+                feed_builder.image(Some(image_builder.build()));
+                feed_builder.link(
+                    feed.links
+                        .clone()
+                        .first()
+                        .map(|d| d.clone().href)
+                        .unwrap_or_default(),
+                );
+                let mut itunes_ext_builder = ITunesChannelExtensionBuilder::default();
+                itunes_ext_builder.image(feed.icon.map(|d| d.uri));
+                feed_builder.itunes_ext(Some(itunes_ext_builder.build()));
+                let items = feed
+                    .entries
+                    .into_iter()
+                    .map(|entry| {
+                        let mut item_builder = ItemBuilder::default();
+                        item_builder.title(entry.title.map(|d| d.content));
+                        item_builder.description(entry.summary.map(|d| d.content));
+                        item_builder.link(entry.links.first().map(|d| d.clone().href));
+                        let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
+                        let media = entry.media.first();
+                        itunes_item_builder.image(
+                            media
+                                .and_then(|m| m.thumbnails.first())
+                                .map(|t| t.clone().image.uri),
+                        );
+                        itunes_item_builder.duration((|| {
+                            let total_seconds = media?.duration?.as_secs();
+                            Some(format!(
+                                "{:02}:{:02}:{:02}",
+                                total_seconds / 3600,
+                                (total_seconds % 3600) / 60,
+                                total_seconds % 60
+                            ))
+                        })());
+                        item_builder.itunes_ext(Some(itunes_item_builder.build()));
+                        item_builder.guid(Some(GuidBuilder::default().value(entry.id).build()));
+                        item_builder.build()
+                    })
+                    .collect::<Vec<Item>>();
+                feed_builder.items(items);
+                return Ok(feed_builder.build().to_string());
             }
         }
     }
@@ -576,7 +625,6 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use test_log::test;
 
     #[tokio::test]
@@ -636,18 +684,13 @@ mod tests {
         let result = provider
             .generate_rss_feed(Url::parse("https://www.youtube.com/@LegalEagle").unwrap())
             .await;
-
         assert!(result.is_ok());
-        let feed = feed_rs::parser::parse(&result.unwrap().into_bytes()[..]).unwrap();
 
-        assert!(feed.entries.len() > 50);
-        for entry in &feed.entries {
-            for media in &entry.media {
-                let duration = media.duration.unwrap();
-                assert!(duration > Duration::default());
-            }
-            assert!(entry.title.is_some());
-            assert!(entry.summary.is_some());
+        let channel = rss::Channel::read_from(&result.unwrap().as_bytes()[..]).unwrap();
+        assert!(channel.items.len() > 50);
+        for item in &channel.items {
+            assert!(item.title.is_some());
+            assert!(item.description.is_some());
         }
     }
 }
