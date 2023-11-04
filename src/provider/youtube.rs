@@ -115,57 +115,8 @@ impl MediaProvider for YoutubeProvider {
                     path if path.starts_with("/@") => feed_url_for_yt_channel(&channel_url).await,
                     _ => Err(eyre!("unsupported youtube url")),
                 }?;
-                let response = reqwest::get(feed).await?.text().await?;
-                let feed = feed_rs::parser::parse(&response.into_bytes()[..]).unwrap();
-
-                let mut feed_builder = provider::build_default_rss_structure();
-                feed_builder.description(feed.description.map(|d| d.content).unwrap_or_default());
-                feed_builder.title(feed.title.map(|d| d.content).unwrap_or_default());
-                feed_builder.language(feed.language);
-                let mut image_builder = ImageBuilder::default();
-                image_builder.url(feed.icon.clone().map(|d| d.uri).unwrap_or_default());
-                feed_builder.image(Some(image_builder.build()));
-                feed_builder.link(
-                    feed.links
-                        .clone()
-                        .first()
-                        .map(|d| d.clone().href)
-                        .unwrap_or_default(),
-                );
-                let mut itunes_ext_builder = ITunesChannelExtensionBuilder::default();
-                itunes_ext_builder.image(feed.icon.map(|d| d.uri));
-                feed_builder.itunes_ext(Some(itunes_ext_builder.build()));
-                let items = feed
-                    .entries
-                    .into_iter()
-                    .map(|entry| {
-                        let mut item_builder = ItemBuilder::default();
-                        item_builder.title(entry.title.map(|d| d.content));
-                        item_builder.description(entry.summary.map(|d| d.content));
-                        item_builder.link(entry.links.first().map(|d| d.clone().href));
-                        let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
-                        let media = entry.media.first();
-                        itunes_item_builder.image(
-                            media
-                                .and_then(|m| m.thumbnails.first())
-                                .map(|t| t.clone().image.uri),
-                        );
-                        itunes_item_builder.duration((|| {
-                            let total_seconds = media?.duration?.as_secs();
-                            Some(format!(
-                                "{:02}:{:02}:{:02}",
-                                total_seconds / 3600,
-                                (total_seconds % 3600) / 60,
-                                total_seconds % 60
-                            ))
-                        })());
-                        item_builder.itunes_ext(Some(itunes_item_builder.build()));
-                        item_builder.guid(Some(GuidBuilder::default().value(entry.id).build()));
-                        item_builder.build()
-                    })
-                    .collect::<Vec<Item>>();
-                feed_builder.items(items);
-                return Ok(feed_builder.build().to_string());
+                let raw_atom_feed = reqwest::get(feed).await?.text().await?;
+                return Ok(convert_atom_to_rss(raw_atom_feed));
             }
         }
     }
@@ -620,6 +571,63 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
         .await?;
     let feed_url = std::str::from_utf8(&output.stdout)?.trim().to_string();
     Ok(Url::parse(&feed_url)?)
+}
+
+fn convert_atom_to_rss(raw_atom: String) -> String {
+    let feed = feed_rs::parser::parse(&raw_atom.into_bytes()[..]).unwrap();
+    let mut feed_builder = provider::build_default_rss_structure();
+    feed_builder.description(feed.description.map(|d| d.content).unwrap_or_default());
+    feed_builder.title(feed.title.map(|d| d.content).unwrap_or_default());
+    feed_builder.language(feed.language);
+    let mut image_builder = ImageBuilder::default();
+    image_builder.url(feed.icon.clone().map(|d| d.uri).unwrap_or_default());
+    feed_builder.image(Some(image_builder.build()));
+    feed_builder.link(
+        feed.links
+            .clone()
+            .first()
+            .map(|d| d.clone().href)
+            .unwrap_or_default(),
+    );
+    let mut itunes_ext_builder = ITunesChannelExtensionBuilder::default();
+    itunes_ext_builder.image(feed.icon.map(|d| d.uri));
+    feed_builder.itunes_ext(Some(itunes_ext_builder.build()));
+    let items = feed
+        .entries
+        .into_iter()
+        .map(|entry| {
+            let mut item_builder = ItemBuilder::default();
+            item_builder.title(entry.title.map(|d| d.content));
+            item_builder.description(
+                entry
+                    .media
+                    .first()
+                    .and_then(|d| Some(d.clone().description?.content)),
+            );
+            item_builder.link(entry.links.first().map(|d| d.clone().href));
+            let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
+            let media = entry.media.first();
+            itunes_item_builder.image(
+                media
+                    .and_then(|m| m.thumbnails.first())
+                    .map(|t| t.clone().image.uri),
+            );
+            itunes_item_builder.duration((|| {
+                let total_seconds = media?.duration?.as_secs();
+                Some(format!(
+                    "{:02}:{:02}:{:02}",
+                    total_seconds / 3600,
+                    (total_seconds % 3600) / 60,
+                    total_seconds % 60
+                ))
+            })());
+            item_builder.itunes_ext(Some(itunes_item_builder.build()));
+            item_builder.guid(Some(GuidBuilder::default().value(entry.id).build()));
+            item_builder.build()
+        })
+        .collect::<Vec<Item>>();
+    feed_builder.items(items);
+    feed_builder.build().to_string()
 }
 
 #[cfg(test)]
