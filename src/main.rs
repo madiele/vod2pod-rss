@@ -1,10 +1,7 @@
 use log::{debug, info};
 use simple_logger::SimpleLogger;
 use std::net::TcpListener;
-use vod2pod_rss::{
-    configs::{conf, Conf, ConfName},
-    server,
-};
+use vod2pod_rss::server;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -30,13 +27,10 @@ async fn main() -> std::io::Result<()> {
 }
 
 async fn flush_redis_on_new_version() -> eyre::Result<()> {
-    let redis_address = conf().get(ConfName::RedisAddress).unwrap();
-    let redis_port = conf().get(ConfName::RedisPort).unwrap();
     let app_version = env!("CARGO_PKG_VERSION");
     info!("app version {app_version}");
 
-    let client = redis::Client::open(format!("redis://{}:{}/", redis_address, redis_port))?;
-    let mut con = client.get_tokio_connection().await?;
+    let mut con = vod2pod_rss::get_redis_client().await?;
 
     let cached_version: Option<String> = redis::cmd("GET")
         .arg("version")

@@ -4,13 +4,14 @@ use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset};
 use feed_rs::model::Entry;
 use log::{debug, info, warn};
+use redis::{ErrorKind, FromRedisValue, RedisError, ToRedisArgs};
 use regex::Regex;
 use reqwest::Url;
 use rss::{
     extension::itunes::{ITunesChannelExtensionBuilder, ITunesItemExtensionBuilder},
     GuidBuilder, ImageBuilder, Item, ItemBuilder,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -283,14 +284,59 @@ async fn get_twitch_stream_url(url: &Url) -> eyre::Result<Url> {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OAuthCredentials {
     oauth_token: String,
     oauth_expire_epoch: u64,
 }
 
-//TODO: cache oauth credentials
-pub async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAuthCredentials> {
+impl OAuthCredentials {
+    fn key() -> &'static str {
+        "twitch_oauth_credentials"
+    }
+}
+
+impl FromRedisValue for OAuthCredentials {
+    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
+        let raw_json = String::from_redis_value(v)?;
+        let credentials: OAuthCredentials = serde_json::from_str(&raw_json).map_err(|_e| {
+            RedisError::from((ErrorKind::TypeError, "redis twitch credential corrupted"))
+        })?;
+        Ok(credentials)
+    }
+}
+
+impl ToRedisArgs for OAuthCredentials {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + redis::RedisWrite,
+    {
+        let raw_json = serde_json::to_string(self).unwrap();
+        raw_json.write_redis_args(out);
+    }
+}
+
+async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAuthCredentials> {
+    let mut redis = crate::get_redis_client().await?;
+
+    let cached_credential: Option<OAuthCredentials> = redis::cmd("GET")
+        .arg(OAuthCredentials::key())
+        .query_async(&mut redis)
+        .await?;
+
+    if let Some(cached_credential) = cached_credential {
+        if cached_credential.oauth_expire_epoch
+            > SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+        {
+            info!(
+                "using cached twitch oauth credentials, expires in {} seconds",
+                cached_credential.oauth_expire_epoch
+                    - SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+            );
+            return Ok(cached_credential);
+        }
+    }
+
     let base_url = "https://id.twitch.tv/oauth2/token";
     let client = reqwest::Client::new();
 
@@ -317,10 +363,24 @@ pub async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAu
                     .as_u64()
                     .ok_or(eyre::eyre!("no expires_in in twitch response"))?;
 
-            return Ok(OAuthCredentials {
+            let oauth_credentials = OAuthCredentials {
                 oauth_token,
                 oauth_expire_epoch,
-            });
+            };
+
+            let _: () = redis::cmd("SET")
+                .arg(OAuthCredentials::key())
+                .arg(oauth_credentials.clone())
+                .query_async(&mut redis)
+                .await?;
+
+            info!(
+                "got new twitch oauth credentials, expires in {} seconds",
+                oauth_credentials.oauth_expire_epoch
+                    - SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+            );
+
+            return Ok(oauth_credentials);
         }
 
         attempt += 1;
