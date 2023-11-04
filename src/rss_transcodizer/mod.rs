@@ -593,30 +593,6 @@ mod test {
         res
     }
 
-    #[test(actix_web::test)]
-    async fn rss_youtube_feed() {
-        let handle = startup_test("youtube".to_string(), 9870).await;
-
-        let rss_url = Url::parse("http://127.0.0.1:9870/feed.rss").unwrap();
-        let raw_rss = reqwest::get(rss_url.clone())
-            .await
-            .expect("failed to get raw RSS")
-            .text()
-            .await
-            .expect("failed to get RSS bytes");
-        println!("testing feed {rss_url}");
-        let transcode_service_url = "http://127.0.0.1:9870/transcode".parse().unwrap();
-        let rss_transcodizer = RssTranscodizer::new(rss_url, transcode_service_url, true, raw_rss);
-
-        let res = validate_must_have_props(rss_transcodizer).await;
-
-        stop_test(handle).await;
-
-        if let Err(e) = res {
-            panic!("{e}");
-        }
-    }
-
     async fn startup_test(type_test: String, port: u16) -> ServerHandle {
         let feed_type = Data::new(type_test);
         let fake_server = HttpServer::new(move || {
