@@ -29,7 +29,7 @@ COPY Cargo.toml ./
 RUN sed '/\[dev-dependencies\]/,/^$/d' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
 
 RUN cargo fetch
-RUN cargo install cargo-build-deps
+#RUN cargo install cargo-build-deps
 
 #RUN apt-get update && \
 #    apt-get install -y --no-install-recommends ffmpeg clang libavformat-dev libavfilter-dev libavcodec-dev libavdevice-dev libavutil-dev libpostproc-dev libswresample-dev libswscale-dev && \
@@ -39,8 +39,8 @@ RUN cargo install cargo-build-deps
 #workaround for https://github.com/rust-lang/cargo/issues/8719
 #ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
-RUN cargo build-deps --release --target "$(cat /rust_platform.txt)"
-COPY src /tmp/vod2pod/src
+#RUN cargo build-deps --release --target "$(cat /rust_platform.txt)"
+#COPY src /tmp/vod2pod/src
 
 #trick to use github action cache, check the action folder for more info
 COPY set_version.sh version.txt* ./
