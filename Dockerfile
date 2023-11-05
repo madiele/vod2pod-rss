@@ -40,7 +40,7 @@ RUN cargo fetch
 #ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
 #RUN cargo build-deps --release --target "$(cat /rust_platform.txt)"
-#COPY src /tmp/vod2pod/src
+COPY src /tmp/vod2pod/src
 
 #trick to use github action cache, check the action folder for more info
 COPY set_version.sh version.txt* ./
