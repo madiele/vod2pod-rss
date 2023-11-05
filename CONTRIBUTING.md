@@ -31,6 +31,12 @@ once a client makes a request it goes through the transcoding endpoint it will s
 
 optimization: most calls are cached with redis
 
+### How to make a new provider
+
+in the provider folder you will find the list of supported provider, to make a new one
+add a file for your provider, implement the MediaProvider trait (you can copy generic.rs
+to get a boilerplate) and then add it to provider/mod.rs inside the macro call
+
 ## Initial setup
 
 ### github spaces development setup
