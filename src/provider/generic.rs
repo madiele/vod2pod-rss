@@ -10,18 +10,6 @@ pub struct GenericProvider {}
 
 #[async_trait]
 impl MediaProvider for GenericProvider {
-    fn media_url_regexes(&self) -> Vec<Regex> {
-        let generic_whitelist = get_generic_whitelist();
-
-        #[cfg(not(test))]
-        return generic_whitelist;
-        #[cfg(test)] //this will allow test to use localhost ad still work
-        return [
-            generic_whitelist,
-            vec![regex::Regex::new(r"^http://127\.0\.0\.1:9872").unwrap()],
-        ]
-        .concat();
-    }
     async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
         Ok(reqwest::get(channel_url).await?.text().await?)
     }

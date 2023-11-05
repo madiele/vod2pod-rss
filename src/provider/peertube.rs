@@ -23,21 +23,6 @@ pub struct PeerTubeProvider {}
 
 #[async_trait]
 impl MediaProvider for PeerTubeProvider {
-    fn media_url_regexes(&self) -> Vec<Regex> {
-        let hosts = get_peertube_hosts();
-        let mut regexes: Vec<Regex> = Vec::with_capacity(hosts.len());
-        for host in hosts {
-            regexes.push(
-                Regex::new(
-                    &(host.to_string().replace(".", "\\.").replace("*", ".+")
-                        + "/static/streaming-playlists/.*"),
-                )
-                .unwrap(),
-            )
-        }
-
-        return regexes;
-    }
     async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
         Ok(reqwest::get(channel_url).await?.text().await?)
     }

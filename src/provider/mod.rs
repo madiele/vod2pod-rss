@@ -71,10 +71,6 @@ pub trait MediaProvider {
     /// Also be warned missing a match here will cause the server to use the GenericProvider instead
     fn domain_whitelist_regexes(&self) -> Vec<Regex>;
 
-    /// Returns the regular expressions for matching media URLs during RSS/atom parsing.
-    /// this will eventually be passed to the get_stream_url()
-    fn media_url_regexes(&self) -> Vec<Regex>;
-
     /// Constructs the struct for the MediaProvider
     ///
     /// # Returns

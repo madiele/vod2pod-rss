@@ -36,9 +36,6 @@ enum IdType {
 
 #[async_trait]
 impl MediaProvider for YoutubeProvider {
-    fn media_url_regexes(&self) -> Vec<Regex> {
-        return vec![regex::Regex::new(r"^(https?://)?(www\.youtube\.com|youtu\.be)/.+$").unwrap()];
-    }
     async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
         let youtube_api_key = conf().get(ConfName::YoutubeApiKey).ok();
 
