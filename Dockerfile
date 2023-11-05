@@ -68,10 +68,10 @@ COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
 
 RUN if vod2pod --version; then \
-        echo "vod2pod runs correctly"; \
+        echo "vod2pod starts correctly"; \
         exit 0; \
     else \
-        echo "calling vod2pod did not work" 1>&2; \
+        echo "vod2pod did not start" 1>&2; \
         exit 1; \
     fi
 
