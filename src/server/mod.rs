@@ -111,7 +111,7 @@ async fn transcodize_rss(
         .unwrap_or_default();
 
     if let Some(cached_rss) = cached_rss {
-        debug!("serving cached rss feed for {parsed_url}");
+        info!("serving cached rss feed for {parsed_url}");
         return HttpResponse::Ok()
             .content_type("application/xml")
             .body(cached_rss);
