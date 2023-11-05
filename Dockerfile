@@ -3,7 +3,7 @@ FROM --platform=$BUILDPLATFORM rust:1.73 as builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
-
+ARG RUST_TARGET_PLATFORM
 
 # Referred TARGETPLATFORM to appropriate Rust platform
 RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
