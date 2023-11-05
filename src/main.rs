@@ -1,10 +1,17 @@
 use log::{debug, info};
 use simple_logger::SimpleLogger;
-use std::net::TcpListener;
+use std::{env, net::TcpListener, process::exit};
 use vod2pod_rss::server;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if let Some("--version") = args.get(1).cloned().as_deref() {
+        let app_version = env!("CARGO_PKG_VERSION");
+        println!("{}", app_version);
+        exit(0);
+    }
+
     SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
         .env()
