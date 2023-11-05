@@ -5,6 +5,7 @@ services:
     image: alpine
     environment:
     #add your api-keys here (put them after the "=" sign or use an .env file)
+    #(is normal to se this conteiner as stopped soon after deploy)
       # Set your YouTube API key
       - YT_API_KEY=${YT_API_KEY:-}
       # Set your Twitch secret
@@ -30,22 +31,6 @@ services:
       - PODTUBE_URL=http://podtube:15000 #don't edit this
       - REDIS_ADDRESS=redis #don't edit this
       - REDIS_PORT=6379 #don't edit this
-
-  ttprss: # you can remove this section and save some storage if you don't need twitch
-    extends: api_keys
-    image: madiele/twitch_to_podcast_rss
-    restart: unless-stopped
-    container_name: twitchToPodcastRSS
-    environment:
-        - TZ=Europe/London
-        - TRANSCODE=False #keep this to false, the vod2pod one is the one you should change
-
-  podtube: #remove this section if you don't need improved youtube support
-    extends: api_keys
-    image: ftawesome/podtube
-    restart: unless-stopped
-    environment:
-      - YT_AUTOLOAD_NEWEST_AUDIO=False
 
   redis:
     image: "redis:6.2"
