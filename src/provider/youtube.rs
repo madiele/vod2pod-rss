@@ -141,8 +141,6 @@ impl MediaProvider for YoutubeProvider {
             regex::Regex::new(r"^(https://)?youtu\.be/").unwrap(),
             regex::Regex::new(r"^(https://)?.*\.youtu\.be/").unwrap(),
             regex::Regex::new(r"^(https://)?.*\.googlevideo\.com/").unwrap(),
-            regex::Regex::new(r"^http://localhost:15000/youtube").unwrap(),
-            regex::Regex::new(r"^http://podtube(:[0-9]+)?/youtube").unwrap(),
         ];
 
         #[cfg(not(test))]

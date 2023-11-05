@@ -14,11 +14,9 @@ pub enum ConfName {
     RedisPort,
     RedisUrl,
     Mp3Bitrate,
-    TwitchToPodcastUrl,
     YoutubeApiKey,
     TwitchClientId,
     TwitchSecretKey,
-    PodTubeUrl,
     TranscodingEnabled,
     SubfolderPath,
     ValidUrlDomains,
@@ -45,7 +43,6 @@ impl Conf for EnvConf {
             ConfName::Mp3Bitrate => {
                 Ok(std::env::var("MP3_BITRATE").unwrap_or_else(|_| "192".to_string()))
             }
-            ConfName::TwitchToPodcastUrl => Ok(std::env::var("TWITCH_TO_PODCAST_URL")?),
             ConfName::TwitchClientId => std::env::var("TWITCH_CLIENT_ID")
                 .map_err(|e| eyre::eyre!(e))
                 .and_then(|s| {
@@ -73,7 +70,6 @@ impl Conf for EnvConf {
                         Ok(s)
                     }
                 }),
-            ConfName::PodTubeUrl => Ok(std::env::var("PODTUBE_URL")?),
             ConfName::TranscodingEnabled => {
                 Ok(std::env::var("TRANSCODE").unwrap_or_else(|_| "False".to_string()))
             }

@@ -99,8 +99,10 @@ You can set the following environment variables:
 
 ## Honorable mentions
 
-* Youtube support is possible thanks to the cool [podtube fork project by amckee](https://github.com/amckee/PodTube) consider dropping him a star.
-* Twitch support is possible thanks to [my fork](https://github.com/madiele/TwitchToPodcastRSS) of [lzeke0's TwitchRSS](https://github.com/lzeke0/TwitchRSS) drop a star to him too!
+This projects were fondamental for the success of vod2pod-rss, originally they handled the feed generation for youtube and twitch, now this is all done by vod2pod-rss internally so they are not used anymore, but were still helpful to get vod2pod-rss up and running fast.
+Those project were:
+* Youtube support was possible thanks to the cool [podtube fork project by amckee](https://github.com/amckee/PodTube) consider dropping him a star.
+* Twitch support was possible thanks to [my fork](https://github.com/madiele/TwitchToPodcastRSS) of [lzeke0's TwitchRSS](https://github.com/lzeke0/TwitchRSS) drop a star to him too!
 
 ## Donations
 

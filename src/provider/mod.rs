@@ -77,11 +77,6 @@ pub trait MediaProvider {
 
     /// Constructs the struct for the MediaProvider
     ///
-    /// # Arguments
-    ///
-    /// * `url` -   The URL pointing to the feed URL (this can be both the original public feed URL
-    ///             or the URL of the internal feed generation service (es: podtube, ttprss))
-    ///
     /// # Returns
     ///
     /// The constructed struct for the media provider.

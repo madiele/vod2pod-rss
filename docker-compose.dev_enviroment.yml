@@ -11,26 +11,6 @@ services:
       # Set your Twitch client ID
       - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
 
-  ttprss:
-    extends: api_keys
-    image: madiele/twitch_to_podcast_rss
-    restart: "no"
-    container_name: twitchToPodcastRSS
-    ports:
-      - "8085:80"
-    environment:
-        - TZ=Europe/London
-        - TRANSCODE=False
-
-  podtube:
-    extends: api_keys
-    image: ftawesome/podtube
-    restart: "no"
-    ports:
-      - "15000:15000"
-    environment:
-      - YT_AUTOLOAD_NEWEST_AUDIO=False
-
   redis:
     image: "redis:6.2"
     command: redis-server --save 20 1 --loglevel warning
