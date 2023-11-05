@@ -351,7 +351,17 @@ fn vod_to_rss_item_converter(vod: Video) -> Item {
                 .replace("m", ":")
                 .replace("s", "");
 
-            let duration_parts: Vec<&str> = duration_as_string.split(':').collect();
+            let duration_parts = duration_as_string
+                .split(':')
+                .map(|s| s.parse::<usize>())
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_else(|_e| {
+                    warn!(
+                        "could not parse duration for twitch stream: {:?}",
+                        duration_as_string
+                    );
+                    vec![0]
+                });
 
             match duration_parts.len() {
                 3 => format!(
@@ -361,7 +371,7 @@ fn vod_to_rss_item_converter(vod: Video) -> Item {
                 2 => format!("00:{:02}:{:02}", duration_parts[0], duration_parts[1]),
                 1 => format!("00:00:{:02}", duration_parts[0]),
                 _ => {
-                    info!(
+                    warn!(
                         "vod {} has invalid duration {}",
                         video_id, duration_as_string
                     );

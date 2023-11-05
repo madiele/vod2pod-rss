@@ -109,7 +109,6 @@ fn get_description(item: &Item) -> String {
 }
 
 fn parse_duration(duration_str: &str) -> Result<Duration, String> {
-    println!("duration_str: {}", duration_str);
     let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
 
     let seconds = match duration_parts.get(0) {
