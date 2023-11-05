@@ -22,8 +22,6 @@ run rustup target list
 RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust target is $(cat rust_platform.txt)"
 
 RUN rustup target add $(cat rust_platform.txt) 
-RUN rustup toolchain list
-RUN rustup toolchain install $(cat rust_platform.txt) 
 
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
