@@ -1,12 +1,25 @@
 # this step always runs nativly
-#FROM --platform=$BUILDPLATFORM rust:1.73 as builder
-FROM rust:1.73 as builder
+FROM --platform=$BUILDPLATFORM rust:1.73 as builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 
-RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM"
-RUN rustup target list --installed
+
+# Referred TARGETPLATFORM to appropriate Rust platform
+RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+        export RUST_TARGET_PLATFORM=armv7-unknown-linux-gnueabihf; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        export RUST_TARGET_PLATFORM=aarch64-unknown-linux-gnu; \
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        export RUST_TARGET_PLATFORM=x86_64-unknown-linux-gnu; \
+    else \
+        export RUST_TARGET_PLATFORM=$(rustup target list --installed | head -n 1); \
+    fi
+
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust target is $RUST_TARGET_PLATFORM"
+
+RUN rustup target add $RUST_TARGET_PLATFORM 
+RUN rustup toolchain install $RUST_TARGET_PLATFORM 
 
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
@@ -16,15 +29,15 @@ RUN sed '/\[dev-dependencies\]/,/^$/d' Cargo.toml > Cargo.toml.tmp && mv Cargo.t
 RUN cargo fetch
 RUN cargo install cargo-build-deps
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg clang libavformat-dev libavfilter-dev libavcodec-dev libavdevice-dev libavutil-dev libpostproc-dev libswresample-dev libswscale-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+#RUN apt-get update && \
+#    apt-get install -y --no-install-recommends ffmpeg clang libavformat-dev libavfilter-dev libavcodec-dev libavdevice-dev libavutil-dev libpostproc-dev libswresample-dev libswscale-dev && \
+#    apt-get clean && \
+#    rm -rf /var/lib/apt/lists/*
 
 #workaround for https://github.com/rust-lang/cargo/issues/8719
-ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+#ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
-RUN cargo build-deps --release
+RUN cargo build-deps --release --target $RUST_TARGET_PLATFORM
 COPY src /tmp/vod2pod/src
 
 #trick to use github action cache, check the action folder for more info
@@ -32,7 +45,7 @@ COPY set_version.sh version.txt* ./
 COPY templates/ ./templates/
 RUN sh set_version.sh
 
-RUN cargo build --release
+RUN cargo build --release --target $RUST_TARGET_PLATFORM
 
 #----------
 FROM debian:bullseye-slim
