@@ -23,7 +23,7 @@ RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust tar
 
 RUN if echo $TARGETPLATFORM | grep -q 'arm'; then \
         echo 'Installing packages for ARM platforms...'; \
-        apt-get update && apt-get install build-essential gcc gcc-arm* gcc-aarch* -y && apt-get clean; \
+        apt-get update && apt-get install gcc-multilib build-essential gcc gcc-arm* gcc-aarch* -y && apt-get clean; \
         echo 'gcc-arm* packages installed and cache cleaned.'; \
     fi
 
