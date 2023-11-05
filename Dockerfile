@@ -15,7 +15,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
     else \
         export RUST_TARGET_PLATFORM=$(rustup target list --installed | head -n 1); \
     fi; \
-    echo choosen rust target: $RUST_TARGET_PLATFORM \
+    echo choosen rust target: $RUST_TARGET_PLATFORM \\
     echo $RUST_TARGET_PLATFORM > rust_platform.txt
 
 run ls
