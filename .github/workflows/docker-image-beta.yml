@@ -22,7 +22,7 @@ jobs:
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
         - name: remove dev deps and version (for cache purposes)
           run: |
-            sh .github/workflows/remove_dev_deps_and_version.sh test
+            sh .github/workflows/remove_dev_deps_and_version.sh beta
           shell: bash
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v3
@@ -37,7 +37,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-test
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-beta
             platforms: linux/amd64
             cache-from: type=gha,scope=main-amd64
             cache-to: type=gha,mode=max,scope=main-amd64
@@ -55,7 +55,7 @@ jobs:
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
         - name: remove dev deps and version (for cache purposes)
           run: |
-            sh .github/workflows/remove_dev_deps_and_version.sh test
+            sh .github/workflows/remove_dev_deps_and_version.sh beta
           shell: bash
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v3
@@ -72,7 +72,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-test
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-beta
             platforms: linux/arm64
             cache-from: type=gha,scope=main-arm64
             cache-to: type=gha,mode=max,scope=main-arm64
@@ -94,7 +94,7 @@ jobs:
             echo "VERSION=${VERSION}" >> $GITHUB_ENV
         - name: remove dev deps and version (for cache purposes)
           run: |
-            sh .github/workflows/remove_dev_deps_and_version.sh test
+            sh .github/workflows/remove_dev_deps_and_version.sh beta
           shell: bash
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v3
@@ -111,7 +111,7 @@ jobs:
             context: ./
             file: ./Dockerfile
             push: true
-            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-test
+            tags: ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-beta
             platforms: linux/arm/v7
             cache-from: type=gha,scope=main-armv7
             cache-to: type=gha,mode=max,scope=main-armv7
@@ -135,6 +135,6 @@ jobs:
             username: ${{ secrets.DOCKERHUB_USERNAME }}
             password: ${{ secrets.DOCKERHUB_TOKEN }}
         - name: merge into version
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:test ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-test ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-test ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-test
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-beta
         - name: merge into version
-          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-test ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-test ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-test ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-test
+          run: docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-armv7-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-arm64-beta ${{ secrets.DOCKERHUB_USERNAME }}/vod2pod-rss:${{ env.VERSION }}-amd64-beta
