@@ -46,13 +46,6 @@ impl MediaProvider for PeerTubeProvider {
 
         return regexes;
     }
-
-    fn new() -> Self
-    where
-        Self: Sized,
-    {
-        PeerTubeProvider {}
-    }
 }
 
 async fn find_api_url(media_url: &Url) -> eyre::Result<Url> {

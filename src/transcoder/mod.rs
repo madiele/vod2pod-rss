@@ -18,6 +18,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::configs::AudioCodec;
 use crate::provider;
+use crate::provider::MediaProvider;
 
 #[derive(Serialize)]
 pub struct FfmpegParameters {

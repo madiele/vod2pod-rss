@@ -21,13 +21,6 @@ impl MediaProvider for GenericProvider {
     fn domain_whitelist_regexes(&self) -> Vec<Regex> {
         get_generic_whitelist()
     }
-
-    fn new() -> Self
-    where
-        Self: Sized,
-    {
-        GenericProvider {}
-    }
 }
 
 fn get_generic_whitelist() -> Vec<Regex> {

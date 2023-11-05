@@ -1,4 +1,6 @@
 mod generic;
+#[macro_use]
+mod macros;
 mod peertube;
 mod twitch;
 mod youtube;
@@ -14,25 +16,14 @@ use crate::provider::{
     youtube::YoutubeProvider,
 };
 
-macro_rules! dispatch_if_match {
-    ($url: expr, $provider: ident) => {
-        let provider = $provider::new();
-        for regex in provider.domain_whitelist_regexes() {
-            if regex.is_match(&$url.to_string()) {
-                debug!("using {}", stringify!($provider));
-                return Box::new(provider);
-            }
-        }
-    };
-}
-
-pub fn from(url: &Url) -> Box<dyn MediaProvider> {
-    dispatch_if_match!(url, YoutubeProvider);
-    dispatch_if_match!(url, TwitchProvider);
-    dispatch_if_match!(url, PeerTubeProvider);
-    debug!("using GenericProvider as provider");
-    return Box::new(GenericProvider::new());
-}
+generate_static_dispatcher!(
+    StaticMediaProviderDispatcer
+    for
+    GenericProvider,
+    YoutubeProvider,
+    TwitchProvider,
+    PeerTubeProvider,
+);
 
 #[async_trait]
 pub trait MediaProvider {
@@ -70,17 +61,6 @@ pub trait MediaProvider {
     /// limitation open an issue with a change request and why you need it to change.
     /// Also be warned missing a match here will cause the server to use the GenericProvider instead
     fn domain_whitelist_regexes(&self) -> Vec<Regex>;
-
-    /// Constructs the struct for the MediaProvider
-    ///
-    /// # Returns
-    ///
-    /// The constructed struct for the media provider.
-    ///
-    /// Only used for dynamic dispatching
-    fn new() -> Self
-    where
-        Self: Sized;
 }
 
 /// This is the default rss structure used as a base for all the providers,

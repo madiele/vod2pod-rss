@@ -149,10 +149,6 @@ impl MediaProvider for YoutubeProvider {
         ]
         .concat();
     }
-
-    fn new() -> Self {
-        YoutubeProvider {}
-    }
 }
 
 async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, Vec<Item>)> {
@@ -745,7 +741,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn test_fetch_youtube_channel_by_name() {
-        let provider = YoutubeProvider::new();
+        let provider = YoutubeProvider;
         let Ok(_api_key) = conf().get(ConfName::YoutubeApiKey) else {
             panic!("to run this test you need to set an api key for youtube.");
         };

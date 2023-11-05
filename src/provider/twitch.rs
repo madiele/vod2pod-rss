@@ -117,13 +117,6 @@ impl MediaProvider for TwitchProvider {
         ]
         .concat();
     }
-
-    fn new() -> Self
-    where
-        Self: Sized,
-    {
-        TwitchProvider {}
-    }
 }
 
 #[allow(dead_code)]
@@ -393,7 +386,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn fetch_twitch_channel() {
-        let provider = TwitchProvider::new();
+        let provider = TwitchProvider;
         conf()
             .get(ConfName::TwitchSecretKey)
             .expect("to run this test set TWITCH_SECRET env var");

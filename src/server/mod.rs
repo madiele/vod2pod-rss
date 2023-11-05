@@ -8,7 +8,8 @@ use url::Url;
 
 use crate::{
     configs::{conf, Conf, ConfName},
-    provider, rss_transcodizer,
+    provider::{self, MediaProvider},
+    rss_transcodizer,
     transcoder::{FfmpegParameters, Transcoder},
 };
 
