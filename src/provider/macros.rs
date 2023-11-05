@@ -28,6 +28,7 @@ macro_rules! dispatch_if_match_static {
     };
 }
 
+/// this will generate the boilerplate to statically dispatch the provider
 macro_rules! generate_static_dispatcher {
     ($name:ident for $($provider:ident),* $(,)?) => {
 

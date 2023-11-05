@@ -16,13 +16,14 @@ use crate::provider::{
     youtube::YoutubeProvider,
 };
 
+// to add a new provider just add it here (the provider should implement the MediaProvider trait)
 generate_static_dispatcher!(
-    StaticMediaProviderDispatcer
+    Provider
     for
-    GenericProvider,
     YoutubeProvider,
     TwitchProvider,
     PeerTubeProvider,
+    GenericProvider,
 );
 
 #[async_trait]
