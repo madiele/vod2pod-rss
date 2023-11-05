@@ -19,7 +19,7 @@ struct StreamingPlaylist {
     playlistUrl: Url,
 }
 
-pub struct PeerTubeProvider {}
+pub struct PeerTubeProvider;
 
 #[async_trait]
 impl MediaProvider for PeerTubeProvider {

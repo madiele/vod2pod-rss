@@ -6,7 +6,7 @@ use crate::configs::{conf, Conf, ConfName};
 
 use super::MediaProvider;
 
-pub struct GenericProvider {}
+pub struct GenericProvider;
 
 #[async_trait]
 impl MediaProvider for GenericProvider {

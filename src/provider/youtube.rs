@@ -27,7 +27,7 @@ use crate::{
 
 use super::MediaProvider;
 
-pub(super) struct YoutubeProvider {}
+pub struct YoutubeProvider;
 
 enum IdType {
     Playlist(String),

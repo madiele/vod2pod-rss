@@ -21,7 +21,7 @@ use crate::{
 
 use super::MediaProvider;
 
-pub struct TwitchProvider {}
+pub struct TwitchProvider;
 
 #[async_trait]
 impl MediaProvider for TwitchProvider {
