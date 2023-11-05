@@ -195,6 +195,19 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
     };
 }
 
+macro_rules! get_thumb {
+    ($snippet:ident) => {
+        $snippet.thumbnails.and_then(|thumbs| {
+            thumbs
+                .maxres
+                .or(thumbs.high)
+                .or(thumbs.medium)
+                .or(thumbs.standard)
+                .or(thumbs.default)
+        })
+    };
+}
+
 fn build_channel_from_yt_channel(channel: api::Channel) -> Channel {
     let mut channel_builder = ChannelBuilder::default();
     let mut itunes_channel_builder = ITunesChannelExtensionBuilder::default();
@@ -203,7 +216,7 @@ fn build_channel_from_yt_channel(channel: api::Channel) -> Channel {
         channel_builder.description(snippet.description.take().unwrap_or("".to_owned()));
         channel_builder.title(snippet.title.take().unwrap_or("".to_owned()));
         channel_builder.language(snippet.default_language.take());
-        if let Some(mut thumb) = get_thumb_from_channel_snippet(snippet) {
+        if let Some(mut thumb) = get_thumb!(snippet) {
             itunes_channel_builder.image(thumb.url.take());
         }
         itunes_channel_builder.explicit(Some("no".to_owned()));
@@ -215,41 +228,6 @@ fn build_channel_from_yt_channel(channel: api::Channel) -> Channel {
 
     channel_builder.itunes_ext(Some(itunes_channel_builder.build()));
     channel_builder.build()
-}
-
-fn get_thumb_from_playlist_snippet(snippet: api::PlaylistSnippet) -> Option<api::Thumbnail> {
-    snippet.thumbnails.and_then(|thumbs| {
-        thumbs
-            .maxres
-            .or(thumbs.high)
-            .or(thumbs.medium)
-            .or(thumbs.standard)
-            .or(thumbs.default)
-    })
-}
-
-fn get_thumb_from_playlist_item_snippet(
-    snippet: api::PlaylistItemSnippet,
-) -> Option<api::Thumbnail> {
-    snippet.thumbnails.and_then(|thumbs| {
-        thumbs
-            .maxres
-            .or(thumbs.high)
-            .or(thumbs.medium)
-            .or(thumbs.standard)
-            .or(thumbs.default)
-    })
-}
-
-fn get_thumb_from_channel_snippet(snippet: api::ChannelSnippet) -> Option<api::Thumbnail> {
-    snippet.thumbnails.and_then(|thumbs| {
-        thumbs
-            .maxres
-            .or(thumbs.high)
-            .or(thumbs.medium)
-            .or(thumbs.standard)
-            .or(thumbs.default)
-    })
 }
 
 async fn fetch_channel(id: String, api_key: &str) -> eyre::Result<api::Channel> {
@@ -366,7 +344,7 @@ fn build_channel_items_from_playlist(
                     let seconds = video_infos.duration.second;
                     format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
                 }))
-                .image(get_thumb_from_playlist_item_snippet(snippet).and_then(|t| t.url))
+                .image(get_thumb!(snippet).and_then(|t| t.url))
                 .build();
             item_builder.itunes_ext(Some(itunes_item_extension));
             Some(item_builder.build())
@@ -431,7 +409,7 @@ fn build_channel_from_playlist(playlist: api::Playlist) -> Channel {
             "https://www.youtube.com/playlist?list={}",
             playlist.id.unwrap_or_default()
         ));
-        if let Some(mut thumb) = get_thumb_from_playlist_snippet(snippet) {
+        if let Some(mut thumb) = get_thumb!(snippet) {
             itunes_channel_builder.image(thumb.url.take());
         }
     }
