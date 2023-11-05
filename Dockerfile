@@ -47,6 +47,12 @@ COPY set_version.sh version.txt* ./
 COPY templates/ ./templates/
 RUN sh set_version.sh
 
+RUN if echo $TARGETPLATFORM | grep -q 'arm'; then \
+        echo 'Installing gcc-arm* packages for ARM platform...'; \
+        sudo apt-get update && sudo apt-get install gcc-arm* -y && sudo apt-get clean; \
+        echo 'gcc-arm* packages installed and cache cleaned.'; \
+    fi
+
 RUN cargo build --release --target "$(cat /rust_platform.txt)"
 
 #----------
@@ -68,7 +74,7 @@ RUN apt-get update && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /tmp/vod2pod/target/release/app /usr/local/bin/vod2pod
+COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
 
 
