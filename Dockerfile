@@ -14,13 +14,16 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
         export RUST_TARGET_PLATFORM=x86_64-unknown-linux-gnu; \
     else \
         export RUST_TARGET_PLATFORM=$(rustup target list --installed | head -n 1); \
-    fi ;\
+    fi; \
+    echo choosen rust target: $RUST_TARGET_PLATFORM \
     echo $RUST_TARGET_PLATFORM > rust_platform.txt
 
-RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust target is $$(cat rust_platform.txt)"
+run ls
+run cat rust_platform.txt
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust target is $(cat rust_platform.txt)"
 
-RUN rustup target add $$(cat rust_platform.txt) 
-RUN rustup toolchain install $$(cat rust_platform.txt) 
+RUN rustup target add $(cat rust_platform.txt) 
+RUN rustup toolchain install $(cat rust_platform.txt) 
 
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
@@ -38,7 +41,7 @@ RUN cargo install cargo-build-deps
 #workaround for https://github.com/rust-lang/cargo/issues/8719
 #ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
-RUN cargo build-deps --release --target $$(cat rust_platform.txt)
+RUN cargo build-deps --release --target $(cat rust_platform.txt)
 COPY src /tmp/vod2pod/src
 
 #trick to use github action cache, check the action folder for more info
@@ -46,7 +49,7 @@ COPY set_version.sh version.txt* ./
 COPY templates/ ./templates/
 RUN sh set_version.sh
 
-RUN cargo build --release --target $$(cat rust_platform.txt)
+RUN cargo build --release --target $(cat rust_platform.txt)
 
 #----------
 FROM debian:bullseye-slim
