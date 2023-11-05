@@ -18,8 +18,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
     echo "choosen rust target: $RUST_TARGET_PLATFORM" ;\
     echo $RUST_TARGET_PLATFORM > rust_platform.txt
 
-run ls
-run cat rust_platform.txt
+run rustup target list
 RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust target is $(cat rust_platform.txt)"
 
 RUN rustup target add $(cat rust_platform.txt) 
