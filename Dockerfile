@@ -14,7 +14,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
         export RUST_TARGET_PLATFORM=x86_64-unknown-linux-gnu; \
     else \
         export RUST_TARGET_PLATFORM=$(rustup target list --installed | head -n 1); \
-    fi \
+    fi ;\
     echo $RUST_TARGET_PLATFORM > rust_platform.txt
 
 RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM, rust target is $(cat rust_platform.txt)"
