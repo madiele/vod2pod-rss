@@ -67,6 +67,19 @@ RUN apt-get update && \
 COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
 
+#check that vod2pod runs
+RUN vod2pod & \
+    sleep 1 && \
+    for i in {1..300}; do \
+        if curl -sSf http://localhost:8080/health; then \
+            killall vod2pod && \
+            echo "vod2pod is running and responsive" && \
+            exit 0; \
+        fi; \
+        sleep 1; \
+    done; \
+    echo "vod2pod is not running or not responsive" 1>&2 && \
+    exit 1
 
 EXPOSE 8080
 
