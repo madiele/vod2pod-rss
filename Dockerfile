@@ -49,14 +49,14 @@ RUN sh set_version.sh
 
 RUN if echo $TARGETPLATFORM | grep -q 'arm'; then \
         echo 'Installing gcc-arm* packages for ARM platform...'; \
-        apt-get update && apt-get install gcc-arm* -y && apt-get clean; \
+        apt-get update && apt-get install gcc-arm* gcc-aarch* -y && apt-get clean; \
         echo 'gcc-arm* packages installed and cache cleaned.'; \
     fi
 
 RUN cargo build --release --target "$(cat /rust_platform.txt)"
 
 #----------
-FROM debian:bullseye-slim
+FROM debian:bullseye-slim as app
 
 #install ffmpeg and yt-dlp
 ARG BUILDPLATFORM
