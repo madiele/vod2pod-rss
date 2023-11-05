@@ -1,4 +1,12 @@
+# this step always runs nativly
+#FROM --platform=$BUILDPLATFORM rust:1.73 as builder
 FROM rust:1.73 as builder
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM"
+RUN rustup target list --installed
 
 RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
@@ -30,7 +38,10 @@ RUN cargo build --release
 FROM debian:bullseye-slim
 
 #install ffmpeg and yt-dlp
+ARG BUILDPLATFORM
 ARG TARGETPLATFORM
+
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM"
 COPY requirements.txt ./
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 curl ca-certificates ffmpeg && \
