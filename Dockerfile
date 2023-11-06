@@ -34,10 +34,14 @@ RUN cd /tmp && USER=root cargo new --bin vod2pod
 WORKDIR /tmp/vod2pod
 
 COPY Cargo.toml ./
+#trick to use github action cache, check the action folder for more info
 RUN sed '/\[dev-dependencies\]/,/^$/d' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
 
 RUN cargo fetch
-COPY . /tmp/vod2pod
+
+COPY src /tmp/vod2pod/src
+COPY set_version.sh version.txt* ./
+COPY templates/ ./templates/
 
 RUN sh set_version.sh
 
