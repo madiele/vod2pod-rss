@@ -50,5 +50,5 @@ jobs:
         run: cargo test --verbose
         if: needs.check-secret.outputs.has_secrets == 'true'
       - name: Run tests without secrets
-        run: cargo test --verbose --skip requires_api_key
+        run: cargo test --verbose -- --skip requires_api_key
         if: needs.check-secret.outputs.has_secrets == 'false'
