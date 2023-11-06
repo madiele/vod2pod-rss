@@ -39,7 +39,8 @@ RUN sed '/\[dev-dependencies\]/,/^$/d' Cargo.toml > Cargo.toml.tmp && mv Cargo.t
 
 RUN cargo fetch
 
-COPY src /tmp/vod2pod/src
+COPY .cargo/ ./.cargo/
+COPY src ./src
 COPY set_version.sh version.txt* ./
 COPY templates/ ./templates/
 
