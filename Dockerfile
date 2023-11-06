@@ -46,7 +46,9 @@ RUN echo "final size of vod2pod:\n $(du -sh /tmp/vod2pod/target/*/release/app)"
 RUN cargo build --release --target "$(cat /rust_platform.txt)"
 
 #----------
-FROM debian:bookworm-slim as app
+#this step will always run on the target architecture,
+#so the build driver will need to be able to support runtime commands on it (es: using QEMU)  
+FROM --platform=$TARGETPLATFORM debian:bookworm-slim as app
 
 #install ffmpeg and yt-dlp
 ARG BUILDPLATFORM
