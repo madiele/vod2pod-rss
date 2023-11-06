@@ -15,7 +15,7 @@ services:
 
   vod2pod:
     extends: api_keys
-    image: madiele/vod2pod-rss
+    image: madiele/vod2pod-rss:latest
     depends_on:
       - redis
     restart: unless-stopped
