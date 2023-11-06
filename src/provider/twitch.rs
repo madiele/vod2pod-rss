@@ -395,7 +395,7 @@ mod tests {
     use test_log::test;
 
     #[test(tokio::test)]
-    async fn fetch_twitch_channel() {
+    async fn fetch_twitch_channel_requires_api_key() {
         let provider = TwitchProvider;
         conf()
             .get(ConfName::TwitchSecretKey)

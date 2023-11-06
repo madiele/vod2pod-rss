@@ -671,7 +671,7 @@ mod tests {
     use test_log::test;
 
     #[tokio::test]
-    async fn test_build_items_for_playlist() {
+    async fn test_build_items_for_playlist_requires_api_key() {
         let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
 
@@ -687,7 +687,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn test_build_channel_for_playlist() {
+    async fn test_build_channel_for_playlist_requires_api_key() {
         let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
 
@@ -702,7 +702,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn test_fetch_playlist() {
+    async fn test_fetch_playlist_requires_api_key() {
         let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
 
@@ -718,7 +718,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
-    async fn test_fetch_youtube_channel_by_name() {
+    async fn test_fetch_youtube_channel_by_name_requires_api_key() {
         let provider = YoutubeProvider;
         let Ok(_api_key) = conf().get(ConfName::YoutubeApiKey) else {
             panic!("to run this test you need to set an api key for youtube.");
