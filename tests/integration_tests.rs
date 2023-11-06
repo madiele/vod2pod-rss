@@ -21,7 +21,7 @@ async fn health_works() {
 }
 
 #[actix_rt::test]
-async fn fetch_yt_feed_by_channel_url_ok() {
+async fn fetch_yt_feed_by_channel_url_ok_requires_api_key() {
     let address = spawn_app();
     let client = reqwest::Client::new();
 
@@ -46,7 +46,7 @@ async fn fetch_yt_feed_by_channel_url_ok() {
 }
 
 #[actix_rt::test]
-async fn fetch_yt_feed_by_channel_id_url_ok() {
+async fn fetch_yt_feed_by_channel_id_url_ok_requires_api_key() {
     let address = spawn_app();
     let client = reqwest::Client::new();
 
@@ -108,7 +108,7 @@ async fn fetch_yt_feed_by_playlist_url_ok() {
 }
 
 #[actix_rt::test]
-async fn fetch_twitch_feed_by_channel_url_ok() {
+async fn fetch_twitch_feed_by_channel_url_ok_requires_api_key() {
     let address = spawn_app();
     let client = reqwest::Client::new();
 
