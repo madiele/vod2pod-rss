@@ -54,12 +54,12 @@ RUN cargo build --release --target "$(cat /rust_platform.txt)"
 #so the build driver will need to be able to support runtime commands on it (es: using QEMU)  
 FROM --platform=$TARGETPLATFORM debian:bookworm-slim as app
 
-#install ffmpeg and yt-dlp
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 
 RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM"
 COPY requirements.txt ./
+#install ffmpeg and yt-dlp
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 curl ca-certificates ffmpeg && \
     export YT_DLP_VERSION=$(cat requirements.txt | grep yt-dlp | cut -d "=" -f3 | awk -F. '{printf "%d.%02d.%02d\n", $1, $2, $3}') && \
