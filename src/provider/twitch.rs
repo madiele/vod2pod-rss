@@ -38,16 +38,16 @@ impl MediaProvider for TwitchProvider {
         let client_id = &conf().get(ConfName::TwitchClientId)?;
         let client_secret = &conf().get(ConfName::TwitchSecretKey)?;
         debug!("fetching oauth token");
-        let oauth_credentials = authorize(client_id, client_secret).await?;
+        let oauth_token = authorize(client_id, client_secret).await?.oauth_token;
 
         // add bearer token to request
         let client = reqwest::Client::new();
-        let data = client
+        let channels = client
             .get(format!(
                 "https://api.twitch.tv/helix/users?login={}",
                 username
             ))
-            .bearer_auth(oauth_credentials.oauth_token.clone())
+            .bearer_auth(oauth_token.clone())
             .header("Client-Id", client_id)
             .send()
             .await?
@@ -55,7 +55,7 @@ impl MediaProvider for TwitchProvider {
             .await?
             .data;
 
-        let channel = data
+        let channel = channels
             .get(0)
             .ok_or_else(|| eyre::eyre!("No twitch user found"))?;
 
@@ -66,7 +66,7 @@ impl MediaProvider for TwitchProvider {
                 "https://api.twitch.tv/helix/videos?user_id={}",
                 channel.id
             ))
-            .bearer_auth(oauth_credentials.oauth_token)
+            .bearer_auth(oauth_token.clone())
             .header("Client-Id", client_id)
             .send()
             .await?
@@ -76,6 +76,20 @@ impl MediaProvider for TwitchProvider {
         let vods = vods_data.data;
 
         debug!("fetched vods: {:?}", vods);
+
+        let streams_data: StreamsData = client
+            .get(format!(
+                "https://api.twitch.tv/helix/streams?user_id={}",
+                channel.id
+            ))
+            .bearer_auth(oauth_token)
+            .header("Client-Id", client_id)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let streams = streams_data.data;
 
         let mut channel_builder = provider::build_default_rss_structure();
 
@@ -94,7 +108,7 @@ impl MediaProvider for TwitchProvider {
                 image_builder.url(channel.profile_image_url.clone()).build(),
             ));
 
-        let rss_items = build_items_from_vods(vods);
+        let rss_items = build_items_from_vods(vods, streams);
 
         Ok(channel_builder.items(rss_items).build().to_string())
     }
@@ -168,6 +182,34 @@ struct Video {
     type_field: String,
     duration: String,
     muted_segments: Option<Vec<MutedSegments>>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, serde::Deserialize)]
+struct Stream {
+    id: String,
+    user_id: String,
+    user_login: String,
+    user_name: String,
+    game_id: String,
+    game_name: String,
+    #[serde(rename = "type")]
+    stream_type: String,
+    title: String,
+    tags: Vec<String>,
+    viewer_count: i32,
+    started_at: String,
+    language: String,
+    thumbnail_url: String,
+    tag_ids: Vec<String>,
+    is_mature: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, serde::Deserialize)]
+struct StreamsData {
+    data: Vec<Stream>,
+    pagination: serde_json::Value,
 }
 
 #[allow(dead_code)]
@@ -316,8 +358,16 @@ async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAuthCr
     }
 }
 
-fn build_items_from_vods(items: Vec<Video>) -> Vec<Item> {
-    items.into_iter().map(vod_to_rss_item_converter).collect()
+fn build_items_from_vods(vods: Vec<Video>, streams: Vec<Stream>) -> Vec<Item> {
+    let streams = &streams;
+    vods.into_iter()
+        .filter(|v| {
+            !streams
+                .into_iter()
+                .any(|s| v.stream_id.as_ref().is_some_and(|vid| *vid == s.id))
+        })
+        .map(vod_to_rss_item_converter)
+        .collect()
 }
 
 fn vod_to_rss_item_converter(vod: Video) -> Item {
