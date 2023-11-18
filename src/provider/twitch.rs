@@ -61,35 +61,33 @@ impl MediaProvider for TwitchProvider {
 
         debug!("fetched twitch channel: {:?}", channel);
 
-        let vods_data: VodsData = client
+        let vods_request = client
             .get(format!(
                 "https://api.twitch.tv/helix/videos?user_id={}",
                 channel.id
             ))
             .bearer_auth(oauth_token.clone())
-            .header("Client-Id", client_id)
-            .send()
-            .await?
-            .json()
-            .await?;
+            .header("Client-Id", client_id.clone())
+            .send();
 
-        let vods = vods_data.data;
-
-        debug!("fetched vods: {:?}", vods);
-
-        let streams_data: StreamsData = client
+        let streams_request = client
             .get(format!(
                 "https://api.twitch.tv/helix/streams?user_id={}",
                 channel.id
             ))
             .bearer_auth(oauth_token)
             .header("Client-Id", client_id)
-            .send()
-            .await?
-            .json()
-            .await?;
+            .send();
 
+        let (vods_response, streams_response) = tokio::join!(vods_request, streams_request);
+
+        let vods_data: VodsData = vods_response?.json().await?;
+        let vods = vods_data.data;
+
+        let streams_data: StreamsData = streams_response?.json().await?;
         let streams = streams_data.data;
+
+        debug!("fetched vods and streams: {:?}\n{:?}", vods, streams);
 
         let mut channel_builder = provider::build_default_rss_structure();
 
