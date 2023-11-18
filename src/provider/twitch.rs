@@ -331,7 +331,7 @@ async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAuthCr
                 oauth_expire_epoch,
             };
 
-            let _: () = redis::cmd("SET")
+            redis::cmd("SET")
                 .arg(OAuthCredentials::key())
                 .arg(oauth_credentials.clone())
                 .query_async(&mut redis)
@@ -361,7 +361,7 @@ fn build_items_from_vods(vods: Vec<Video>, streams: Vec<Stream>) -> Vec<Item> {
     vods.into_iter()
         .filter(|v| {
             !streams
-                .into_iter()
+                .iter()
                 .any(|s| v.stream_id.as_ref().is_some_and(|vid| *vid == s.id))
         })
         .map(vod_to_rss_item_converter)
@@ -393,11 +393,7 @@ fn vod_to_rss_item_converter(vod: Video) -> Item {
     let itunes_item_extension = ITunesItemExtensionBuilder::default()
         .summary(Some(description))
         .duration(Some({
-            let duration_as_string = vod
-                .duration
-                .replace("h", ":")
-                .replace("m", ":")
-                .replace("s", "");
+            let duration_as_string = vod.duration.replace(['h', 'm'], ":").replace('s', "");
 
             let duration_parts = duration_as_string
                 .split(':')

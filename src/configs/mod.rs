@@ -6,7 +6,7 @@ pub fn conf() -> impl Conf {
 }
 
 pub trait Conf {
-    fn get(self: &Self, key: ConfName) -> eyre::Result<String>;
+    fn get(&self, key: ConfName) -> eyre::Result<String>;
 }
 
 pub enum ConfName {
@@ -27,7 +27,7 @@ pub enum ConfName {
 struct EnvConf {}
 
 impl Conf for EnvConf {
-    fn get(self: &Self, key: ConfName) -> eyre::Result<String> {
+    fn get(&self, key: ConfName) -> eyre::Result<String> {
         match key {
             ConfName::RedisAddress => {
                 Ok(std::env::var("REDIS_ADDRESS").unwrap_or_else(|_| "localhost".to_string()))

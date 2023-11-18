@@ -41,10 +41,10 @@ impl MediaProvider for PeerTubeProvider {
         let mut regexes: Vec<Regex> = Vec::with_capacity(hosts.len());
         for host in hosts {
             regexes
-                .push(Regex::new(&host.to_string().replace(".", "\\.").replace("*", ".+")).unwrap())
+                .push(Regex::new(&host.to_string().replace('.', "\\.").replace('*', ".+")).unwrap())
         }
 
-        return regexes;
+        regexes
     }
 }
 
@@ -74,10 +74,10 @@ async fn find_api_url(media_url: &Url) -> eyre::Result<Url> {
 fn get_peertube_hosts() -> Vec<String> {
     let binding = conf().get(ConfName::PeerTubeValidHosts).unwrap();
     let patterns: Vec<String> = binding
-        .split(",")
-        .filter(|e| e.trim().len() > 0)
+        .split(',')
+        .filter(|e| !e.trim().is_empty())
         .map(|x| x.to_string())
         .collect();
-    return patterns;
+    patterns
 }
 

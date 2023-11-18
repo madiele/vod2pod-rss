@@ -1,6 +1,5 @@
 use rss::Channel;
 use std::net::TcpListener;
-use vod2pod_rss;
 
 #[actix_rt::test]
 async fn health_works() {
@@ -40,7 +39,7 @@ async fn fetch_yt_feed_by_channel_url_ok_requires_api_key() {
     }
 
     let raw_rss_body = response.text().await.expect("failed to get response text");
-    let feed = rss::Channel::read_from(&raw_rss_body.as_bytes()[..]).expect("failed to parse feed");
+    let feed = rss::Channel::read_from(raw_rss_body.as_bytes()).expect("failed to parse feed");
     println!("{:?}", feed);
     check_youtube_feed(feed);
 }
@@ -68,7 +67,7 @@ async fn fetch_yt_feed_by_channel_id_url_ok_requires_api_key() {
     }
 
     let raw_rss_body = response.text().await.expect("failed to get response text");
-    let feed = rss::Channel::read_from(&raw_rss_body.as_bytes()[..]).expect("failed to parse feed");
+    let feed = rss::Channel::read_from(raw_rss_body.as_bytes()).expect("failed to parse feed");
     println!("{:?}", feed);
     check_youtube_feed(feed);
 }
@@ -96,9 +95,9 @@ async fn fetch_yt_feed_by_playlist_url_ok() {
     }
 
     let raw_rss_body = response.text().await.expect("failed to get response text");
-    let feed = rss::Channel::read_from(&raw_rss_body.as_bytes()[..]).expect("failed to parse feed");
+    let feed = rss::Channel::read_from(raw_rss_body.as_bytes()).expect("failed to parse feed");
     println!("{:?}", feed);
-    assert!(feed.items.len() > 0);
+    assert!(!feed.items.is_empty());
     assert!(feed.image().is_some());
     for item in feed.items() {
         assert!(item.link().is_some());
@@ -127,9 +126,9 @@ async fn fetch_twitch_feed_by_channel_url_ok_requires_api_key() {
     }
 
     let raw_rss_body = response.text().await.expect("failed to get response text");
-    let feed = rss::Channel::read_from(&raw_rss_body.as_bytes()[..]).expect("failed to parse feed");
+    let feed = rss::Channel::read_from(raw_rss_body.as_bytes()).expect("failed to parse feed");
     println!("{:?}", feed);
-    assert!(feed.items.len() > 0);
+    assert!(!feed.items.is_empty());
     assert!(feed.image().is_some());
     for item in feed.items() {
         assert!(item.link().is_some());
@@ -146,7 +145,7 @@ fn check_youtube_feed(feed: Channel) {
     );
     assert_eq!(".", feed.description());
     assert!(feed.image().is_some());
-    assert!(feed.items.len() > 0);
+    assert!(!feed.items.is_empty());
     let mut found = 0;
     for item in feed.items() {
         match item.title() {
@@ -157,7 +156,7 @@ fn check_youtube_feed(feed: Channel) {
                 let url_format =
                     regex::Regex::new(r"^https://i\.ytimg\.com/vi/[a-zA-Z0-9_-]*/.*\.jpg$")
                         .unwrap();
-                assert!(url_format.is_match(&image_url));
+                assert!(url_format.is_match(image_url));
                 found += 1;
             }
             Some("effetto disegno con gimp") => {
@@ -166,7 +165,7 @@ fn check_youtube_feed(feed: Channel) {
                 let url_format =
                     regex::Regex::new(r"^https://i\.ytimg\.com/vi/[a-zA-Z0-9_-]*/.*\.jpg$")
                         .unwrap();
-                assert!(url_format.is_match(&image_url));
+                assert!(url_format.is_match(image_url));
                 assert_eq!(itunes.duration(), Some("00:09:03"));
                 found += 1;
             }
@@ -176,7 +175,7 @@ fn check_youtube_feed(feed: Channel) {
                 let url_format =
                     regex::Regex::new(r"^https://i\.ytimg\.com/vi/[a-zA-Z0-9_-]*/.*\.jpg$")
                         .unwrap();
-                assert!(url_format.is_match(&image_url));
+                assert!(url_format.is_match(image_url));
                 assert_eq!(itunes.duration(), Some("00:02:07"));
                 found += 1;
             }
@@ -186,7 +185,7 @@ fn check_youtube_feed(feed: Channel) {
                 let url_format =
                     regex::Regex::new(r"^https://i\.ytimg\.com/vi/[a-zA-Z0-9_-]*/.*\.jpg$")
                         .unwrap();
-                assert!(url_format.is_match(&image_url));
+                assert!(url_format.is_match(image_url));
                 assert_eq!(itunes.duration(), Some("00:04:14"));
                 found += 1;
             }
@@ -205,7 +204,8 @@ fn spawn_app() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
     let server = vod2pod_rss::server::spawn_server(listener).expect("Failed to bind address");
-    let _ = tokio::spawn(server);
+    let handle = tokio::spawn(server);
+    std::mem::drop(handle);
 
     format!("http://127.0.0.1:{}", port)
 }

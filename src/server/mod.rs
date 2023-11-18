@@ -80,7 +80,7 @@ async fn transcodize_rss(
         return HttpResponse::BadRequest().finish();
     };
 
-    let transcode_service_url = req.url_for("transcode_mp3", &[""]).unwrap();
+    let transcode_service_url = req.url_for("transcode_mp3", [""]).unwrap();
 
     let parsed_url = match Url::parse(url) {
         Ok(x) => x,
@@ -92,7 +92,7 @@ async fn transcodize_rss(
     if !provider
         .domain_whitelist_regexes()
         .iter()
-        .any(|r| r.is_match(&parsed_url.to_string()))
+        .any(|r| r.is_match(parsed_url.as_ref()))
     {
         error!("supplied url ({parsed_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
@@ -129,7 +129,7 @@ async fn transcodize_rss(
     // rewrite urls in feed
     let injected_feed = rss_transcodizer::inject_vod2pod_customizations(
         raw_rss,
-        should_transcode.then(|| transcode_service_url),
+        should_transcode.then_some(transcode_service_url),
     );
 
     let body = match injected_feed {
@@ -212,12 +212,12 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
         }
     }
 
-    let provider = provider::from(&stream_url);
+    let provider = provider::from(stream_url);
 
     if !provider
         .domain_whitelist_regexes()
         .iter()
-        .any(|r| r.is_match(&stream_url.to_string()))
+        .any(|r| r.is_match(stream_url.as_ref()))
     {
         error!("supplied url ({stream_url}) not in whitelist (whitelist is needed to prevent SSRF attack)");
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");

@@ -167,7 +167,7 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
 
             let rss_items = build_channel_items_from_playlist(items, duration_map);
 
-            return Ok((rss_channel, rss_items));
+            Ok((rss_channel, rss_items))
         }
         IdType::Channel(id) => {
             info!("fetching channel {}", id);
@@ -190,9 +190,9 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
 
             let rss_items = build_channel_items_from_playlist(items, duration_map);
 
-            return Ok((rss_channel, rss_items));
+            Ok((rss_channel, rss_items))
         }
-    };
+    }
 }
 
 macro_rules! get_thumb {
@@ -237,7 +237,7 @@ async fn fetch_channel(id: String, api_key: &str) -> eyre::Result<api::Channel> 
         .list(&vec!["snippet".into(), "contentDetails".into()])
         .max_results(1)
         .add_id(&id)
-        .param("key", &api_key);
+        .param("key", api_key);
     let result = channel_request.doit().await?;
     let channel = result
         .1
@@ -259,7 +259,7 @@ async fn create_duration_url_map(
     api_key: &str,
 ) -> Result<HashMap<String, VideoExtraInfo>, eyre::Error> {
     let ids_batches = items.chunks(50).map(|c| {
-        c.into_iter()
+        c.iter()
             .filter_map(|i| i.snippet.clone()?.resource_id?.video_id)
     });
 
@@ -268,7 +268,7 @@ async fn create_duration_url_map(
         let mut video_info_request = hub
             .videos()
             .list(&vec!["contentDetails".to_owned()])
-            .param("key", &api_key);
+            .param("key", api_key);
 
         for video_id in batch {
             video_info_request = video_info_request.add_id(&video_id);
@@ -329,7 +329,7 @@ fn build_channel_items_from_playlist(
             item_builder.pub_date(
                 snippet
                     .published_at
-                    .and_then(|pub_date| Some(pub_date.to_rfc2822().to_string())),
+                    .map(|pub_date| pub_date.to_rfc2822().to_string()),
             );
             item_builder.author(snippet.channel_title.take());
             let video_infos = videos_infos.get(&video_id).or_else(|| {
@@ -369,7 +369,7 @@ async fn fetch_playlist_items(
             .playlist_items()
             .list(&vec!["snippet".into()])
             .playlist_id(playlist_id)
-            .param("key", &api_key)
+            .param("key", api_key)
             .max_results(50);
         if let Some(ref next_page_token) = next_page_token {
             playlist_items_request = playlist_items_request.page_token(next_page_token.as_str());
@@ -424,7 +424,7 @@ async fn fetch_playlist(id: String, api_key: &String) -> Result<api::Playlist, e
         .playlists()
         .list(&vec!["snippet".into()])
         .add_id(&id)
-        .param("key", &api_key);
+        .param("key", api_key);
     let result = playlist_request.doit().await?;
     let playlist = result
         .1
@@ -444,8 +444,8 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
         .enable_http1()
         .build();
     let client = hyper::Client::builder().build(connector);
-    let hub = YouTube::new(client, auth);
-    hub
+
+    YouTube::new(client, auth)
 }
 
 #[io_cached(
@@ -647,7 +647,7 @@ async fn get_youtube_video_duration_with_ytdlp(url: &Url) -> eyre::Result<Option
 fn parse_duration(duration_str: &str) -> Result<Duration, String> {
     let duration_parts: Vec<&str> = duration_str.split(':').rev().collect();
 
-    let seconds = match duration_parts.get(0) {
+    let seconds = match duration_parts.first() {
         Some(sec_str) => sec_str.parse().map_err(|_| "Invalid format".to_string())?,
         None => 0,
     };
@@ -683,7 +683,7 @@ mod tests {
             .unwrap();
 
         println!("{:?}", items);
-        assert!(items.len() > 0)
+        assert!(!items.is_empty())
     }
 
     #[test(tokio::test)]
@@ -696,8 +696,8 @@ mod tests {
         let channel = build_channel_from_playlist(playlist);
 
         println!("{:?}", channel);
-        assert!(channel.description.len() > 0);
-        assert!(channel.title.len() > 0);
+        assert!(!channel.description.is_empty());
+        assert!(!channel.title.is_empty());
         assert!(channel.itunes_ext.unwrap().image.is_some());
     }
 
@@ -729,7 +729,7 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        let channel = rss::Channel::read_from(&result.unwrap().as_bytes()[..]).unwrap();
+        let channel = rss::Channel::read_from(result.unwrap().as_bytes()).unwrap();
         assert!(channel.items.len() > 50);
         for item in &channel.items {
             assert!(item.title.is_some());

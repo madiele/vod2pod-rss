@@ -118,10 +118,9 @@ impl Transcoder {
             let mut out = child.stdout.take().expect("failed to open stdout");
 
             let channel_size: usize = 10;
-            let (tx, mut rx): (
-                Sender<Result<Bytes, std::io::Error>>,
-                Receiver<Result<Bytes, std::io::Error>>,
-            ) = channel(channel_size);
+            type ChannelBytes = Result<Bytes, std::io::Error>;
+            let (tx, mut rx): (Sender<ChannelBytes>, Receiver<ChannelBytes>) =
+                channel(channel_size);
 
             let tx_stdout = tx.clone();
             let tx_stderr = tx;
@@ -187,7 +186,7 @@ impl Transcoder {
                                         sent_bytes_count += BUFFER_SIZE;
                                     } else {
                                         _ = tx_stdout.blocking_send(Ok(Bytes::copy_from_slice(
-                                            &NULL_BUFF[..padding_bytes.try_into().unwrap_or(0)],
+                                            &NULL_BUFF[..padding_bytes],
                                         )));
                                         sent_bytes_count += padding_bytes;
                                     }
@@ -221,7 +220,7 @@ impl Transcoder {
                                     };
                                 }
                                 warn!("read was interrupted, retrying in 1sec");
-                                let _ = sleep(Duration::from_secs(1));
+                                sleep(Duration::from_secs(1));
                                 tries += 1;
                             }
                             _ => {
