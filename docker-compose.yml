@@ -15,7 +15,7 @@ services:
 
   vod2pod:
     extends: api_keys
-    image: madiele/vod2pod-rss:latest
+    image: madiele/vod2pod-rss:latest #change "latest" to "beta" if you want to test yet unreleased fixes/features (expect bugs and broken builds from time to time)
     depends_on:
       - redis
     restart: unless-stopped
