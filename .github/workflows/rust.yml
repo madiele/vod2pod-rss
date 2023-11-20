@@ -9,11 +9,29 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  YT_API_KEY: ${{ secrets.YT_API_KEY }}
+  TWITCH_SECRET: ${{ secrets.TWITCH_SECRET }}
+  TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
 
 jobs:
-  build:
-
+  check-secret:
     runs-on: ubuntu-latest
+    outputs:
+      has_secrets: ${{ steps.my-key-check.outputs.defined }}
+    steps:
+      - name: Check for Secret availability
+        id: my-key-check
+        shell: bash
+        run: |
+          if [ "${{ secrets.TWITCH_CLIENT_ID }}" != '' ]; then
+            echo "defined=true" >> $GITHUB_OUTPUT;
+          else
+            echo "defined=false" >> $GITHUB_OUTPUT;
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [check-secret]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,5 +46,9 @@ jobs:
         run: python3 -m pip install -U yt-dlp
       - name: Start Redis server
         run: redis-server --daemonize yes
-      - name: Run tests
+      - name: Run tests with secrets
         run: cargo test --verbose
+        if: needs.check-secret.outputs.has_secrets == 'true'
+      - name: Run tests without secrets
+        run: cargo test --verbose -- --skip requires_api_key
+        if: needs.check-secret.outputs.has_secrets == 'false'

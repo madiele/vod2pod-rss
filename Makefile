@@ -9,8 +9,6 @@ grep -q '^TWITCH_CLIENT_ID=' .env || echo 'TWITCH_CLIENT_ID=' >> .env
 grep -q '^RUST_LOG=' .env || echo 'RUST_LOG=DEBUG' >> .env
 grep -q '^MP3_BITRATE=' .env || echo 'MP3_BITRATE=192' >> .env
 grep -q '^SUBFOLDER=' .env || echo 'SUBFOLDER=/' >> .env
-grep -q '^TWITCH_TO_PODCAST_URL=' .env || echo 'TWITCH_TO_PODCAST_URL=localhost:8085' >> .env
-grep -q '^PODTUBE_URL=' .env || echo 'PODTUBE_URL=http://localhost:15000' >> .env
 grep -q '^REDIS_ADDRESS=' .env || echo 'REDIS_ADDRESS=localhost' >> .env
 grep -q '^REDIS_PORT=' .env || echo 'REDIS_PORT=6379' >> .env
 endef
