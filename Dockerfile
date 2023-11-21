@@ -46,9 +46,9 @@ COPY templates/ ./templates/
 
 RUN sh set_version.sh
 
-RUN echo "final size of vod2pod:\n $(ls -lah /tmp/vod2pod/target/*/release/app)"
-
 RUN cargo build --release --target "$(cat /rust_platform.txt)"
+
+RUN echo "final size of vod2pod:\n $(ls -lah /tmp/vod2pod/target/*/release/app)"
 
 #----------
 #this step will always run on the target architecture,
