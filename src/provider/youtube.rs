@@ -61,7 +61,6 @@ impl MediaProvider for YoutubeProvider {
                     path if path.starts_with("/channel/")
                         || path.starts_with("/user/")
                         || path.starts_with("/c/")
-                        || path.starts_with("/c/")
                         || path.starts_with("/@") =>
                     {
                         let url = find_yt_channel_url_with_c_id(&channel_url).await?;
