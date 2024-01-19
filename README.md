@@ -2,14 +2,14 @@
 
 Converts a YouTube or Twitch channel into a full-blown podcast.
 
-<a label="example of it working with podcast addict" href="url"><img src="https://user-images.githubusercontent.com/4585690/231301791-2f838fb3-4f6e-4382-bac4-c968bfe98c08.png" align="left" height="350" ></a>
+<a label="example of it working with podcast addict" href="https://user-images.githubusercontent.com/4585690/231301791-2f838fb3-4f6e-4382-bac4-c968bfe98c08.png"><img src="https://user-images.githubusercontent.com/4585690/231301791-2f838fb3-4f6e-4382-bac4-c968bfe98c08.png" align="left" height="350" ></a>
 
 ## Features
 
 - Completely converts the VoDs into a proper podcast RSS that can be listened to directly inside the client.
 - The VoDs are not downloaded on the server, so no need for storage while self-hosting this app.
 - VoDs are transcoded to MP3 192k on the fly by default, tested to be working flawlessly even on a Raspberry Pi 3-4.
-- also work on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
+- also works on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
 
 ## Limitations
 
@@ -17,7 +17,7 @@ Converts a YouTube or Twitch channel into a full-blown podcast.
 
 ## Usage
 
-<a label="frontend" href="url"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
+<a label="frontend" href="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
 
 Just go to the root of the server es: `myserver.com` and paste the channel you want to convert to podcast and copy the generated link.
 
@@ -92,8 +92,8 @@ then run this to delete the old version form your system (note: this will also d
 
 You can set the following environment variables:
 
-- `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
-- `BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
+- `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "false")
+- `MP3_BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
 - `VALID_URL_DOMAINS`: (optional) Set a comma separated list of domains urls that are allowed to be converted into RSS  (defaults to yotube and twitch urls)
 
