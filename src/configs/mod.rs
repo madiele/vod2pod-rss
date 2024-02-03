@@ -15,6 +15,7 @@ pub enum ConfName {
     RedisUrl,
     Mp3Bitrate,
     YoutubeApiKey,
+    YouutbeMaxResults,
     TwitchClientId,
     TwitchSecretKey,
     TranscodingEnabled,
@@ -101,6 +102,9 @@ impl Conf for EnvConf {
                 .unwrap_or_else(|_| "MP3".to_string())),
             ConfName::PeerTubeValidHosts => {
                 Ok(std::env::var("PEERTUBE_VALID_DOMAINS").unwrap_or_else(|_| "".to_string()))
+            }
+            ConfName::YouutbeMaxResults => {
+                Ok(std::env::var("YOUTUBE_MAX_RESULTS").unwrap_or_else(|_| "300".to_string()))
             }
         }
     }
