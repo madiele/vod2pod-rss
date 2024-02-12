@@ -34,7 +34,7 @@ redis = { version = "=0.24", features = ["tokio-comp"] }
 mime = "=0.3.17"
 cached = { version = "=0.48.1", features = ["redis_tokio"] }
 iso8601-duration = "=0.2.0"
-chrono = "=0.4.33"
+chrono = "=0.4.34"
 feed-rs = "=1.4.0"
 
 [dev-dependencies]
