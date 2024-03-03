@@ -160,7 +160,9 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
 
             let rss_channel = build_channel_from_playlist(playlist);
 
-            let items = fetch_playlist_items(&playlist_id, &api_key).await?;
+            let max_fetched_items: usize =
+                conf().get(ConfName::YouutbeMaxResults).unwrap().parse()?;
+            let items = fetch_playlist_items(&playlist_id, &api_key, max_fetched_items).await?;
 
             let duration_map = create_duration_url_map(&items, &api_key).await?;
 
@@ -183,7 +185,9 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
 
             let rss_channel = build_channel_from_yt_channel(channel);
 
-            let items = fetch_playlist_items(&upload_playlist, &api_key).await?;
+            let max_fetched_items: usize =
+                conf().get(ConfName::YouutbeMaxResults).unwrap().parse()?;
+            let items = fetch_playlist_items(&upload_playlist, &api_key, max_fetched_items).await?;
 
             let duration_map = create_duration_url_map(&items, &api_key).await?;
 
@@ -355,37 +359,51 @@ fn build_channel_items_from_playlist(
 async fn fetch_playlist_items(
     playlist_id: &String,
     api_key: &String,
+    max_fetched_items: usize,
 ) -> eyre::Result<Vec<PlaylistItem>> {
     let hub = get_youtube_hub();
-    let max_consecutive_requests = 5;
-    let mut fetched_playlist_items: Vec<PlaylistItem> =
-        Vec::with_capacity(max_consecutive_requests * 50);
+    let max_consecutive_requests = (max_fetched_items / 50) + 1;
+    let mut fetched_playlist_items: Vec<PlaylistItem> = Vec::with_capacity(max_fetched_items);
     let mut request_count = 0;
     let mut next_page_token: Option<String> = None;
     debug!("fetching items from playlist {}", playlist_id);
     loop {
+        let remaining_items = max_fetched_items - fetched_playlist_items.len();
+        let items_to_fetch = if remaining_items > 50 {
+            50
+        } else {
+            remaining_items
+        };
+
         let mut playlist_items_request = hub
             .playlist_items()
             .list(&vec!["snippet".into()])
             .playlist_id(playlist_id)
             .param("key", api_key)
-            .max_results(50);
+            .max_results(items_to_fetch.try_into()?);
+
         if let Some(ref next_page_token) = next_page_token {
             playlist_items_request = playlist_items_request.page_token(next_page_token.as_str());
         }
+
         let response = playlist_items_request.doit().await?;
 
-        fetched_playlist_items.extend(response.1.items.ok_or(eyre!("playlist has no items"))?);
+        fetched_playlist_items.extend(
+            response
+                .1
+                .items
+                .ok_or(eyre!("playlist object has no items field"))?,
+        );
         next_page_token = response.1.next_page_token;
 
-        request_count += 1;
-        if next_page_token.is_none() || request_count > max_consecutive_requests {
+        if next_page_token.is_none() || request_count == max_consecutive_requests {
             info!(
-                "fetched {} items, channel too large, stopping",
+                "fetched {} items, max items reached or no more items to fetch",
                 fetched_playlist_items.len()
             );
             break;
         }
+        request_count += 1;
     }
     info!(
         "fetched {} items, in {} requests",
@@ -671,18 +689,69 @@ mod tests {
 
     #[tokio::test]
     async fn test_build_items_for_playlist_requires_api_key() {
-        let id = "PLJmimp-uZX42T7ONp1FLXQDJrRxZ-_1Ct".to_string();
+        let id = "UUXuqSBlHAE6Xw-yeJA0Tunw".to_string();
         let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
 
         let playlist = fetch_playlist(id, &api_key).await.unwrap();
 
         println!("{:?}", &playlist.clone().id.unwrap().clone());
-        let items = fetch_playlist_items(&playlist.id.unwrap(), &api_key)
+        let items = fetch_playlist_items(&playlist.id.unwrap(), &api_key, 300)
             .await
             .unwrap();
 
         println!("{:?}", items);
         assert!(!items.is_empty())
+    }
+
+    #[tokio::test]
+    async fn test_less_than_50_items_requires_api_key() {
+        let id = "UUXuqSBlHAE6Xw-yeJA0Tunw".to_string();
+        let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
+
+        let playlist = fetch_playlist(id, &api_key).await.unwrap();
+
+        println!("{:?}", &playlist.clone().id.unwrap().clone());
+        let items = fetch_playlist_items(&playlist.id.unwrap(), &api_key, 13)
+            .await
+            .unwrap();
+
+        println!("{:?}", items);
+        assert!(!items.is_empty());
+        assert_eq!(items.len(), 13)
+    }
+
+    #[tokio::test]
+    async fn test_less_than_300_items_requires_api_key() {
+        let id = "UUXuqSBlHAE6Xw-yeJA0Tunw".to_string();
+        let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
+
+        let playlist = fetch_playlist(id, &api_key).await.unwrap();
+
+        println!("{:?}", &playlist.clone().id.unwrap().clone());
+        let items = fetch_playlist_items(&playlist.id.unwrap(), &api_key, 50)
+            .await
+            .unwrap();
+
+        println!("{:?}", items);
+        assert!(!items.is_empty());
+        assert_eq!(items.len(), 50)
+    }
+
+    #[tokio::test]
+    async fn test_more_than_300_items_requires_api_key() {
+        let id = "UUXuqSBlHAE6Xw-yeJA0Tunw".to_string();
+        let api_key = conf().get(ConfName::YoutubeApiKey).unwrap();
+
+        let playlist = fetch_playlist(id, &api_key).await.unwrap();
+
+        println!("{:?}", &playlist.clone().id.unwrap().clone());
+        let items = fetch_playlist_items(&playlist.id.unwrap(), &api_key, 600)
+            .await
+            .unwrap();
+
+        println!("{:?}", items);
+        assert!(!items.is_empty());
+        assert_eq!(items.len(), 600)
     }
 
     #[test(tokio::test)]

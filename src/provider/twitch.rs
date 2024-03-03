@@ -56,7 +56,7 @@ impl MediaProvider for TwitchProvider {
             .data;
 
         let channel = channels
-            .get(0)
+            .first()
             .ok_or_else(|| eyre::eyre!("No twitch user found"))?;
 
         debug!("fetched twitch channel: {:?}", channel);

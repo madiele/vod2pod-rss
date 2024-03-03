@@ -1,6 +1,8 @@
 use std::{collections::HashMap, net::TcpListener, time::Instant};
 
-use actix_web::{dev::Server, guard, middleware, web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{
+    dev::Server, guard, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
+};
 use log::{debug, error, info, warn};
 use regex::Regex;
 use serde::Deserialize;
@@ -23,12 +25,21 @@ pub fn spawn_server(listener: TcpListener) -> eyre::Result<Server> {
             .service(
                 web::scope(&root)
                     .service(
-                        web::resource("transcode_media/to_mp3")
+                        web::resource("transcode_media/to.mp3")
                             .name("transcode_mp3")
-                            .guard(guard::Get())
+                            .guard(guard::Any(guard::Get()).or(guard::Head()))
+                            .to(transcode_to_mp3),
+                    )
+                    .service(
+                        //this is an old URL used in old vod2pod versions that did not work with
+                        //itunes kept for backwards compatiility
+                        web::resource("transcode_media/to_mp3")
+                            .name("transcode_mp3_obsolete")
+                            .guard(guard::Any(guard::Get()).or(guard::Head()))
                             .to(transcode_to_mp3),
                     )
                     .route("transcodize_rss", web::get().to(transcodize_rss))
+                    .route("transcodize_rss", web::head().to(transcodize_rss))
                     .route("health", web::get().to(health))
                     .route("/", web::get().to(index))
                     .route("", web::get().to(index)),
@@ -63,6 +74,10 @@ async fn transcodize_rss(
     req: HttpRequest,
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
+    if req.method() == http::Method::HEAD {
+        return HttpResponse::Ok().finish();
+    }
+
     let start_time = Instant::now();
 
     let should_transcode = match conf().get(ConfName::TranscodingEnabled) {
@@ -257,6 +272,17 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
         expected_bytes_count: expected_bytes,
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
+
+    if req.method() == http::Method::HEAD {
+        return HttpResponse::Ok()
+            .insert_header(("Accept-Ranges", "bytes"))
+            .insert_header((
+                "Content-Range",
+                format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}"),
+            ))
+            .content_type(codec.get_mime_type_str())
+            .finish();
+    }
 
     match Transcoder::new(&ffmpeg_paramenters).await {
         Ok(transcoder) => {

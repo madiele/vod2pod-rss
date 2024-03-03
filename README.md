@@ -84,7 +84,7 @@ run this inside the folder with `docker-compose.yml`
 
 `sudo docker compose pull && sudo docker compose up -d`
 
-then run this to delete the old version form your system (note: this will also delete any other unused image you have)
+then run this to delete the old version from your system (note: this will also delete any other unused image you have)
 
 `sudo docker system prune`
 
