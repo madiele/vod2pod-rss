@@ -18,7 +18,7 @@ actix-web = "=4.5.1"
 async-trait = "=0.1.77"
 url = { version="=2.5.0", features = ["serde"]}
 futures = "=0.3.30"
-log = "=0.4.20"
+log = "=0.4.21"
 regex = "=1.10.3"
 reqwest = { version = "=0.11.24", features = ["json"] }
 serde = "=1.0.197"
