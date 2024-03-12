@@ -26,32 +26,33 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
     - RSS/atom feed: `http://myserver.com/transcodize_rss?url=https://feeds.simplecast.com/aU_RzZ7j`
       - Add the domain to the whitelist. See configurations [below](#configurations)
 
-## Add URL To A Podcast Client
-- Add the RSS link to your podcast client <https://transistor.fm/add-podcast/>
+## Add The URL To A Podcast Client
+- <https://transistor.fm/add-podcast/>
 
-# Install
-## Optional API Access
+# Optional API Access
 - Twitch: Get your SECRET and CLIENT ID <https://dev.twitch.tv/console>
 - YouTube: More than 15 items in the RSS feed, channel avatar
   - API key <https://developers.google.com/youtube/v3/getting-started>
   - Enable API Access <https://console.cloud.google.com/>
     - APIs & Services > +Enable APIs and Services > Search "YouTube Data API"
+See configurations [below](#configurations)
 
+# Install
 ## Clone This Repository  
 ```
 git clone https://github.com/madiele/vod2pod-rss.git
 ```
 
 ## Docker
+- Install [Docker Compose](https://docs.docker.com/compose/install/)
 - Precompiled images are available [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
-- Mac: Make sure Rust is installed
+- Mac: Make sure Rust is installed <https://www.rust-lang.org>
   ```
   brew info rust
   ```
   ```
   brew install rust
   ```
-- Install [Docker Compose](https://docs.docker.com/compose/install/)
 
 ### Docker Compose
 ```
