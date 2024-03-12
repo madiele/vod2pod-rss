@@ -32,8 +32,7 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
   - Add the domain to the whitelist (see configuration below)
 
 ## Podcast Client
-Add the RSS link to your podcast client.
-- <https://transistor.fm/add-podcast/>
+- Add the RSS link to your podcast client <https://transistor.fm/add-podcast/>
 
 # Install
 ## Optional API Access
@@ -43,6 +42,11 @@ Add the RSS link to your podcast client.
   - Enable API Access <https://console.cloud.google.com/>
     - APIs & Services > +Enable APIs and Services > Search "YouTube Data API"
 
+## Clone This Repository  
+```
+git clone https://github.com/madiele/vod2pod-rss.git
+```
+
 ## Docker
 - Precompiled images are available [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
 - Mac: Make sure Rust is installed
@@ -51,38 +55,24 @@ Add the RSS link to your podcast client.
   ```
   ```
   brew install rust
-  ``` 
+  ```
+- Docker [Compose](https://docs.docker.com/compose/install/)
 
-### [Docker Compose](https://docs.docker.com/compose/install/)
-
-```
-git clone https://github.com/madiele/vod2pod-rss.git
-```
-
+### Docker Compose
 ```
 cd vod2pod-rss
-```
-
-**docker-compose.yml**
-```
 nano docker-compose.yml
 ```
 ```
 sudo docker compose up -d
 ```
 
-### Updating
-
-`sudo docker compose pull && sudo docker compose up -d`
-
-then run this to delete the old version from your system (note: this will also delete any other unused image you have)
-
-`sudo docker system prune`
-#### new releases notifications
-
-To get notifications of new release be sure to watch the repo and set a custom notification only on new releases.
-
-
+#### Updating
+```
+sudo docker compose pull && sudo docker compose up -d
+sudo docker system prune
+```
+- To get notifications of new release follow [these instructions](https://docs.github.com/en/account-and-profile/managing-subscriptions-and-notifications-on-github/setting-up-notifications/about-notifications)
 
 ## Configuration
 **Web Server Port**
