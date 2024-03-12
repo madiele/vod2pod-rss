@@ -11,7 +11,7 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
 - also works on standard rss podcasts feed if you want to have a lower bitrate version to save mobile data.
 
 ## Limitations
-- Youtube channel avatar is not present and results are limited to 15 when no youtube API key is set.
+- Youtube channel avatar is not present and results are limited to 15 when no YouTube API key is set.
 
 # Usage
 <a label="frontend" href="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
@@ -31,7 +31,7 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
 
 # Optional API Access
 - Twitch: Get your SECRET and CLIENT ID <https://dev.twitch.tv/console>
-- YouTube: More than 15 items in the RSS feed, channel avatar
+- YouTube: Enable more than 15 items in the RSS feed, channel avatar
   - API key <https://developers.google.com/youtube/v3/getting-started>
   - Enable API Access <https://console.cloud.google.com/>
     - APIs & Services > +Enable APIs and Services > Search "YouTube Data API"
@@ -82,7 +82,8 @@ sudo docker system prune
   - e.g. YT_API_KEY=AIzaSyBTCCEOHm
 - `TWITCH_SECRET`: Set your Twitch secret
 - `TWITCH_CLIENT_ID`: Set your Twitch client ID
-  Note: These can also be set using Docker [.env files](https://docs.docker.com/compose/environment-variables/env-file/) 
+
+Note: These can also be set using Docker [.env files](https://docs.docker.com/compose/environment-variables/env-file/) 
 
 ### Environment
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
