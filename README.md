@@ -15,7 +15,7 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
 
 - Youtube channel avatar is not present and results are limited to 15 when no youtube API key is set
 
-## Usage
+# Usage
 
 <a label="frontend" href="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
 
@@ -31,27 +31,16 @@ Example rss/atom feed (be sure to add the domain to the whitelist): `myserver.co
 
 Just add the link to your podcast client.
 
-## Installation
+# Install
+## Optional API Access
+- Twitch: Get your SECRET and CLIENT ID <https://dev.twitch.tv/console>
+- YouTube: More than 15 items in the RSS feed, channel avatar
+  - API key <https://developers.google.com/youtube/v3/getting-started>
+  - Enable API Access <https://console.cloud.google.com/>
+    - APIs & Services > +Enable APIs and Services > Search "YouTube Data API"
 
-### install with docker
-
-### twitch support (optional)
-
-get your SECRET and CLIENT ID from twitch
-
-<https://dev.twitch.tv/console>
-
-### better youtube support (optional)
-
-only needed if you want youtube channels avatar and better playlist support
-
-get your youtube api key here
-
-<https://developers.google.com/youtube/v3/getting-started>
-
-### running the server
-
-precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
+## Docker
+- Precompiled images are [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
 
 #### use [docker compose](https://docs.docker.com/compose/install/) with precompiled image
 
@@ -89,9 +78,13 @@ then run this to delete the old version from your system (note: this will also d
 `sudo docker system prune`
 
 ## Configuration
+Optional API Keys:
+- `YT_API_KEY`: Set your YouTube API key (works without but the feed is limited to 15)
+  - e.g. YT_API_KEY=AIzaSyBTCCEOHm
+- `TWITCH_SECRET`: Set your Twitch secret
+- `TWITCH_CLIENT_ID`: Set your Twitch client ID 
 
 You can set the following environment variables:
-
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "false")
 - `MP3_BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
