@@ -18,7 +18,7 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
 ## Generate A Podcast URL
 - In a web browser goto: http://myserver.com/ or http://localhost/
   - In the web page that opens paste the channel you want to convert to podcast and copy the generated link.
-- Optionally goto : http://myserver.com/`/transcodize_rss?url=channel_url`
+- Optionally goto : http://myserver.com/transcodize_rss?url=channel_url
   - An RSS will be generated.
   - Replace `channel_url` with the URL of the YouTube or Twitch channel you want to convert into a podcast.
     - YouTube: `http://myserver.com/transcodize_rss?url=https://www.youtube.com/c/channelname`
