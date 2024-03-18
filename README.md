@@ -47,13 +47,6 @@ git clone https://github.com/madiele/vod2pod-rss.git
 ## Docker
 - Install [Docker Compose](https://docs.docker.com/compose/install/)
 - Precompiled images are available [here](https://hub.docker.com/r/madiele/vod2pod-rss/) for linux machines with arm64, amd64 and armv7 (raspberry pis are supported).
-- Mac: Make sure Rust is installed <https://www.rust-lang.org>
-  ```
-  brew info rust
-  ```
-  ```
-  brew install rust
-  ```
 
 ### Docker Compose
 ```
