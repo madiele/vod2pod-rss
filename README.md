@@ -14,9 +14,12 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
 - Youtube channel avatar is not present and results are limited to 15 when no YouTube API key is set.
 
 # Usage
+
+## Web UI
 <a label="frontend" href="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png"><img src="https://user-images.githubusercontent.com/4585690/234704870-0bf3023a-78e0-4ccc-adea-9d1f6ea2fabc.png" align="right" width="400px" ></a>
-## Generate A Podcast URL
-- In a web browser goto: http://myserver.com/ or http://localhost/
+- just go where you hosted vod2pod and you will find an easy to use UI to generate the feed
+## Manually Generate A Podcast URL
+- In a web browser go to where you hosted vod2pod, es: http://myserver.com/ or http://localhost/
   - In the web page that opens paste the channel you want to convert to podcast and copy the generated link.
 - Optionally goto : http://myserver.com/transcodize_rss?url=channel_url
   - An RSS will be generated.
@@ -27,7 +30,7 @@ Converts a YouTube or Twitch channel into a full blown audio podcast feed.
       - Add the domain to the whitelist. See configurations [below](#configurations)
 
 ## Add The URL To A Podcast Client
-- <https://transistor.fm/add-podcast/>
+- find a tutorial on how to add an rss feed to your favorite podcast app
 
 # Optional API Access
 - Twitch: Get your SECRET and CLIENT ID <https://dev.twitch.tv/console>
