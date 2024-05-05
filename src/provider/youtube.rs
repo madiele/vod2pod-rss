@@ -258,7 +258,7 @@ struct VideoExtraInfo {
 }
 
 async fn create_duration_url_map(
-    items: &Vec<PlaylistItem>,
+    items: &[PlaylistItem],
     api_key: &str,
 ) -> Result<HashMap<String, VideoExtraInfo>, eyre::Error> {
     let ids_batches = items.chunks(50).map(|c| {
@@ -467,7 +467,7 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
 
 #[io_cached(
     map_error = r##"|e| eyre::Error::new(e)"##,
-    type = "AsyncRedisCache<Url, Url>",
+    ty = "AsyncRedisCache<Url, Url>",
     create = r##" {
         AsyncRedisCache::new("cached_yt_stream_url=", 18000)
             .set_refresh(false)
@@ -543,7 +543,7 @@ async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
     not(test),
     io_cached(
         map_error = r##"|e| eyre::Error::new(e)"##,
-        type = "AsyncRedisCache<Url, Url>",
+        ty = "AsyncRedisCache<Url, Url>",
         create = r##" {
         AsyncRedisCache::new("youtube_channel_username_to_id=", 9999999)
             .set_refresh(false)
@@ -627,7 +627,7 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
     not(test),
     io_cached(
         map_error = r##"|e| eyre::Error::new(e)"##,
-        type = "AsyncRedisCache<Url, Option<usize>>",
+        ty = "AsyncRedisCache<Url, Option<usize>>",
         create = r##" {
         AsyncRedisCache::new("cached_yt_video_duration=", 86400)
             .set_refresh(false)
