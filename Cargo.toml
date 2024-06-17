@@ -20,7 +20,7 @@ url = { version="=2.5.1", features = ["serde"]}
 futures = "=0.3.30"
 log = "=0.4.21"
 regex = "=1.10.5"
-reqwest = { version = "=0.12.4", features = ["json"] }
+reqwest = { version = "=0.12.5", features = ["json"] }
 serde = "=1.0.203"
 serde_json = "=1.0.117"
 tokio = { version = "=1.38.0", features = ["macros", "process"]}
@@ -32,7 +32,7 @@ eyre = "=0.6"
 simple_logger = "=5.0"
 redis = { version = "=0.25", features = ["tokio-comp"] }
 mime = "=0.3.17"
-cached = { version = "=0.51.3", features = ["redis_tokio"] }
+cached = { version = "=0.51.4", features = ["redis_tokio"] }
 iso8601-duration = "=0.2.0"
 chrono = "=0.4.38"
 feed-rs = "=2.0.0"
