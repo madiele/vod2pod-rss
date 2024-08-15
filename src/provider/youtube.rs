@@ -479,13 +479,20 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
 )]
 async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
-    let output = tokio::process::Command::new("yt-dlp")
+    let extra_args: Vec<String> =
+        serde_json::from_str(conf().get(ConfName::YouutbeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
+    let mut command = tokio::process::Command::new("yt-dlp");
+    command
         .arg("-f")
         .arg("bestaudio")
         .arg("--get-url")
-        .arg(url.as_str())
-        .output()
-        .await;
+        .arg(url.as_str());
+
+    for arg in extra_args {
+        command.arg(arg);
+    }
+
+    let output = command.output().await;
 
     match output {
         Ok(x) => {
@@ -565,8 +572,20 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
         .arg(url.to_string())
         .output()
         .await?;
-    let feed_url = std::str::from_utf8(&output.stdout)?.trim().to_string();
-    Ok(Url::parse(&feed_url)?)
+    let conversion = std::str::from_utf8(&output.stdout);
+    let feed_url = match conversion {
+        Ok(feed_url) => feed_url,
+        Err(e) => {
+            warn!(
+                        "error while translating channel name using yt-dlp:\nerror: {}\nyt-dlp stdout: {}\nyt-dlp stderr: {}",
+                        e.to_string(),
+                        conversion.unwrap_or_default(),
+                        std::str::from_utf8(&output.stderr).unwrap_or_default()
+                    );
+            return Err(eyre::eyre!(e));
+        }
+    };
+    Ok(Url::parse(feed_url)?)
 }
 
 fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>) -> String {
