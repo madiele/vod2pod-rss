@@ -15,7 +15,7 @@ path = "src/main.rs"
 actix-rt = "=2.10.0"
 google-youtube3 = "=5.0.4"
 actix-web = "=4.9.0"
-async-trait = "=0.1.81"
+async-trait = "=0.1.82"
 url = { version="=2.5.2", features = ["serde"]}
 futures = "=0.3.30"
 log = "=0.4.22"
@@ -23,7 +23,7 @@ regex = "=1.10.6"
 reqwest = { version = "=0.12.7", features = ["json"] }
 serde = "=1.0.209"
 serde_json = "=1.0.127"
-tokio = { version = "=1.39.3", features = ["macros", "process"]}
+tokio = { version = "=1.40.0", features = ["macros", "process"]}
 uuid = { version= "=1.10.0", features = ["v4", "serde"]}
 genawaiter = {version = "=0.99", features = ["futures03"] }
 openssl = { version = "*", features = ["vendored"] } #this is here just to make cross-compiling work during github actions
