@@ -21,8 +21,8 @@ futures = "=0.3.30"
 log = "=0.4.22"
 regex = "=1.10.6"
 reqwest = { version = "=0.12.7", features = ["json"] }
-serde = "=1.0.209"
-serde_json = "=1.0.127"
+serde = "=1.0.210"
+serde_json = "=1.0.128"
 tokio = { version = "=1.40.0", features = ["macros", "process"]}
 uuid = { version= "=1.10.0", features = ["v4", "serde"]}
 genawaiter = {version = "=0.99", features = ["futures03"] }
