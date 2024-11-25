@@ -16,7 +16,7 @@ actix-rt = "=2.10.0"
 google-youtube3 = "=5.0.4"
 actix-web = "=4.9.0"
 async-trait = "=0.1.83"
-url = { version="=2.5.3", features = ["serde"]}
+url = { version="=2.5.4", features = ["serde"]}
 futures = "=0.3.31"
 log = "=0.4.22"
 regex = "=1.11.1"
