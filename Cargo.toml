@@ -20,9 +20,9 @@ url = { version="=2.5.4", features = ["serde"]}
 futures = "=0.3.31"
 log = "=0.4.22"
 regex = "=1.11.1"
-reqwest = { version = "=0.12.9", features = ["json"] }
-serde = "=1.0.215"
-serde_json = "=1.0.133"
+reqwest = { version = "=0.12.11", features = ["json"] }
+serde = "=1.0.217"
+serde_json = "=1.0.134"
 tokio = { version = "=1.42.0", features = ["macros", "process"]}
 uuid = { version= "=1.11.0", features = ["v4", "serde"]}
 genawaiter = {version = "=0.99", features = ["futures03"] }
@@ -35,7 +35,7 @@ mime = "=0.3.17"
 cached = { version = "=0.54.0", features = ["redis_tokio"] }
 iso8601-duration = "=0.2.0"
 chrono = "=0.4.39"
-feed-rs = "=2.3.0"
+feed-rs = "=2.3.1"
 
 [dev-dependencies]
 temp-env ={ version = "=0.3.6", features = ["async_closure"] }
