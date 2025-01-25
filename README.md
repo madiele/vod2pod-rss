@@ -68,6 +68,14 @@ sudo docker system prune
 ```
 - To get notifications of new release follow [these instructions](https://docs.github.com/en/account-and-profile/managing-subscriptions-and-notifications-on-github/setting-up-notifications/about-notifications)
 
+#### Switching to the Beta branch
+
+The beta branch is a version of vod2pod that is always updated to the latest yt-dlp releases in a matter of days, if you have problems try it out first to see if they are fixed, then open an issue so that I can consider making a new stable release
+
+Also by being on the beta branch you might help me find bugs before I make any new stable release, so you'll help the project too
+
+To switch open the compose docker-compose.yml and edit the vod2pod image section from "latest" to "beta", then follow the steps to update
+
 ## Configurations
 ### Web Server Port
 - `ports`: "80:8080" (optional) Change 80 to another port if you already use the port 80 on your host
