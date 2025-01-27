@@ -23,6 +23,7 @@ pub enum ConfName {
     ValidUrlDomains,
     AudioCodec,
     PeerTubeValidHosts,
+    YouutbeYtDlpExtraArgs,
 }
 
 struct EnvConf {}
@@ -106,6 +107,10 @@ impl Conf for EnvConf {
             ConfName::YouutbeMaxResults => {
                 Ok(std::env::var("YOUTUBE_MAX_RESULTS").unwrap_or_else(|_| "300".to_string()))
             }
+            ConfName::YouutbeYtDlpExtraArgs => {
+                Ok(std::env::var("YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS")
+                    .unwrap_or_else(|_| "[]".to_string()))
+            }
         }
     }
 }
@@ -165,4 +170,3 @@ impl Default for AudioCodec {
         Self::MP3
     }
 }
-
