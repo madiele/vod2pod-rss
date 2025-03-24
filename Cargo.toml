@@ -18,9 +18,9 @@ actix-web = "=4.10.2"
 async-trait = "=0.1.88"
 url = { version="=2.5.4", features = ["serde"]}
 futures = "=0.3.31"
-log = "=0.4.26"
+log = "=0.4.27"
 regex = "=1.11.1"
-reqwest = { version = "=0.12.14", features = ["json"] }
+reqwest = { version = "=0.12.15", features = ["json"] }
 serde = "=1.0.219"
 serde_json = "=1.0.140"
 tokio = { version = "=1.44.1", features = ["macros", "process"]}
