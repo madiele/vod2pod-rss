@@ -14,27 +14,27 @@ path = "src/main.rs"
 [dependencies]
 actix-rt = "=2.10.0"
 google-youtube3 = "=5.0.4"
-actix-web = "=4.9.0"
-async-trait = "=0.1.85"
+actix-web = "=4.10.2"
+async-trait = "=0.1.88"
 url = { version="=2.5.4", features = ["serde"]}
 futures = "=0.3.31"
-log = "=0.4.25"
+log = "=0.4.27"
 regex = "=1.11.1"
-reqwest = { version = "=0.12.12", features = ["json"] }
-serde = "=1.0.217"
-serde_json = "=1.0.137"
-tokio = { version = "=1.43.0", features = ["macros", "process"]}
-uuid = { version= "=1.12.0", features = ["v4", "serde"]}
+reqwest = { version = "=0.12.15", features = ["json"] }
+serde = "=1.0.219"
+serde_json = "=1.0.140"
+tokio = { version = "=1.44.1", features = ["macros", "process"]}
+uuid = { version= "=1.16.0", features = ["v4", "serde"]}
 genawaiter = {version = "=0.99", features = ["futures03"] }
 openssl = { version = "*", features = ["vendored"] } #this is here just to make cross-compiling work during github actions
 rss = { version = "=2.0", features = ["serde"] }
 eyre = "=0.6"
 simple_logger = "=5.0"
-redis = { version = "=0.28", features = ["tokio-comp"] }
+redis = { version = "=0.29", features = ["tokio-comp"] }
 mime = "=0.3.17"
-cached = { version = "=0.54.0", features = ["redis_tokio"] }
+cached = { version = "=0.55.1", features = ["redis_tokio"] }
 iso8601-duration = "=0.2.0"
-chrono = "=0.4.39"
+chrono = "=0.4.40"
 feed-rs = "=2.3.1"
 
 [dev-dependencies]
