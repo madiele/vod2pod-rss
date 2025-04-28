@@ -30,7 +30,7 @@ openssl = { version = "*", features = ["vendored"] } #this is here just to make 
 rss = { version = "=2.0", features = ["serde"] }
 eyre = "=0.6"
 simple_logger = "=5.0"
-redis = { version = "=0.29", features = ["tokio-comp"] }
+redis = { version = "=0.30", features = ["tokio-comp"] }
 mime = "=0.3.17"
 cached = { version = "=0.55.1", features = ["redis_tokio"] }
 iso8601-duration = "=0.2.0"
