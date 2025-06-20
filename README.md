@@ -94,6 +94,7 @@ Note: These can also be set using Docker [.env files](https://docs.docker.com/co
 - `MP3_BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
 - `VALID_URL_DOMAINS`: (optional) Set a comma separated list of domain urls that are allowed to be converted into RSS  (defaults to YouTube and Twitch urls)
+- `CACHE_TTL`: (optional) Set the time to live of the cache in seconds, default is 600 seconds (10 minutes)
 
 # Honorable Mentions
 

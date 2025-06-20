@@ -156,8 +156,11 @@ async fn transcodize_rss(
         }
     };
 
-    //set cache
-    const CACHE_TTL: &str = "600";
+    //set cache to env var CACHE_TTL (or default 600 seconds)
+    let CACHE_TTL: u64 = match conf().get(ConfName::CacheTTL) {
+        Ok(value) => value.parse().unwrap_or(600),
+        Err(_) => 600,
+    };
     let _: () = redis::cmd("SET")
         .arg(&parsed_url.to_string())
         .arg(&body)

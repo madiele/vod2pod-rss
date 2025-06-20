@@ -24,6 +24,7 @@ pub enum ConfName {
     AudioCodec,
     PeerTubeValidHosts,
     YouutbeYtDlpExtraArgs,
+    CacheTTL,
 }
 
 struct EnvConf {}
@@ -110,6 +111,9 @@ impl Conf for EnvConf {
             ConfName::YouutbeYtDlpExtraArgs => {
                 Ok(std::env::var("YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS")
                     .unwrap_or_else(|_| "[]".to_string()))
+            }
+            ConfName::CacheTTL => {
+                Ok(std::env::var("CACHE_TTL").unwrap_or_else(|_| "600".to_string()))
             }
         }
     }
