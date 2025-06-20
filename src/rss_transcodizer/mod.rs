@@ -104,7 +104,7 @@ fn get_description(item: &Item) -> String {
         env!("CARGO_PKG_VERSION"),
         " made by Mattia Di Eleuterio (<a href=\"https://github.com/madiele\">madiele</a>). Check out the <a href=\"https://github.com/madiele/vod2pod-rss\">GitHub repository</a>."
     );
-    let description = item.description().unwrap_or_default();
+    let description = item.description().unwrap_or_default().replace("\n", "<br>");
     let url = item.link().unwrap_or_default();
     let img = item
         .itunes_ext()
