@@ -89,12 +89,23 @@ To switch open the compose docker-compose.yml and edit the vod2pod image section
 
 Note: These can also be set using Docker [.env files](https://docs.docker.com/compose/environment-variables/env-file/) 
 
+### Advanced YouTube Configuration
+- `YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS`: Additional arguments to pass to yt-dlp when extracting YouTube audio URLs
+  - This variable allows you to pass custom arguments to yt-dlp for advanced configurations
+  - Format: JSON array of strings, e.g. `["--arg1", "value1", "--arg2", "value2"]`
+  - Useful for scenarios like:
+    - **Using a proxy**: `YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS=["--proxy", "http://proxy.example.com:8080"]`
+    - **Custom user-agent**: `YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS=["--user-agent", "Mozilla/5.0 Custom Agent"]`
+  - Note: These arguments are applied in addition to the default yt-dlp arguments used by vod2pod-rss
+  - Default: `[]` (empty array)
+
 ### Environment
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
 - `MP3_BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
 - `VALID_URL_DOMAINS`: (optional) Set a comma separated list of domain urls that are allowed to be converted into RSS  (defaults to YouTube and Twitch urls)
 - `CACHE_TTL`: (optional) Set the time to live of the cache in seconds, default is 600 seconds (10 minutes)
+- `YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS`
 
 # Honorable Mentions
 
