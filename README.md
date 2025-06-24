@@ -84,6 +84,8 @@ To switch open the compose docker-compose.yml and edit the vod2pod image section
 ### Optional API Keys
 - `YT_API_KEY`: Set your YouTube API key (works without but the feed is limited to 15)
   - e.g. YT_API_KEY=AIzaSyBTCCEOHm
+- `PROXY`: Set a proxy for yt-dlp requests (optional)
+  - e.g. PROXY=socks5://127.0.0.1:1080 or PROXY=http://proxy.example.com:8080
 - `TWITCH_SECRET`: Set your Twitch secret
 - `TWITCH_CLIENT_ID`: Set your Twitch client ID
 

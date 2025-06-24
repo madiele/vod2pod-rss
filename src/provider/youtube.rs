@@ -481,12 +481,19 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let extra_args: Vec<String> =
         serde_json::from_str(conf().get(ConfName::YouutbeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
+    let proxy = conf().get(ConfName::Proxy).unwrap_or_default();
+    
     let mut command = tokio::process::Command::new("yt-dlp");
     command
         .arg("-f")
         .arg("bestaudio")
         .arg("--get-url")
         .arg(url.as_str());
+
+    // Add proxy if configured
+    if !proxy.is_empty() {
+        command.arg("--proxy").arg(&proxy);
+    }
 
     for arg in extra_args {
         command.arg(arg);
@@ -564,14 +571,22 @@ async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
 )]
 async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
     info!("conversion not in cache, using yt-dlp for conversion...");
-    let output = Command::new("yt-dlp")
+    let proxy = conf().get(ConfName::Proxy).unwrap_or_default();
+    
+    let mut command = Command::new("yt-dlp");
+    command
         .arg("--playlist-items")
         .arg("0")
         .arg("-O")
         .arg("playlist:channel_url")
-        .arg(url.to_string())
-        .output()
-        .await?;
+        .arg(url.to_string());
+    
+    // Add proxy if configured
+    if !proxy.is_empty() {
+        command.arg("--proxy").arg(&proxy);
+    }
+    
+    let output = command.output().await?;
     let conversion = std::str::from_utf8(&output.stdout);
     let feed_url = match conversion {
         Ok(feed_url) => feed_url,
@@ -660,12 +675,19 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
 )]
 async fn get_youtube_video_duration_with_ytdlp(url: &Url) -> eyre::Result<Option<usize>> {
     debug!("getting duration for yt video: {}", url);
+    let proxy = conf().get(ConfName::Proxy).unwrap_or_default();
 
-    let output = Command::new("yt-dlp")
+    let mut command = Command::new("yt-dlp");
+    command
         .arg("--get-duration")
-        .arg(url.to_string())
-        .output()
-        .await;
+        .arg(url.to_string());
+    
+    // Add proxy if configured
+    if !proxy.is_empty() {
+        command.arg("--proxy").arg(&proxy);
+    }
+    
+    let output = command.output().await;
     if let Ok(x) = output {
         let duration_str = std::str::from_utf8(&x.stdout).unwrap().trim().to_string();
         Ok(Some(

@@ -8,6 +8,8 @@ services:
     #(is normal to se this conteiner as stopped soon after deploy)
       # Set your YouTube API key
       - YT_API_KEY=${YT_API_KEY:-}
+      # Set a proxy for yt-dlp requests (optional)
+      - PROXY=${PROXY:-}
       # Set your Twitch secret
       - TWITCH_SECRET=${TWITCH_SECRET:-}
       # Set your Twitch client ID

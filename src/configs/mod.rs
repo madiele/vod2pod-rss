@@ -15,6 +15,7 @@ pub enum ConfName {
     RedisUrl,
     Mp3Bitrate,
     YoutubeApiKey,
+    Proxy,
     YouutbeMaxResults,
     TwitchClientId,
     TwitchSecretKey,
@@ -73,6 +74,9 @@ impl Conf for EnvConf {
                         Ok(s)
                     }
                 }),
+            ConfName::Proxy => {
+                Ok(std::env::var("PROXY").unwrap_or_else(|_| "".to_string()))
+            }
             ConfName::TranscodingEnabled => {
                 Ok(std::env::var("TRANSCODE").unwrap_or_else(|_| "False".to_string()))
             }
