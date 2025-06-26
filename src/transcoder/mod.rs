@@ -64,6 +64,9 @@ impl Transcoder {
         debug!("generating ffmpeg command");
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
+
+        let timeout = conf().get(ConfName::FfmpegTimeoutSeconds).unwrap();
+
         command_ref
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
@@ -84,7 +87,7 @@ impl Transcoder {
                 "-maxrate",
                 format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str(),
             ])
-            .args(["-timeout", "300"])
+            .args(["-timeout", &timeout])
             .args(["-hide_banner"])
             .args(["-loglevel", "error"])
             .args(["pipe:stdout"]);
@@ -256,6 +259,7 @@ impl Transcoder {
 mod test {
     use super::*;
     use log::info;
+    use std::env;
 
     #[tokio::test]
     async fn check_ffmpeg_command() {
@@ -268,6 +272,10 @@ mod test {
             bitrate_kbit: 3,
             expected_bytes_count: 999,
         };
+
+        // Set the environment variable for the test
+        env::set_var("FFMPEG_TIMEOUT", "600");
+
         let transcoder = Transcoder::new(&params).await.unwrap();
         let ppath = transcoder.ffmpeg_command.get_program();
         if let Some(x) = ppath.to_str() {
@@ -316,6 +324,7 @@ mod test {
                 Some("-timeout") => {
                     let value = args.next().unwrap().to_str().unwrap();
                     info!("-timeout {}", value);
+                    assert_eq!(value, "600");
                 }
                 Some("-hide_banner") => {
                     info!("-hide_banner");
@@ -328,6 +337,8 @@ mod test {
                 None => panic!("ffmpeg run with no options"),
             }
         }
+
+        // Clean up the environment variable
+        env::remove_var("FFMPEG_TIMEOUT");
     }
 }
-
