@@ -15,7 +15,7 @@ pub enum ConfName {
     RedisUrl,
     Mp3Bitrate,
     YoutubeApiKey,
-    YoutbeMaxResults,
+    YoutubeMaxResults,
     TwitchClientId,
     TwitchSecretKey,
     TranscodingEnabled,
@@ -23,7 +23,7 @@ pub enum ConfName {
     ValidUrlDomains,
     AudioCodec,
     PeerTubeValidHosts,
-    YoutbeYtDlpExtraArgs,
+    YoutubeYtDlpExtraArgs,
     CacheTTL,
     FfmpegTimeoutSeconds,
 }
@@ -106,10 +106,10 @@ impl Conf for EnvConf {
             ConfName::PeerTubeValidHosts => {
                 Ok(std::env::var("PEERTUBE_VALID_DOMAINS").unwrap_or_else(|_| "".to_string()))
             }
-            ConfName::YoutbeMaxResults => {
+            ConfName::YoutubeMaxResults => {
                 Ok(std::env::var("YOUTUBE_MAX_RESULTS").unwrap_or_else(|_| "300".to_string()))
             }
-            ConfName::YoutbeYtDlpExtraArgs => {
+            ConfName::YoutubeYtDlpExtraArgs => {
                 Ok(std::env::var("YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS")
                     .unwrap_or_else(|_| "[]".to_string()))
             }

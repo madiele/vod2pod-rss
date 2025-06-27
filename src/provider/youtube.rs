@@ -161,7 +161,7 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
             let rss_channel = build_channel_from_playlist(playlist);
 
             let max_fetched_items: usize =
-                conf().get(ConfName::YoutbeMaxResults).unwrap().parse()?;
+                conf().get(ConfName::YoutubeMaxResults).unwrap().parse()?;
             let items = fetch_playlist_items(&playlist_id, &api_key, max_fetched_items).await?;
 
             let duration_map = create_duration_url_map(&items, &api_key).await?;
@@ -186,7 +186,7 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
             let rss_channel = build_channel_from_yt_channel(channel);
 
             let max_fetched_items: usize =
-                conf().get(ConfName::YoutbeMaxResults).unwrap().parse()?;
+                conf().get(ConfName::YoutubeMaxResults).unwrap().parse()?;
             let items = fetch_playlist_items(&upload_playlist, &api_key, max_fetched_items).await?;
 
             let duration_map = create_duration_url_map(&items, &api_key).await?;
@@ -480,7 +480,7 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
 async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let extra_args: Vec<String> =
-        serde_json::from_str(conf().get(ConfName::YoutbeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
+        serde_json::from_str(conf().get(ConfName::YoutubeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
     let mut command = tokio::process::Command::new("yt-dlp");
     command
         .arg("-f")
