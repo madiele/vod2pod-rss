@@ -265,6 +265,14 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
     let seek_secs =
         ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
     debug!("choosen seek_time: {seek_secs}");
+
+    let timeout_in_seconds = conf()
+        .get(ConfName::FfmpegTimeoutSeconds)
+        .unwrap()
+        .parse()
+        .unwrap();
+    debug!("choosen timeout in seconds: {timeout_in_seconds}");
+
     let codec = conf().get(ConfName::AudioCodec).unwrap().into();
     let ffmpeg_paramenters = FfmpegParameters {
         seek_time: seek_secs,
@@ -273,6 +281,7 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
         expected_bytes_count: expected_bytes,
+        timeout_in_seconds: timeout_in_seconds,
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
@@ -347,4 +356,3 @@ mod tests {
         assert_eq!((start, end, expected), (0, 199, 200));
     }
 }
-

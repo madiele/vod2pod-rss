@@ -28,6 +28,7 @@ pub struct FfmpegParameters {
     pub bitrate_kbit: usize,
     pub max_rate_kbit: usize,
     pub expected_bytes_count: usize,
+    pub timeout_in_seconds: usize,
 }
 
 impl FfmpegParameters {
@@ -52,6 +53,7 @@ impl Transcoder {
             bitrate_kbit: ffmpeg_paramenters.bitrate_kbit,
             max_rate_kbit: ffmpeg_paramenters.max_rate_kbit,
             expected_bytes_count: ffmpeg_paramenters.expected_bytes_count,
+            timeout_in_seconds: ffmpeg_paramenters.timeout_in_seconds,
         });
 
         Ok(Self {
@@ -64,6 +66,7 @@ impl Transcoder {
         debug!("generating ffmpeg command");
         let mut command = Command::new("ffmpeg");
         let command_ref = &mut command;
+
         command_ref
             .args(["-ss", ffmpeg_paramenters.seek_time.to_string().as_str()])
             .args(["-i", ffmpeg_paramenters.url.as_str()])
@@ -84,7 +87,10 @@ impl Transcoder {
                 "-maxrate",
                 format!("{}k", ffmpeg_paramenters.max_rate_kbit).as_str(),
             ])
-            .args(["-timeout", "300"])
+            .args([
+                "-timeout",
+                ffmpeg_paramenters.timeout_in_seconds.to_string().as_str(),
+            ])
             .args(["-hide_banner"])
             .args(["-loglevel", "error"])
             .args(["pipe:stdout"]);
@@ -267,7 +273,9 @@ mod test {
             audio_codec: AudioCodec::MP3,
             bitrate_kbit: 3,
             expected_bytes_count: 999,
+            timeout_in_seconds: 600,
         };
+
         let transcoder = Transcoder::new(&params).await.unwrap();
         let ppath = transcoder.ffmpeg_command.get_program();
         if let Some(x) = ppath.to_str() {
@@ -316,6 +324,7 @@ mod test {
                 Some("-timeout") => {
                     let value = args.next().unwrap().to_str().unwrap();
                     info!("-timeout {}", value);
+                    assert_eq!(value, "600");
                 }
                 Some("-hide_banner") => {
                     info!("-hide_banner");
@@ -330,4 +339,3 @@ mod test {
         }
     }
 }
-
