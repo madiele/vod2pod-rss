@@ -20,10 +20,10 @@ url = { version="=2.5.4", features = ["serde"]}
 futures = "=0.3.31"
 log = "=0.4.27"
 regex = "=1.11.1"
-reqwest = { version = "=0.12.20", features = ["json"] }
+reqwest = { version = "=0.12.22", features = ["json"] }
 serde = "=1.0.219"
 serde_json = "=1.0.140"
-tokio = { version = "=1.45.1", features = ["macros", "process"]}
+tokio = { version = "=1.46.1", features = ["macros", "process"]}
 uuid = { version= "=1.17.0", features = ["v4", "serde"]}
 genawaiter = {version = "=0.99", features = ["futures03"] }
 openssl = { version = "*", features = ["vendored"] } #this is here just to make cross-compiling work during github actions
