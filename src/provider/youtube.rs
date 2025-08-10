@@ -469,7 +469,7 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
     map_error = r##"|e| eyre::Error::new(e)"##,
     ty = "AsyncRedisCache<Url, Url>",
     create = r##" {
-        AsyncRedisCache::new("cached_yt_stream_url=", 18000)
+        AsyncRedisCache::new("cached_yt_stream_url=", std::time::Duration::from_secs(18000))
             .set_refresh(false)
             .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
@@ -553,7 +553,7 @@ async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
         map_error = r##"|e| eyre::Error::new(e)"##,
         ty = "AsyncRedisCache<Url, Url>",
         create = r##" {
-        AsyncRedisCache::new("youtube_channel_username_to_id=", 9999999)
+        AsyncRedisCache::new("youtube_channel_username_to_id=", std::time::Duration::from_secs(9999999))
             .set_refresh(false)
             .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
@@ -649,7 +649,7 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
         map_error = r##"|e| eyre::Error::new(e)"##,
         ty = "AsyncRedisCache<Url, Option<usize>>",
         create = r##" {
-        AsyncRedisCache::new("cached_yt_video_duration=", 86400)
+        AsyncRedisCache::new("cached_yt_video_duration=", std::time::Duration::from_secs(86400))
             .set_refresh(false)
             .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
