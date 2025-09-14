@@ -26,6 +26,7 @@ pub enum ConfName {
     YoutubeYtDlpExtraArgs,
     CacheTTL,
     FfmpegTimeoutSeconds,
+    YtExcludeVideosBelowDurationSeconds,
 }
 
 struct EnvConf {}
@@ -118,6 +119,9 @@ impl Conf for EnvConf {
             }
             ConfName::FfmpegTimeoutSeconds => {
                 Ok(std::env::var("FFMPEG_TIMEOUT_SECONDS").unwrap_or_else(|_| "300".to_string()))
+            }
+            ConfName::YtExcludeVideosBelowDurationSeconds => {
+                Ok(std::env::var("YT_EXCLUDE_VIDEOS_BELOW_DURATION_SECONDS").unwrap_or_else(|_| "0".to_string()))
             }
         }
     }

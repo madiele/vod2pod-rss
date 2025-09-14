@@ -325,7 +325,7 @@ fn build_channel_items_from_playlist(
             let video_id = snippet.resource_id.take()?.video_id?;
             let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", &video_id)).ok()?;
             let mut item_builder = ItemBuilder::default();
-            item_builder.title(Some(title));
+            item_builder.title(Some(title.clone()));
             item_builder.description(Some(description.clone()));
             item_builder.link(Some(url.to_string()));
             item_builder.guid(Some(GuidBuilder::default().value(url.to_string()).build()));
@@ -339,6 +339,25 @@ fn build_channel_items_from_playlist(
                 warn!("no duration found for {:?}", &video_id);
                 None
             })?;
+
+            // Filter videos by minimum duration
+            let min_duration_seconds: u64 = crate::configs::conf()
+                .get(crate::configs::ConfName::YtExcludeVideosBelowDurationSeconds)
+                .unwrap_or_else(|_| "0".to_string())
+                .parse()
+                .unwrap_or(0);
+
+            let total_seconds = video_infos.duration.hour * 3600.0 
+                              + video_infos.duration.minute * 60.0 
+                              + video_infos.duration.second;
+
+            log::debug!("Video '{}' duration: {}s, min required: {}s", title, total_seconds, min_duration_seconds);
+
+            if total_seconds < min_duration_seconds as f32 {
+                log::info!("Skipping video '{}' - duration {}s is below minimum {}s", title, total_seconds, min_duration_seconds);
+                return None; // Skip this video if it's below the minimum duration
+            }
+
             let itunes_item_extension = ITunesItemExtensionBuilder::default()
                 .summary(Some(description))
                 .duration(Some({
@@ -609,7 +628,8 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
     let items = feed
         .entries
         .into_iter()
-        .map(|entry| {
+        .filter_map(|entry| {
+            let title = entry.title.as_ref().map(|d| d.content.clone()).unwrap_or_else(|| "Unknown".to_string());
             let mut item_builder = ItemBuilder::default();
             item_builder.title(entry.title.map(|d| d.content));
             item_builder.description(
@@ -627,16 +647,31 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
                     .and_then(|m| m.thumbnails.first())
                     .map(|t| t.clone().image.uri),
             );
-            let duration = (|| -> Option<_> {
-                duration_map
-                    .get(&link?)
-                    .map(|s| s.map(|a| format!("{:02}:{:02}:{:02}", a / 3600, a / 60 % 60, a % 60)))
-            })()
-            .flatten();
+            let duration_seconds = duration_map
+                .get(&link?)
+                .and_then(|s| *s);
+
+            // Filter videos by minimum duration
+            let min_duration_seconds: u64 = crate::configs::conf()
+                .get(crate::configs::ConfName::YtExcludeVideosBelowDurationSeconds)
+                .unwrap_or_else(|_| "0".to_string())
+                .parse()
+                .unwrap_or(0);
+
+            if let Some(duration_secs) = duration_seconds {
+                log::debug!("Video '{}' duration: {}s, min required: {}s", title, duration_secs, min_duration_seconds);
+                if (duration_secs as u64) < min_duration_seconds {
+                    log::info!("Skipping video '{}' - duration {}s is below minimum {}s", title, duration_secs, min_duration_seconds);
+                    return None; // Skip this video if it's below the minimum duration
+                }
+            }
+
+            let duration = duration_seconds
+                .map(|a| format!("{:02}:{:02}:{:02}", a / 3600, a / 60 % 60, a % 60));
             itunes_item_builder.duration(duration);
             item_builder.itunes_ext(Some(itunes_item_builder.build()));
             item_builder.guid(Some(GuidBuilder::default().value(entry.id).build()));
-            item_builder.build()
+            Some(item_builder.build())
         })
         .collect::<Vec<Item>>();
     feed_builder.items(items);

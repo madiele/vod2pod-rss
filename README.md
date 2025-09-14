@@ -99,6 +99,12 @@ Note: These can also be set using Docker [.env files](https://docs.docker.com/co
   - Note: These arguments are applied in addition to the default yt-dlp arguments used by vod2pod-rss
   - Default: `[]` (empty array)
 
+### Video Duration Filtering
+- `YT_EXCLUDE_VIDEOS_BELOW_DURATION_SECONDS`: Filter out YouTube videos shorter than the specified duration
+  - This variable allows you to exclude videos that are too short from your podcast feed
+  - Format: Integer value in seconds, e.g. `300` (5 minutes), `1800` (30 minutes), `3600` (1 hour)
+  - Default: `0` (no filtering, all videos included)
+
 ### Environment
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
 - `MP3_BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
