@@ -351,10 +351,8 @@ fn build_channel_items_from_playlist(
                               + video_infos.duration.minute * 60.0 
                               + video_infos.duration.second;
 
-            log::debug!("Video '{}' duration: {}s, min required: {}s", title, total_seconds, min_duration_seconds);
-
             if total_seconds < min_duration_seconds as f32 {
-                log::info!("Skipping video '{}' - duration {}s is below minimum {}s", title, total_seconds, min_duration_seconds);
+                log::debug!("Skipping video '{}' - duration {}s is below minimum {}s", title, total_seconds, min_duration_seconds);
                 return None; // Skip this video if it's below the minimum duration
             }
 
@@ -659,9 +657,8 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
                 .unwrap_or(0);
 
             if let Some(duration_secs) = duration_seconds {
-                log::debug!("Video '{}' duration: {}s, min required: {}s", title, duration_secs, min_duration_seconds);
                 if (duration_secs as u64) < min_duration_seconds {
-                    log::info!("Skipping video '{}' - duration {}s is below minimum {}s", title, duration_secs, min_duration_seconds);
+                    log::debug!("Skipping video '{}' - duration {}s is below minimum {}s", title, duration_secs, min_duration_seconds);
                     return None; // Skip this video if it's below the minimum duration
                 }
             }
