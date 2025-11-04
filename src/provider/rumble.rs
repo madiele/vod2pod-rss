@@ -10,7 +10,6 @@ use rss::{
 use scraper::{Html, Selector};
 use chrono::{DateTime, Utc};
 use tokio::process::Command;
-use serde_json; // <--- added
 
 use crate::provider;
 use crate::configs::{conf, Conf, ConfName};
@@ -26,87 +25,87 @@ impl MediaProvider for RumbleProvider {
 
         let client = Client::new();
 
-        // ------------ First page ------------
-        let html = client
-            .get(channel_url.clone())
+        // ------------ Fetch first page HTML ------------
+        let mut current_url = channel_url.clone();
+        let mut current_html = client
+            .get(current_url.clone())
             .send()
             .await?
             .text()
             .await?;
-        let mut document = Html::parse_document(&html);
 
-        // Work inside <main> to avoid header/footer noise
         let main_sel = Selector::parse("main").unwrap();
-        let main = document
-            .select(&main_sel)
-            .next()
-            .ok_or_else(|| eyre!("failed to find <main> in rumble page"))?;
-
         let mut feed_builder: ChannelBuilder = provider::build_default_rss_structure();
 
-        // ------------ Channel title ------------
-        let title_sel = Selector::parse("div.channel-header--title h1").unwrap();
-        let chan_title = main
-            .select(&title_sel)
-            .next()
-            .map(|n| n.text().collect::<String>().trim().to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| {
-                warn!("Rumble: failed to pull channel title, falling back to URL");
-                channel_url.to_string()
-            });
-        feed_builder.title(chan_title);
+        // ------------ Channel metadata from first page ------------
+        {
+            let document = Html::parse_document(&current_html);
+            let main = document
+                .select(&main_sel)
+                .next()
+                .ok_or_else(|| eyre!("failed to find <main> in rumble page"))?;
 
-        // ------------ Channel description (meta[name="description"]) ------------
-        let meta_desc_sel = Selector::parse(r#"meta[name="description"]"#).unwrap();
-        let chan_desc = document
-            .select(&meta_desc_sel)
-            .next()
-            .and_then(|n| n.value().attr("content"))
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| {
-                warn!("Rumble: failed to pull channel description, using fallback");
-                format!("Rumble channel: {}", channel_url)
-            });
-        feed_builder.description(chan_desc);
+            // Channel title
+            let title_sel = Selector::parse("div.channel-header--title h1").unwrap();
+            let chan_title = main
+                .select(&title_sel)
+                .next()
+                .map(|n| n.text().collect::<String>().trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| {
+                    warn!("Rumble: failed to pull channel title, falling back to URL");
+                    channel_url.to_string()
+                });
+            feed_builder.title(chan_title);
 
-        // ------------ Channel image (prefer avatar, fall back to banner) ------------
-        let avatar_sel = Selector::parse("img.channel-header--img").unwrap();
-        let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
+            // Channel description (meta[name="description"])
+            let meta_desc_sel = Selector::parse(r#"meta[name="description"]"#).unwrap();
+            let chan_desc = document
+                .select(&meta_desc_sel)
+                .next()
+                .and_then(|n| n.value().attr("content"))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| {
+                    warn!("Rumble: failed to pull channel description, using fallback");
+                    format!("Rumble channel: {}", channel_url)
+                });
+            feed_builder.description(chan_desc);
 
-        let chan_img_url = main
-            // Prefer the square-ish avatar for podcast apps
-            .select(&avatar_sel)
-            .next()
-            .and_then(|n| n.value().attr("src"))
-            .map(|s| s.to_string())
-            // Fallback: channel banner if no avatar was found
-            .or_else(|| {
-                main.select(&banner_sel)
-                    .next()
-                    .and_then(|n| n.value().attr("src"))
-                    .map(|s| s.to_string())
-            });
+            // Channel image (prefer avatar, fall back to banner)
+            let avatar_sel = Selector::parse("img.channel-header--img").unwrap();
+            let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
 
-        if let Some(img_url) = chan_img_url {
-            let mut image_builder = ImageBuilder::default();
-            image_builder.url(img_url);
-            // You *can* hint square size if you want:
-            // image_builder.width(140);
-            // image_builder.height(140);
-            feed_builder.image(Some(image_builder.build()));
+            let chan_img_url = main
+                // Prefer the square-ish avatar (better for podcast apps)
+                .select(&avatar_sel)
+                .next()
+                .and_then(|n| n.value().attr("src"))
+                .map(|s| s.to_string())
+                // Fallback: channel banner
+                .or_else(|| {
+                    main.select(&banner_sel)
+                        .next()
+                        .and_then(|n| n.value().attr("src"))
+                        .map(|s| s.to_string())
+                });
+
+            if let Some(img_url) = chan_img_url {
+                let mut image_builder = ImageBuilder::default();
+                image_builder.url(img_url);
+                feed_builder.image(Some(image_builder.build()));
+            }
         }
 
         feed_builder.link(channel_url.to_string());
         feed_builder.language(Some("en".to_string()));
 
-        // ------------ Config: max items (reuse YouTube max results) ------------
+        // ------------ Config: max items (reuse YoutubeMaxResults) ------------
         let max_items: usize = conf()
-            .get(ConfName::YoutubeMaxResults)              // <- correct variant name
-            .unwrap_or_else(|_| "50".to_string())         // <- handle error, use default "50"
+            .get(ConfName::YoutubeMaxResults)
+            .unwrap_or_else(|_| "50".to_string())
             .parse()
-            .unwrap_or(50);                                // <- fallback if parse fails
+            .unwrap_or(50);
 
         // ------------ Common selectors for videos ------------
         let grid_sel = Selector::parse("ol.thumbnail__grid div.videostream").unwrap();
@@ -126,18 +125,19 @@ impl MediaProvider for RumbleProvider {
         let time_sel = Selector::parse("time.videostream__time").unwrap();
         let duration_sel = Selector::parse("div.videostream__status--duration").unwrap();
 
-        // Pagination "next" link (may need tweaking if Rumble changes)
+        // Pagination "next" link
         let next_sel =
             Selector::parse("a[rel=\"next\"], a.pagination__next, a.page-link[rel=\"next\"]")
                 .unwrap();
 
         let mut items = Vec::new();
-        let mut current_url = channel_url.clone();
 
         // ------------ Process pages (pagination) ------------
         'pages: loop {
             info!("Rumble: processing page {}", current_url);
 
+            // Parse the current page HTML and drop it before the next await
+            let document = Html::parse_document(&current_html);
             let main = document
                 .select(&main_sel)
                 .next()
@@ -246,7 +246,7 @@ impl MediaProvider for RumbleProvider {
                 break 'pages;
             }
 
-            // Find and follow "next" page
+            // Find "next" page from this document
             let maybe_next = document
                 .select(&next_sel)
                 .next()
@@ -261,8 +261,14 @@ impl MediaProvider for RumbleProvider {
             current_url = next_url.clone();
             info!("Rumble: following pagination to {}", current_url);
 
-            let html = client.get(next_url).send().await?.text().await?;
-            document = Html::parse_document(&html);
+            // Fetch next page HTML
+            // NOTE: `document` and `main` are dropped before this `.await`
+            current_html = client
+                .get(next_url)
+                .send()
+                .await?
+                .text()
+                .await?;
         }
 
         feed_builder.items(items);
@@ -274,32 +280,13 @@ impl MediaProvider for RumbleProvider {
     async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
         debug!("getting stream_url for rumble video: {}", media_url);
 
-        // Build yt-dlp command
-        let mut cmd = Command::new("yt-dlp");
-
-        // 1) Global extra args from ENV (e.g. retries, no-progress, geo-bypass)
-        if let Ok(extra) = std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS") {
-            match serde_json::from_str::<Vec<String>>(&extra) {
-                Ok(args) => {
-                    debug!("Rumble: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp: {:?}", args);
-                    cmd.args(args);
-                }
-                Err(e) => {
-                    warn!(
-                        "Rumble: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
-                        extra, e
-                    );
-                }
-            }
-        }
-
-        // 2) Rumble-specific base options
-        cmd.arg("-f")
+        let output = Command::new("yt-dlp")
+            .arg("-f")
             .arg("bestaudio/best")
             .arg("--get-url")
-            .arg(media_url.as_str());
-
-        let output = cmd.output().await;
+            .arg(media_url.as_str())
+            .output()
+            .await;
 
         match output {
             Ok(x) => {
