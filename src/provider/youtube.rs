@@ -54,7 +54,10 @@ impl MediaProvider for YoutubeProvider {
                             .find(|(key, _)| key == "list")
                             .map(|(_, value)| value)
                             .ok_or_else(|| {
-                                eyre::eyre!("Failed to parse playlist ID from URL: {}", channel_url)
+                                eyre::eyre!(
+                                    "Failed to parse playlist ID from URL: {}",
+                                    channel_url
+                                )
                             })?;
                         IdType::Playlist(playlist_id.into())
                     }
@@ -101,15 +104,21 @@ impl MediaProvider for YoutubeProvider {
                     path if path.starts_with("/playlist") => {
                         feed_url_for_yt_playlist(&channel_url).await
                     }
-                    path if path.starts_with("/feeds/") => feed_url_for_yt_atom(&channel_url).await,
+                    path if path.starts_with("/feeds/") => {
+                        feed_url_for_yt_atom(&channel_url).await
+                    }
                     path if path.starts_with("/channel/") => {
                         feed_url_for_yt_channel(&channel_url).await
                     }
                     path if path.starts_with("/user/") => {
                         feed_url_for_yt_channel(&channel_url).await
                     }
-                    path if path.starts_with("/c/") => feed_url_for_yt_channel(&channel_url).await,
-                    path if path.starts_with("/@") => feed_url_for_yt_channel(&channel_url).await,
+                    path if path.starts_with("/c/") => {
+                        feed_url_for_yt_channel(&channel_url).await
+                    }
+                    path if path.starts_with("/@") => {
+                        feed_url_for_yt_channel(&channel_url).await
+                    }
                     _ => Err(eyre!("unsupported youtube url")),
                 }?;
                 let raw_atom_feed = reqwest::get(feed).await?.text().await?;
@@ -479,24 +488,55 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
 )]
 async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
-    let extra_args: Vec<String> =
-        serde_json::from_str(conf().get(ConfName::YoutubeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
+
     let mut command = tokio::process::Command::new("yt-dlp");
+
+    // ---------- Global yt-dlp extra args from env (optional) ----------
+    if let Ok(extra) = std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS") {
+        match serde_json::from_str::<Vec<String>>(&extra) {
+            Ok(args) => {
+                debug!(
+                    "YouTube: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp: {:?}",
+                    args
+                );
+                command.args(args);
+            }
+            Err(e) => {
+                warn!(
+                    "YouTube: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
+                    extra, e
+                );
+            }
+        }
+    }
+
+    // ---------- YouTube-specific extra args from config ----------
+    let extra_args_raw = conf().get(ConfName::YoutubeYtDlpExtraArgs)?;
+    let extra_args: Vec<String> = serde_json::from_str(extra_args_raw.as_str()).map_err(|_| {
+        eyre!(
+            r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS; allowed syntax is ["arg1", "arg2", "arg3", ...]"#
+        )
+    })?;
+
+    // ---------- Base yt-dlp options ----------
     command
         .arg("-f")
         .arg("bestaudio")
-        .arg("--get-url")
-        .arg(url.as_str());
+        .arg("--get-url");
 
+    // Apply YouTube-specific args *before* the URL
     for arg in extra_args {
         command.arg(arg);
     }
+
+    // Finally, the video URL
+    command.arg(url.as_str());
 
     let output = command.output().await;
 
     match output {
         Ok(x) => {
-            let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default();
+            let raw_url = std::str::from_utf8(&x.stdout).unwrap_or_default().trim();
             match Url::from_str(raw_url) {
                 Ok(url) => Ok(url),
                 Err(e) => {
@@ -564,28 +604,49 @@ async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
 )]
 async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
     info!("conversion not in cache, using yt-dlp for conversion...");
-    let output = Command::new("yt-dlp")
-        .arg("--playlist-items")
+
+    let mut cmd = Command::new("yt-dlp");
+
+    // Global extra args
+    if let Ok(extra) = std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS") {
+        match serde_json::from_str::<Vec<String>>(&extra) {
+            Ok(args) => {
+                debug!(
+                    "YouTube: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp (find_yt_channel_url_with_c_id): {:?}",
+                    args
+                );
+                cmd.args(args);
+            }
+            Err(e) => {
+                warn!(
+                    "YouTube: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
+                    extra, e
+                );
+            }
+        }
+    }
+
+    cmd.arg("--playlist-items")
         .arg("0")
         .arg("-O")
         .arg("playlist:channel_url")
-        .arg(url.to_string())
-        .output()
-        .await?;
+        .arg(url.to_string());
+
+    let output = cmd.output().await?;
     let conversion = std::str::from_utf8(&output.stdout);
     let feed_url = match conversion {
         Ok(feed_url) => feed_url,
         Err(e) => {
             warn!(
-                        "error while translating channel name using yt-dlp:\nerror: {}\nyt-dlp stdout: {}\nyt-dlp stderr: {}",
-                        e.to_string(),
-                        conversion.unwrap_or_default(),
-                        std::str::from_utf8(&output.stderr).unwrap_or_default()
-                    );
+                "error while translating channel name using yt-dlp:\nerror: {}\nyt-dlp stdout: {}\nyt-dlp stderr: {}",
+                e.to_string(),
+                conversion.unwrap_or_default(),
+                std::str::from_utf8(&output.stderr).unwrap_or_default()
+            );
             return Err(eyre::eyre!(e));
         }
     };
-    Ok(Url::parse(feed_url)?)
+    Ok(Url::parse(feed_url.trim())?)
 }
 
 fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>) -> String {
@@ -661,13 +722,35 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
 async fn get_youtube_video_duration_with_ytdlp(url: &Url) -> eyre::Result<Option<usize>> {
     debug!("getting duration for yt video: {}", url);
 
-    let output = Command::new("yt-dlp")
-        .arg("--get-duration")
-        .arg(url.to_string())
-        .output()
-        .await;
+    let mut cmd = Command::new("yt-dlp");
+
+    // Global extra args
+    if let Ok(extra) = std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS") {
+        match serde_json::from_str::<Vec<String>>(&extra) {
+            Ok(args) => {
+                debug!(
+                    "YouTube: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp (get_youtube_video_duration_with_ytdlp): {:?}",
+                    args
+                );
+                cmd.args(args);
+            }
+            Err(e) => {
+                warn!(
+                    "YouTube: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
+                    extra, e
+                );
+            }
+        }
+    }
+
+    cmd.arg("--get-duration").arg(url.to_string());
+
+    let output = cmd.output().await;
     if let Ok(x) = output {
-        let duration_str = std::str::from_utf8(&x.stdout).unwrap().trim().to_string();
+        let duration_str = std::str::from_utf8(&x.stdout)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
         Ok(Some(
             parse_duration(&duration_str)
                 .unwrap_or_default()
@@ -702,6 +785,7 @@ fn parse_duration(duration_str: &str) -> Result<Duration, String> {
     let duration_secs = hours * 3600 + minutes * 60 + seconds;
     Ok(Duration::from_secs(duration_secs))
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
