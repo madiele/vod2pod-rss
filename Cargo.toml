@@ -36,6 +36,7 @@ cached = { version = "=0.56.0", features = ["redis_tokio"] }
 iso8601-duration = "=0.2.0"
 chrono = "=0.4.42"
 feed-rs = "=2.3.1"
+scraper = "0.19"
 
 [dev-dependencies]
 temp-env ={ version = "=0.3.6", features = ["async_closure"] }
