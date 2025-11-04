@@ -5,14 +5,13 @@ use regex::Regex;
 use reqwest::Url;
 use rss::{
     extension::itunes::ITunesItemExtensionBuilder,
-    ChannelBuilder, GuidBuilder, ImageBuilder, ItemBuilder,
+    GuidBuilder, ImageBuilder, ItemBuilder,
 };
 use scraper::{Html, Selector};
 use chrono::{DateTime, Utc};
 use tokio::process::Command;
 
 use crate::provider;
-use crate::configs::{conf, Conf, ConfName};
 use super::MediaProvider;
 
 pub struct RumbleProvider;
@@ -26,7 +25,7 @@ impl MediaProvider for RumbleProvider {
         let html = reqwest::get(channel_url.as_str()).await?.text().await?;
         let document = Html::parse_document(&html);
 
-        // We mirror PodTube: work inside <main> to avoid header/footer noise
+        // Work inside <main> to avoid header/footer noise
         let main_sel = Selector::parse("main").unwrap();
         let main = document
             .select(&main_sel)
@@ -40,7 +39,7 @@ impl MediaProvider for RumbleProvider {
         let chan_title = main
             .select(&title_sel)
             .next()
-            .and_then(|n| Some(n.text().collect::<String>().trim().to_string()))
+            .map(|n| n.text().collect::<String>().trim().to_string())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| {
                 warn!("Rumble: failed to pull channel title, falling back to URL");
@@ -67,6 +66,8 @@ impl MediaProvider for RumbleProvider {
         let videos: Vec<_> = main.select(&grid_sel).collect();
         if videos.is_empty() {
             warn!("Rumble: failed to find video list");
+        } else {
+            info!("Rumble: found {} videos", videos.len());
         }
 
         let live_sel = Selector::parse(
@@ -171,9 +172,7 @@ impl MediaProvider for RumbleProvider {
                 item_builder.pub_date(Some(pd));
             }
 
-            // NOTE: enclosure URL will be injected by rss_transcodizer
-            // so we do NOT set it here; this matches what Youtube/Twitch flows do.
-
+            // enclosure will be injected later by rss_transcodizer
             items.push(item_builder.build());
         }
 
@@ -217,13 +216,13 @@ impl MediaProvider for RumbleProvider {
     }
 
     /// Regexes for Rumble and its media hosts
-fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-    vec![
-        // Any https://rumble.com... URL
-        Regex::new(r"^https?://(www\.)?rumble\.com").unwrap(),
-        // Rumble’s media hosts
-        Regex::new(r"^https?://sp\.rmbl\.ws").unwrap(),
-        Regex::new(r"^https?://rmbl\.ws").unwrap(),
-    ]
-}
+    fn domain_whitelist_regexes(&self) -> Vec<Regex> {
+        vec![
+            // Any rumble.com URL (http or https)
+            Regex::new(r"^https?://(www\.)?rumble\.com").unwrap(),
+            // Rumble’s media hosts
+            Regex::new(r"^https?://sp\.rmbl\.ws").unwrap(),
+            Regex::new(r"^https?://rmbl\.ws").unwrap(),
+        ]
+    }
 }
