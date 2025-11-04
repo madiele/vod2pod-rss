@@ -70,27 +70,32 @@ impl MediaProvider for RumbleProvider {
             });
         feed_builder.description(chan_desc);
 
-        // ------------ Channel image (prefer banner, fall back to avatar) ------------
-        let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
-        let avatar_sel = Selector::parse("img.channel-header--img").unwrap();
+// ------------ Channel image (prefer avatar, fall back to banner) ------------
+let avatar_sel = Selector::parse("img.channel-header--img").unwrap();
+let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
 
-        let chan_img_url = main
-            .select(&banner_sel)
+let chan_img_url = main
+    // Prefer the square-ish avatar for podcast apps
+    .select(&avatar_sel)
+    .next()
+    .and_then(|n| n.value().attr("src"))
+    .map(|s| s.to_string())
+    // Fallback: channel banner if no avatar was found
+    .or_else(|| {
+        main.select(&banner_sel)
             .next()
             .and_then(|n| n.value().attr("src"))
             .map(|s| s.to_string())
-            .or_else(|| {
-                main.select(&avatar_sel)
-                    .next()
-                    .and_then(|n| n.value().attr("src"))
-                    .map(|s| s.to_string())
-            });
+    });
 
-        if let Some(img_url) = chan_img_url {
-            let mut image_builder = ImageBuilder::default();
-            image_builder.url(img_url);
-            feed_builder.image(Some(image_builder.build()));
-        }
+if let Some(img_url) = chan_img_url {
+    let mut image_builder = ImageBuilder::default();
+    image_builder.url(img_url);
+    // Optional: you *can* hint that it's square, but most clients ignore width/height anyway.
+    // image_builder.width(140);
+    // image_builder.height(140);
+    feed_builder.image(Some(image_builder.build()));
+}
 
         feed_builder.link(channel_url.to_string());
         feed_builder.language(Some("en".to_string()));
