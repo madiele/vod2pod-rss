@@ -13,7 +13,7 @@ use tokio::process::Command;
 use serde_json; // <--- added
 
 use crate::provider;
-use crate::configs::{conf, ConfName};
+use crate::configs::{conf, Conf, ConfName};
 use super::MediaProvider;
 
 pub struct RumbleProvider;
@@ -102,12 +102,11 @@ impl MediaProvider for RumbleProvider {
         feed_builder.language(Some("en".to_string()));
 
         // ------------ Config: max items (reuse YouTube max results) ------------
-        let cfg = conf();
-        let max_items: usize = cfg
-            .get(ConfName::YouTubeMaxResults)
-            .unwrap_or_else(|| "50".to_string())
+        let max_items: usize = conf()
+            .get(ConfName::YoutubeMaxResults)              // <- correct variant name
+            .unwrap_or_else(|_| "50".to_string())         // <- handle error, use default "50"
             .parse()
-            .unwrap_or(50);
+            .unwrap_or(50);                                // <- fallback if parse fails
 
         // ------------ Common selectors for videos ------------
         let grid_sel = Selector::parse("ol.thumbnail__grid div.videostream").unwrap();
