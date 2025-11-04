@@ -34,6 +34,15 @@ enum IdType {
     Channel(String),
 }
 
+/// Read minimum allowed duration (in seconds) for YouTube items.
+/// If 0 or unset, no filtering is applied.
+fn youtube_min_seconds() -> u64 {
+    std::env::var("YOUTUBE_MIN_SECONDS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0)
+}
+
 #[async_trait]
 impl MediaProvider for YoutubeProvider {
     async fn generate_rss_feed(&self, channel_url: Url) -> eyre::Result<String> {
@@ -150,7 +159,7 @@ impl MediaProvider for YoutubeProvider {
 
         #[cfg(not(test))]
         return youtube_whitelist;
-        #[cfg(test)] //this will allow test to use localhost ad still work
+        #[cfg(test)] //this will allow test to use localhost and still work
         return [
             youtube_whitelist,
             vec![regex::Regex::new(r"^http://127\.0\.0\.1:9870").unwrap()],
@@ -325,6 +334,14 @@ fn build_channel_items_from_playlist(
     items: Vec<PlaylistItem>,
     videos_infos: HashMap<String, VideoExtraInfo>,
 ) -> Vec<Item> {
+    let min_seconds = youtube_min_seconds();
+    if min_seconds > 0 {
+        info!(
+            "YouTube: filtering out items shorter than {} seconds",
+            min_seconds
+        );
+    }
+
     let rss_item: Vec<Item> = items
         .into_iter()
         .filter_map(|item| {
@@ -333,29 +350,53 @@ fn build_channel_items_from_playlist(
             let description = snippet.description.take().unwrap_or("".to_owned());
             let video_id = snippet.resource_id.take()?.video_id?;
             let url = Url::parse(&format!("https://www.youtube.com/watch?v={}", &video_id)).ok()?;
+
+            let video_infos = videos_infos.get(&video_id).or_else(|| {
+                warn!("no duration found for {:?}", &video_id);
+                None
+            })?;
+
+            // Convert iso8601_duration::Duration to total seconds
+            let hours = video_infos.duration.hour as i64;
+            let minutes = video_infos.duration.minute as i64;
+            let seconds = video_infos.duration.second as i64;
+            let total_secs_i64 = hours * 3600 + minutes * 60 + seconds;
+            let total_secs = if total_secs_i64 < 0 {
+                0
+            } else {
+                total_secs_i64 as u64
+            };
+
+            if min_seconds > 0 && total_secs < min_seconds {
+                debug!(
+                    "YouTube: skipping video {} ({}s) because it is shorter than {}s",
+                    video_id, total_secs, min_seconds
+                );
+                return None;
+            }
+
             let mut item_builder = ItemBuilder::default();
             item_builder.title(Some(title));
             item_builder.description(Some(description.clone()));
             item_builder.link(Some(url.to_string()));
-            item_builder.guid(Some(GuidBuilder::default().value(url.to_string()).build()));
+            item_builder.guid(Some(
+                GuidBuilder::default().value(url.to_string()).build(),
+            ));
             item_builder.pub_date(
                 snippet
                     .published_at
                     .map(|pub_date| pub_date.to_rfc2822().to_string()),
             );
             item_builder.author(snippet.channel_title.take());
-            let video_infos = videos_infos.get(&video_id).or_else(|| {
-                warn!("no duration found for {:?}", &video_id);
-                None
-            })?;
+
             let itunes_item_extension = ITunesItemExtensionBuilder::default()
                 .summary(Some(description))
-                .duration(Some({
-                    let hours = video_infos.duration.hour;
-                    let minutes = video_infos.duration.minute;
-                    let seconds = video_infos.duration.second;
-                    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
-                }))
+                .duration(Some(format!(
+                    "{:02}:{:02}:{:02}",
+                    hours.abs(),
+                    minutes.abs(),
+                    seconds.abs()
+                )))
                 .image(get_thumb!(snippet).and_then(|t| t.url))
                 .build();
             item_builder.itunes_ext(Some(itunes_item_extension));
@@ -667,11 +708,38 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
     let mut itunes_ext_builder = ITunesChannelExtensionBuilder::default();
     itunes_ext_builder.image(feed.icon.map(|d| d.uri));
     feed_builder.itunes_ext(Some(itunes_ext_builder.build()));
+
+    let min_seconds = youtube_min_seconds();
+    if min_seconds > 0 {
+        info!(
+            "YouTube (Atom): filtering out items shorter than {} seconds",
+            min_seconds
+        );
+    }
+
     let items = feed
         .entries
         .into_iter()
-        .map(|entry| {
+        .filter_map(|entry| {
             let mut item_builder = ItemBuilder::default();
+            let link = entry.links.first().map(|d| d.clone().href);
+
+            // Look up duration in seconds from the duration_map
+            let duration_secs_opt = link
+                .as_ref()
+                .and_then(|l| duration_map.get(l))
+                .and_then(|o| *o);
+
+            if let Some(d) = duration_secs_opt {
+                if min_seconds > 0 && (d as u64) < min_seconds {
+                    debug!(
+                        "YouTube (Atom): skipping entry {} ({}s) because it is shorter than {}s",
+                        entry.id, d, min_seconds
+                    );
+                    return None;
+                }
+            }
+
             item_builder.title(entry.title.map(|d| d.content));
             item_builder.description(
                 entry
@@ -679,8 +747,8 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
                     .first()
                     .and_then(|d| Some(d.clone().description?.content)),
             );
-            let link = entry.links.first().map(|d| d.clone().href);
             item_builder.link(link.clone());
+
             let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
             let media = entry.media.first();
             itunes_item_builder.image(
@@ -688,18 +756,20 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
                     .and_then(|m| m.thumbnails.first())
                     .map(|t| t.clone().image.uri),
             );
-            let duration = (|| -> Option<_> {
-                duration_map
-                    .get(&link?)
-                    .map(|s| s.map(|a| format!("{:02}:{:02}:{:02}", a / 3600, a / 60 % 60, a % 60)))
-            })()
-            .flatten();
-            itunes_item_builder.duration(duration);
+
+            let duration_str = duration_secs_opt.map(|a| {
+                format!("{:02}:{:02}:{:02}", a / 3600, a / 60 % 60, a % 60)
+            });
+            itunes_item_builder.duration(duration_str);
+
             item_builder.itunes_ext(Some(itunes_item_builder.build()));
-            item_builder.guid(Some(GuidBuilder::default().value(entry.id).build()));
-            item_builder.build()
+            item_builder.guid(Some(
+                GuidBuilder::default().value(entry.id).build(),
+            ));
+            Some(item_builder.build())
         })
         .collect::<Vec<Item>>();
+
     feed_builder.items(items);
     feed_builder.build().to_string()
 }
