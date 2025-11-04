@@ -93,7 +93,7 @@
   <div class="container">
 <h1 class="text-center mb-4">vod2pod-rss</h1>
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube or Twitch channel/playlist URL" aria-describedby="generateButton" oninput="toggleClearButton()">
+      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube/Twitch/Rumble channel/playlist URL" aria-describedby="generateButton" oninput="toggleClearButton()">
       <button class="btn btn-secondary" type="button" id="clearButton" onclick="clearInput()" style="display:none;">x</button>
       <button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()">Generate RSS</button>
     </div>
