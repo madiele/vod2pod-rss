@@ -58,7 +58,7 @@ impl MediaProvider for RumbleProvider {
             }
         }
 
-        feed_builder.description(Some("--".to_string()));
+        feed_builder.description("--");
         feed_builder.id(channel_url.to_string());
         feed_builder.link(channel_url.to_string());
         feed_builder.language(Some("en".to_string()));
