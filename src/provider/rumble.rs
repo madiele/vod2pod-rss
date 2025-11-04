@@ -25,7 +25,7 @@ impl MediaProvider for RumbleProvider {
 
         let client = Client::new();
 
-        // ------------ Fetch first page HTML ------------
+        // ------------ Initial fetch ------------
         let mut current_url = channel_url.clone();
         let mut current_html = client
             .get(current_url.clone())
@@ -77,12 +77,12 @@ impl MediaProvider for RumbleProvider {
             let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
 
             let chan_img_url = main
-                // Prefer the square-ish avatar (better for podcast apps)
+                // Prefer avatar (square-ish, good for podcast apps)
                 .select(&avatar_sel)
                 .next()
                 .and_then(|n| n.value().attr("src"))
                 .map(|s| s.to_string())
-                // Fallback: channel banner
+                // Fallback: banner
                 .or_else(|| {
                     main.select(&banner_sel)
                         .next()
@@ -136,124 +136,130 @@ impl MediaProvider for RumbleProvider {
         'pages: loop {
             info!("Rumble: processing page {}", current_url);
 
-            // Parse the current page HTML and drop it before the next await
-            let document = Html::parse_document(&current_html);
-            let main = document
-                .select(&main_sel)
-                .next()
-                .ok_or_else(|| eyre!("failed to find <main> in rumble page"))?;
+            // All DOM handling is inside this block so it doesn't live across await.
+            let maybe_next_url = {
+                let document = Html::parse_document(&current_html);
+                let main = document
+                    .select(&main_sel)
+                    .next()
+                    .ok_or_else(|| eyre!("failed to find <main> in rumble page"))?;
 
-            let videos: Vec<_> = main.select(&grid_sel).collect();
-            if videos.is_empty() {
-                warn!("Rumble: failed to find video list on {}", current_url);
-            }
-
-            for video in videos {
-                if items.len() >= max_items {
-                    break 'pages;
+                let videos: Vec<_> = main.select(&grid_sel).collect();
+                if videos.is_empty() {
+                    warn!("Rumble: failed to find video list on {}", current_url);
                 }
 
-                // Skip live / upcoming
-                if video.select(&live_sel).next().is_some() {
-                    if let Some(t) = video.select(&title_sel).next() {
-                        let title = t.text().collect::<String>().trim().to_string();
-                        info!("Rumble: skipping live/upcoming video: {}", title);
+                for video in videos {
+                    if items.len() >= max_items {
+                        break;
                     }
-                    continue;
-                }
 
-                // Skip premium-only
-                if let Some(label) = video.select(&premium_sel).next() {
-                    if label.text().collect::<String>().trim() == "Premium only" {
+                    // Skip live / upcoming
+                    if video.select(&live_sel).next().is_some() {
                         if let Some(t) = video.select(&title_sel).next() {
-                            let title =
-                                t.text().collect::<String>().trim().to_string();
-                            info!("Rumble: skipping premium video: {}", title);
+                            let title = t.text().collect::<String>().trim().to_string();
+                            info!("Rumble: skipping live/upcoming video: {}", title);
                         }
                         continue;
                     }
+
+                    // Skip premium-only
+                    if let Some(label) = video.select(&premium_sel).next() {
+                        if label.text().collect::<String>().trim() == "Premium only" {
+                            if let Some(t) = video.select(&title_sel).next() {
+                                let title =
+                                    t.text().collect::<String>().trim().to_string();
+                                info!("Rumble: skipping premium video: {}", title);
+                            }
+                            continue;
+                        }
+                    }
+
+                    let mut item_builder = ItemBuilder::default();
+
+                    // Title
+                    let title = video
+                        .select(&title_sel)
+                        .next()
+                        .map(|n| n.text().collect::<String>().trim().to_string())
+                        .unwrap_or_else(|| {
+                            warn!("Rumble: failed to pull video title");
+                            "N/A".to_string()
+                        });
+                    item_builder.title(Some(title.clone()));
+
+                    // Description (per-video)
+                    let description = video
+                        .select(&desc_sel)
+                        .next()
+                        .map(|n| n.text().collect::<String>().trim().to_string());
+                    if let Some(desc) = &description {
+                        item_builder.description(Some(desc.clone()));
+                    }
+
+                    // Link to the video page
+                    let href = video
+                        .select(&link_sel)
+                        .next()
+                        .and_then(|n| n.value().attr("href"))
+                        .ok_or_else(|| eyre!("Rumble: failed to pull URL to video"))?;
+
+                    let video_url = Url::parse("https://rumble.com")?
+                        .join(href)?
+                        .to_string();
+                    item_builder.link(Some(video_url.clone()));
+                    item_builder.guid(Some(
+                        GuidBuilder::default().value(video_url.clone()).build(),
+                    ));
+
+                    // Duration (itunes)
+                    let duration_str = video
+                        .select(&duration_sel)
+                        .next()
+                        .map(|n| n.text().collect::<String>().trim().to_string());
+
+                    // PubDate
+                    let pub_date = video
+                        .select(&time_sel)
+                        .next()
+                        .and_then(|n| n.value().attr("datetime"))
+                        .and_then(|dt| DateTime::parse_from_rfc3339(dt).ok())
+                        .map(|dt| dt.with_timezone(&Utc).to_rfc2822());
+
+                    // iTunes extension
+                    let mut itunes_builder = ITunesItemExtensionBuilder::default();
+                    if let Some(d) = &duration_str {
+                        itunes_builder.duration(Some(d.clone()));
+                    }
+                    let itunes_ext = itunes_builder.build();
+                    item_builder.itunes_ext(Some(itunes_ext));
+
+                    if let Some(pd) = pub_date {
+                        item_builder.pub_date(Some(pd));
+                    }
+
+                    // NOTE: enclosure URL injected later by rss_transcodizer.
+                    items.push(item_builder.build());
                 }
 
-                let mut item_builder = ItemBuilder::default();
-
-                // Title
-                let title = video
-                    .select(&title_sel)
-                    .next()
-                    .map(|n| n.text().collect::<String>().trim().to_string())
-                    .unwrap_or_else(|| {
-                        warn!("Rumble: failed to pull video title");
-                        "N/A".to_string()
-                    });
-                item_builder.title(Some(title.clone()));
-
-                // Description (per-video)
-                let description = video
-                    .select(&desc_sel)
-                    .next()
-                    .map(|n| n.text().collect::<String>().trim().to_string());
-                if let Some(desc) = &description {
-                    item_builder.description(Some(desc.clone()));
+                // If we already reached max_items, don't bother computing next
+                if items.len() >= max_items {
+                    None
+                } else {
+                    // Find "next" page link
+                    document
+                        .select(&next_sel)
+                        .next()
+                        .and_then(|n| n.value().attr("href"))
+                        .and_then(|href| current_url.join(href).ok())
                 }
-
-                // Link to the video page
-                let href = video
-                    .select(&link_sel)
-                    .next()
-                    .and_then(|n| n.value().attr("href"))
-                    .ok_or_else(|| eyre!("Rumble: failed to pull URL to video"))?;
-
-                let video_url = Url::parse("https://rumble.com")?
-                    .join(href)?
-                    .to_string();
-                item_builder.link(Some(video_url.clone()));
-                item_builder.guid(Some(
-                    GuidBuilder::default().value(video_url.clone()).build(),
-                ));
-
-                // Duration (itunes)
-                let duration_str = video
-                    .select(&duration_sel)
-                    .next()
-                    .map(|n| n.text().collect::<String>().trim().to_string());
-
-                // PubDate
-                let pub_date = video
-                    .select(&time_sel)
-                    .next()
-                    .and_then(|n| n.value().attr("datetime"))
-                    .and_then(|dt| DateTime::parse_from_rfc3339(dt).ok())
-                    .map(|dt| dt.with_timezone(&Utc).to_rfc2822());
-
-                // iTunes extension
-                let mut itunes_builder = ITunesItemExtensionBuilder::default();
-                if let Some(d) = &duration_str {
-                    itunes_builder.duration(Some(d.clone()));
-                }
-                let itunes_ext = itunes_builder.build();
-                item_builder.itunes_ext(Some(itunes_ext));
-
-                if let Some(pd) = pub_date {
-                    item_builder.pub_date(Some(pd));
-                }
-
-                // NOTE: enclosure URL is injected later by rss_transcodizer.
-
-                items.push(item_builder.build());
-            }
+            }; // <-- document/main/video dropped here
 
             if items.len() >= max_items {
                 break 'pages;
             }
 
-            // Find "next" page from this document
-            let maybe_next = document
-                .select(&next_sel)
-                .next()
-                .and_then(|n| n.value().attr("href"))
-                .and_then(|href| current_url.join(href).ok());
-
-            let Some(next_url) = maybe_next else {
+            let Some(next_url) = maybe_next_url else {
                 info!("Rumble: no further pages, stopping pagination");
                 break 'pages;
             };
@@ -261,8 +267,7 @@ impl MediaProvider for RumbleProvider {
             current_url = next_url.clone();
             info!("Rumble: following pagination to {}", current_url);
 
-            // Fetch next page HTML
-            // NOTE: `document` and `main` are dropped before this `.await`
+            // Now safe to await, no DOM types live across this
             current_html = client
                 .get(next_url)
                 .send()
