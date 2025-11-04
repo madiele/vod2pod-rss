@@ -217,19 +217,13 @@ impl MediaProvider for RumbleProvider {
     }
 
     /// Regexes for Rumble and its media hosts
-    fn domain_whitelist_regexes(&self) -> Vec<Regex> {
-        let mut list = vec![
-            Regex::new(r"^(https://)?(www\.)?rumble\.com/").unwrap(),
-            Regex::new(r"^(https://)?sp\.rmbl\.ws/").unwrap(),
-            Regex::new(r"^(https://)?rmbl\.ws/").unwrap(),
-        ];
-
-        #[cfg(test)]
-        {
-            // allow local testing
-            list.push(Regex::new(r"^http://127\.0\.0\.1:9870").unwrap());
-        }
-
-        list
-    }
+fn domain_whitelist_regexes(&self) -> Vec<Regex> {
+    vec![
+        // Any https://rumble.com... URL
+        Regex::new(r"^https?://(www\.)?rumble\.com").unwrap(),
+        // Rumble’s media hosts
+        Regex::new(r"^https?://sp\.rmbl\.ws").unwrap(),
+        Regex::new(r"^https?://rmbl\.ws").unwrap(),
+    ]
+}
 }
