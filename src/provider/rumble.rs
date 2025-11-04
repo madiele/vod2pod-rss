@@ -10,6 +10,7 @@ use rss::{
 use scraper::{Html, Selector};
 use chrono::{DateTime, Utc};
 use tokio::process::Command;
+use serde_json; // <--- added
 
 use crate::provider;
 use crate::configs::{conf, ConfName};
@@ -70,32 +71,32 @@ impl MediaProvider for RumbleProvider {
             });
         feed_builder.description(chan_desc);
 
-// ------------ Channel image (prefer avatar, fall back to banner) ------------
-let avatar_sel = Selector::parse("img.channel-header--img").unwrap();
-let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
+        // ------------ Channel image (prefer avatar, fall back to banner) ------------
+        let avatar_sel = Selector::parse("img.channel-header--img").unwrap();
+        let banner_sel = Selector::parse("img.channel-header--backsplash-img").unwrap();
 
-let chan_img_url = main
-    // Prefer the square-ish avatar for podcast apps
-    .select(&avatar_sel)
-    .next()
-    .and_then(|n| n.value().attr("src"))
-    .map(|s| s.to_string())
-    // Fallback: channel banner if no avatar was found
-    .or_else(|| {
-        main.select(&banner_sel)
+        let chan_img_url = main
+            // Prefer the square-ish avatar for podcast apps
+            .select(&avatar_sel)
             .next()
             .and_then(|n| n.value().attr("src"))
             .map(|s| s.to_string())
-    });
+            // Fallback: channel banner if no avatar was found
+            .or_else(|| {
+                main.select(&banner_sel)
+                    .next()
+                    .and_then(|n| n.value().attr("src"))
+                    .map(|s| s.to_string())
+            });
 
-if let Some(img_url) = chan_img_url {
-    let mut image_builder = ImageBuilder::default();
-    image_builder.url(img_url);
-    // Optional: you *can* hint that it's square, but most clients ignore width/height anyway.
-    // image_builder.width(140);
-    // image_builder.height(140);
-    feed_builder.image(Some(image_builder.build()));
-}
+        if let Some(img_url) = chan_img_url {
+            let mut image_builder = ImageBuilder::default();
+            image_builder.url(img_url);
+            // You *can* hint square size if you want:
+            // image_builder.width(140);
+            // image_builder.height(140);
+            feed_builder.image(Some(image_builder.build()));
+        }
 
         feed_builder.link(channel_url.to_string());
         feed_builder.language(Some("en".to_string()));
@@ -274,13 +275,32 @@ if let Some(img_url) = chan_img_url {
     async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
         debug!("getting stream_url for rumble video: {}", media_url);
 
-        let output = Command::new("yt-dlp")
-            .arg("-f")
+        // Build yt-dlp command
+        let mut cmd = Command::new("yt-dlp");
+
+        // 1) Global extra args from ENV (e.g. retries, no-progress, geo-bypass)
+        if let Ok(extra) = std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS") {
+            match serde_json::from_str::<Vec<String>>(&extra) {
+                Ok(args) => {
+                    debug!("Rumble: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp: {:?}", args);
+                    cmd.args(args);
+                }
+                Err(e) => {
+                    warn!(
+                        "Rumble: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
+                        extra, e
+                    );
+                }
+            }
+        }
+
+        // 2) Rumble-specific base options
+        cmd.arg("-f")
             .arg("bestaudio/best")
             .arg("--get-url")
-            .arg(media_url.as_str())
-            .output()
-            .await;
+            .arg(media_url.as_str());
+
+        let output = cmd.output().await;
 
         match output {
             Ok(x) => {
