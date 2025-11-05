@@ -164,16 +164,38 @@ impl MediaProvider for RumbleProvider {
     }
 
     /// Given a Rumble video page URL, return a direct media URL using yt-dlp
-    async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
+async fn get_stream_url(&self, media_url: &Url) -> eyre::Result<Url> {
         debug!("getting stream_url for rumble video: {}", media_url);
 
-        let output = Command::new("yt-dlp")
+        let mut command = Command::new("yt-dlp");
+        command
             .arg("-f")
             .arg("bestaudio/best")
-            .arg("--get-url")
-            .arg(media_url.as_str())
-            .output()
-            .await;
+            .arg("--get-url");
+
+        // Apply GLOBAL_YT_DLP_EXTRA_ARGS from config (JSON array string)
+        let global_extra_raw = conf().get(ConfName::GlobalYtDlpExtraArgs)?;
+        match serde_json::from_str::<Vec<String>>(global_extra_raw.as_str()) {
+            Ok(args) => {
+                if !args.is_empty() {
+                    debug!(
+                        "Rumble: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp: {:?}",
+                        args
+                    );
+                    command.args(&args);
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Rumble: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
+                    global_extra_raw, e
+                );
+            }
+        }
+
+        command.arg(media_url.as_str());
+
+        let output = command.output().await;
 
         match output {
             Ok(x) => {
