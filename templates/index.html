@@ -93,7 +93,7 @@
   <div class="container">
 <h1 class="text-center mb-4">vod2pod-rss</h1>
     <div class="input-group mb-3">
-      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube or Twitch channel/playlist URL" aria-describedby="generateButton" oninput="toggleClearButton()">
+      <input type="text" class="form-control" id="channelUrl" onkeydown="if(event.keyCode === 13) generateRSSURL()" placeholder="Enter YouTube/Twitch/Rumble channel/playlist URL" aria-describedby="generateButton" oninput="toggleClearButton()">
       <button class="btn btn-secondary" type="button" id="clearButton" onclick="clearInput()" style="display:none;">x</button>
       <button class="btn btn-primary" type="button" id="generateButton" onclick="generateRSSURL()">Generate RSS</button>
     </div>
@@ -141,10 +141,24 @@ function clearInput() {
 }
 
 async function generateRSSURL() {
-  const channelUrl = document.getElementById("channelUrl").value;
-  const baseUrl = window.location.href.endsWith('/') ? window.location.href : window.location.href + '/';
-  const rssUrl = `${baseUrl}transcodize_rss?url=${channelUrl}`;
+  const channelInput = document.getElementById("channelUrl");
+  const rawChannelUrl = channelInput.value.trim();
+
+  if (!rawChannelUrl) {
+    throw new Error("Please enter a channel/playlist URL first.");
+  }
+
+  // Use origin rather than the full href so we don't accidentally append `/ui/` etc.
+  const baseUrl = window.location.origin.endsWith("/")
+    ? window.location.origin
+    : window.location.origin + "/";
+
+  // VERY IMPORTANT: encode the channel URL so its own query string doesn't break our ?url= param
+  const encodedChannelUrl = encodeURIComponent(rawChannelUrl);
+
+  const rssUrl = `${baseUrl}transcodize_rss?url=${encodedChannelUrl}`;
   document.getElementById("rssUrl").value = rssUrl;
+
   await displayRSSPreview(rssUrl);
 }
 
@@ -190,11 +204,21 @@ async function fetchData(rssUrl) {
 }
 
 function extractPodcastInfo(rss) {
+  const channel = rss.querySelector("channel");
+  if (!channel) {
+    throw new Error("Invalid RSS response: <channel> element not found.");
+  }
+
+  const titleNode = channel.querySelector("title");
+  const descNode = channel.querySelector("description");
+  const imageNode = channel.querySelector("image > url");
+
   const podcast = {
-    title: rss.querySelector("channel > title").textContent,
-    thumbnail: rss.querySelector("channel > image") ? rss.querySelector("channel > image > url").textContent : null,
-    description: rss.querySelector("channel > description").textContent
+    title: titleNode ? titleNode.textContent : "(no title)",
+    thumbnail: imageNode ? imageNode.textContent : null,
+    description: descNode ? descNode.textContent : ""
   };
+
   return podcast;
 }
 
