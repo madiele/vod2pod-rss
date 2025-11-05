@@ -114,6 +114,12 @@ impl Conf for EnvConf {
                 Ok(std::env::var("YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS")
                     .unwrap_or_else(|_| "[]".to_string()))
             }
+            ConfName::GlobalYtDlpExtraArgs => {
+                // Global yt-dlp extra args for *any* provider (YouTube, Rumble, etc.).
+                // Stored as a JSON array of strings, e.g.: ["--no-warnings", "--cookies-from-browser", "chrome"]
+                Ok(std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS")
+                    .unwrap_or_else(|_| "[]".to_string()))
+            }
             ConfName::CacheTTL => {
                 Ok(std::env::var("CACHE_TTL").unwrap_or_else(|_| "600".to_string()))
             }
