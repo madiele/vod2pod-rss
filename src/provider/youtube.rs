@@ -584,7 +584,7 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
                 Err(e) => {
                     warn!(
                         "error while parsing stream url using yt-dlp:\nerror: {}\nyt-dlp stdout: {}\nyt-dlp stderr: {}",
-                        e.to_string(),
+                        e,
                         raw_url,
                         std::str::from_utf8(&x.stderr).unwrap_or_default()
                     );
