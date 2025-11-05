@@ -681,7 +681,7 @@ async fn find_yt_channel_url_with_c_id(url: &Url) -> eyre::Result<Url> {
         Err(e) => {
             warn!(
                 "error while translating channel name using yt-dlp:\nerror: {}\nyt-dlp stdout: {}\nyt-dlp stderr: {}",
-                e.to_string(),
+                e,
                 conversion.unwrap_or_default(),
                 std::str::from_utf8(&output.stderr).unwrap_or_default()
             );
