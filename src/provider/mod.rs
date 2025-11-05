@@ -4,6 +4,7 @@ mod macros;
 mod peertube;
 mod twitch;
 mod youtube;
+mod rumble;
 
 use async_trait::async_trait;
 use log::debug;
@@ -14,6 +15,7 @@ use rss::extension::itunes::ITunesChannelExtensionBuilder;
 use crate::provider::{
     generic::GenericProvider, peertube::PeerTubeProvider, twitch::TwitchProvider,
     youtube::YoutubeProvider,
+    rumble::RumbleProvider,
 };
 
 // to add a new provider just add it here (the provider should implement the MediaProvider trait)
@@ -23,6 +25,7 @@ generate_static_dispatcher!(
     YoutubeProvider,
     TwitchProvider,
     PeerTubeProvider,
+    RumbleProvider,
     GenericProvider,
 );
 
