@@ -216,18 +216,20 @@ impl MediaProvider for RumbleProvider {
 ///  - page_image_url (only on first page)
 ///  - stubs for videos on this page (up to remaining_slots)
 ///  - next page URL (if any)
-fn parse_rumble_channel_page(
-    html: &str,
-    current_url: &Url,
-    is_first_page: bool,
-    remaining_slots: usize,
-) -> (
+type RumbleChannelPageParseResult = (
     Option<String>,
     Option<String>,
     Option<String>,
     Vec<RumbleVideoStub>,
     Option<Url>,
-) {
+);
+
+fn parse_rumble_channel_page(
+    html: &str,
+    current_url: &Url,
+    is_first_page: bool,
+    remaining_slots: usize,
+) -> RumbleChannelPageParseResult {
     let document = Html::parse_document(html);
 
     let main_sel = Selector::parse("main").unwrap();
