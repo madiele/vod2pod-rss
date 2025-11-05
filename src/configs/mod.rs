@@ -24,6 +24,7 @@ pub enum ConfName {
     AudioCodec,
     PeerTubeValidHosts,
     YoutubeYtDlpExtraArgs,
+    GlobalYtDlpExtraArgs,
     CacheTTL,
     FfmpegTimeoutSeconds,
 }
