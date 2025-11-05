@@ -106,6 +106,7 @@ Note: These can also be set using Docker [.env files](https://docs.docker.com/co
 - `VALID_URL_DOMAINS`: (optional) Set a comma separated list of domain urls that are allowed to be converted into RSS  (defaults to YouTube and Twitch urls)
 - `CACHE_TTL`: (optional) Set the time to live of the cache in seconds, default is 600 seconds (10 minutes)
 - `YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS`
+- `GLOBAL_YT_DLP_EXTRA_ARGS`:   Extra yt-dlp flags applied to Rumble and other non-YouTube providers (e.g. --no-warnings --cookies-from-browser chrome)
 
 # Honorable Mentions
 
