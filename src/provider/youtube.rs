@@ -532,22 +532,23 @@ async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
 
     let mut command = tokio::process::Command::new("yt-dlp");
 
-    // ---------- Global yt-dlp extra args from env (optional) ----------
-    if let Ok(extra) = std::env::var("GLOBAL_YT_DLP_EXTRA_ARGS") {
-        match serde_json::from_str::<Vec<String>>(&extra) {
-            Ok(args) => {
+    // ---------- Global yt-dlp extra args from config (optional) ----------
+    let global_extra_raw = conf().get(ConfName::GlobalYtDlpExtraArgs)?;
+    match serde_json::from_str::<Vec<String>>(global_extra_raw.as_str()) {
+        Ok(args) => {
+            if !args.is_empty() {
                 debug!(
                     "YouTube: adding GLOBAL_YT_DLP_EXTRA_ARGS to yt-dlp: {:?}",
                     args
                 );
-                command.args(args);
+                command.args(&args);
             }
-            Err(e) => {
-                warn!(
-                    "YouTube: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
-                    extra, e
-                );
-            }
+        }
+        Err(e) => {
+            warn!(
+                "YouTube: failed to parse GLOBAL_YT_DLP_EXTRA_ARGS='{}' as JSON array: {}",
+                global_extra_raw, e
+            );
         }
     }
 
