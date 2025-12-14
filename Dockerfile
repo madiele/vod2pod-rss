@@ -1,7 +1,7 @@
 # by using --platform=$BUILDPLATFORM we force the build step 
 # to always run on the native architecture of the build machine
 # making the build time shorter
-FROM --platform=$BUILDPLATFORM rust:1.82 as builder
+FROM --platform=$BUILDPLATFORM rust:1.85 as builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
