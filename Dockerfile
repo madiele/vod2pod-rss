@@ -75,12 +75,8 @@ RUN apt-get update && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y --no-install-recommends snapd && \
-    systemctl enable --now snapd.socket && \
-    snap install deno && \
-    apt-get -y autoremove && \
-    apt-get -y clean && \
-    rm -rf /var/lib/apt/lists/*
+# try to install deno with install script, do not fail if it does not work
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh || true
 
 COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
