@@ -37,7 +37,7 @@ services:
       - REDIS_PORT=6379 #don't edit this
 
   redis:
-    image: "redis:6.2"
+    image: "redis:8.4"
     command: redis-server --save 20 1 --loglevel warning
     restart: unless-stopped
     healthcheck:
