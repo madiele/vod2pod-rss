@@ -53,7 +53,7 @@ RUN echo "final size of vod2pod:\n $(ls -lah /tmp/vod2pod/target/*/release/app)"
 #-------------
 # Build Deno for target architecture using cargo
 # This stage runs on the build platform but compiles for the target platform
-FROM --platform=$BUILDPLATFORM rust:1.85 as deno-builder
+FROM --platform=$BUILDPLATFORM rust:1.90 as deno-builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
@@ -80,7 +80,7 @@ RUN rustup target add $(cat /rust_platform.txt)
 
 # Use cargo to install deno into /deno for the selected target. This attempts to cross-compile
 # and will require the appropriate cross toolchain when targeting different architectures.
-RUN cargo install --locked deno --root /deno --target "$(cat /rust_platform.txt)" || true
+RUN cargo install --locked deno@2.6.0 --root /deno --target "$(cat /rust_platform.txt)" || true
 
 RUN if [ -x /deno/bin/deno ]; then echo "deno built at /deno/bin/deno"; else echo "deno not available"; fi
 
