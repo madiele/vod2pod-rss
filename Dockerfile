@@ -76,9 +76,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # try to install deno with install script, do not fail if it does not work
-RUN apt-get update && apt-get install -y curl ca-certificates && \
+RUN apt-get update && apt-get install -y unzip curl ca-certificates && \
     curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh || true && \
     apt-get -y purge curl && \
+    apt-get -y purge unzip && \
     apt-get -y autoremove && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/*
