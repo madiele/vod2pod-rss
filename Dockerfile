@@ -83,13 +83,6 @@ RUN rustup target add $(cat /rust_platform.txt)
 RUN cargo install --locked deno --root /deno --target "$(cat /rust_platform.txt)" || true
 
 RUN if [ -x /deno/bin/deno ]; then echo "deno built at /deno/bin/deno"; else echo "deno not available"; fi
-# test if deno runs
-RUN if /deno/bin/deno --version; then \
-        echo "deno runs correctly"; \
-    else \
-        echo "deno did not run" 1>&2; \
-        exit 1; \
-    fi
 
 #----------
 #this step will always run on the target architecture,
@@ -119,6 +112,13 @@ RUN apt-get update && \
 COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
 COPY --from=deno-builder /deno/bin/deno /usr/local/bin/deno
+#
+RUN if deno --version; then \
+        echo "deno runs correctly"; \
+    else \
+        echo "deno did not run" 1>&2; \
+        exit 1; \
+    fi
 
 RUN if vod2pod --version; then \
         echo "vod2pod starts correctly"; \
