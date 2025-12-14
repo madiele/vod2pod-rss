@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fmt::Display;
 use std::time::Duration;
 
 use eyre::eyre;
@@ -85,18 +84,7 @@ pub fn inject_vod2pod_customizations(
     Ok(injected_feed.to_string())
 }
 
-#[derive(Clone, Hash)]
-struct TranscodeParams {
-    transcode_service_url_str: String,
-    feed_url: Url,
-    should_transcode: bool,
-}
 
-impl Display for TranscodeParams {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", &self.transcode_service_url_str, &self.feed_url)
-    }
-}
 
 fn get_description(item: &Item) -> String {
     const FOOTER: &str = concat!(

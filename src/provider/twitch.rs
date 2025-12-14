@@ -3,7 +3,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset};
 use log::{debug, info, warn};
-use redis::{ErrorKind, FromRedisValue, RedisError, ToRedisArgs};
+use redis::{FromRedisValue, ParsingError, ToRedisArgs};
 use regex::Regex;
 use reqwest::Url;
 use rss::{
@@ -260,10 +260,10 @@ impl OAuthCredentials {
 }
 
 impl FromRedisValue for OAuthCredentials {
-    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
+    fn from_redis_value(v: redis::Value) -> Result<Self, ParsingError> {
         let raw_json = String::from_redis_value(v)?;
         let credentials: OAuthCredentials = serde_json::from_str(&raw_json).map_err(|_e| {
-            RedisError::from((ErrorKind::TypeError, "redis twitch credential corrupted"))
+            ParsingError::from("redis twitch credential corrupted")
         })?;
         Ok(credentials)
     }
@@ -331,7 +331,7 @@ async fn authorize(client_id: &str, client_secret: &str) -> eyre::Result<OAuthCr
                 oauth_expire_epoch,
             };
 
-            redis::cmd("SET")
+            () = redis::cmd("SET")
                 .arg(OAuthCredentials::key())
                 .arg(oauth_credentials.clone())
                 .query_async(&mut redis)

@@ -157,7 +157,7 @@ async fn transcodize_rss(
     };
 
     //set cache to env var CACHE_TTL (or default 600 seconds)
-    let CACHE_TTL: u64 = match conf().get(ConfName::CacheTTL) {
+    let cache_ttl: u64 = match conf().get(ConfName::CacheTTL) {
         Ok(value) => value.parse().unwrap_or(600),
         Err(_) => 600,
     };
@@ -165,7 +165,7 @@ async fn transcodize_rss(
         .arg(&parsed_url.to_string())
         .arg(&body)
         .arg("EX")
-        .arg(CACHE_TTL)
+        .arg(cache_ttl)
         .query_async(&mut redis)
         .await
         .unwrap_or_default();
@@ -200,6 +200,13 @@ fn parse_range_header(
     let mut start = 0;
     if let Some(x) = captures.name("start") {
         start = x.as_str().parse()?;
+    }
+
+    if bytes_count == 0 {
+        error!("The requested Rage header with a length of 0 is invalid: {content_range_str}");
+        return Err(eyre::eyre!(
+            "The requested Rage header with a length of 0 is invalid: {content_range_str}"
+        ));
     }
     let mut end = bytes_count - 1;
     if let Some(x) = captures.name("end") {
