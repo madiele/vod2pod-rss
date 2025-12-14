@@ -76,7 +76,12 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # try to install deno with install script, do not fail if it does not work
-RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh || true
+RUN apt-get update && apt-get install -y curl ca-certificates && \
+    curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh || true && \
+    apt-get -y purge curl && \
+    apt-get -y autoremove && \
+    apt-get -y clean && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
