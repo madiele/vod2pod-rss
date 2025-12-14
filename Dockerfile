@@ -50,6 +50,47 @@ RUN cargo build --release --target "$(cat /rust_platform.txt)"
 
 RUN echo "final size of vod2pod:\n $(ls -lah /tmp/vod2pod/target/*/release/app)"
 
+#-------------
+# Build Deno for target architecture using cargo
+# This stage runs on the build platform but compiles for the target platform
+FROM --platform=$BUILDPLATFORM rust:1.85 as deno-builder
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+        export RUST_TARGET_PLATFORM=armv7-unknown-linux-gnueabihf; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        export RUST_TARGET_PLATFORM=aarch64-unknown-linux-gnu; \
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        export RUST_TARGET_PLATFORM=x86_64-unknown-linux-gnu; \
+    else \
+        export RUST_TARGET_PLATFORM=$(rustup target list --installed | head -n 1); \
+    fi; \
+    echo "choosen rust target: $RUST_TARGET_PLATFORM" ;\
+    echo $RUST_TARGET_PLATFORM > /rust_platform.txt
+
+RUN echo "Deno build stage running on $BUILDPLATFORM, building for $TARGETPLATFORM (rust target $(cat /rust_platform.txt))"
+
+RUN if echo $TARGETPLATFORM | grep -q 'arm'; then \
+        apt-get update && apt-get install -y build-essential gcc gcc-arm* gcc-aarch* && apt-get clean; \
+    fi
+
+RUN rustup target add $(cat /rust_platform.txt)
+
+# Use cargo to install deno into /deno for the selected target. This attempts to cross-compile
+# and will require the appropriate cross toolchain when targeting different architectures.
+RUN cargo install --locked deno --root /deno --target "$(cat /rust_platform.txt)" || true
+
+RUN if [ -x /deno/bin/deno ]; then echo "deno built at /deno/bin/deno"; else echo "deno not available"; fi
+# test if deno runs
+RUN if /deno/bin/deno --version; then \
+        echo "deno runs correctly"; \
+    else \
+        echo "deno did not run" 1>&2; \
+        exit 1; \
+    fi
+
 #----------
 #this step will always run on the target architecture,
 #so the build driver will need to be able to support runtime commands on it (es: using QEMU)  
@@ -77,6 +118,7 @@ RUN apt-get update && \
 
 COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
+COPY --from=deno-builder /deno/bin/deno /usr/local/bin/deno
 
 RUN if vod2pod --version; then \
         echo "vod2pod starts correctly"; \
