@@ -1,2 +1,2 @@
 # this is only used to track the version in the Dockerfile and with depend-a-bot
-yt-dlp==2025.12.8
+yt-dlp==2026.1.29
