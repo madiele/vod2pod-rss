@@ -1,7 +1,10 @@
 use log::{debug, info};
 use simple_logger::SimpleLogger;
 use std::{env, net::TcpListener, process::exit};
-use vod2pod_rss::server;
+use vod2pod_rss::{
+    configs::{conf, Conf, ConfName},
+    server,
+};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -25,7 +28,15 @@ async fn main() -> std::io::Result<()> {
         );
     }
 
-    let listener = TcpListener::bind("0.0.0.0:8080").expect("Failed to bind");
+    let host = conf()
+        .get(ConfName::Host)
+        .unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = conf()
+        .get(ConfName::Port)
+        .unwrap_or_else(|_| "8080".to_string());
+    let bind_addr = format!("{}:{}", host, port);
+
+    let listener = TcpListener::bind(&bind_addr).expect("Failed to bind");
     info!("listening on http://{}", listener.local_addr().unwrap());
     server::spawn_server(listener)
         .expect("could not setup server")
@@ -61,4 +72,3 @@ async fn flush_redis_on_new_version() -> eyre::Result<()> {
 
     Ok(())
 }
-

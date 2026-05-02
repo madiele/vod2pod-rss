@@ -100,6 +100,9 @@ Note: These can also be set using Docker [.env files](https://docs.docker.com/co
   - Default: `[]` (empty array)
 
 ### Environment
+- `VOD2POD_RSS_HOST`: Set the host address to bind to (default: "0.0.0.0")
+- `VOD2POD_RSS_PORT`: Set the port to listen on (default: "8080")
+- `TEMPLATES_DIR`: Set the directory for template files (default: "./templates")
 - `TRANSCODE`: Set to "false" to disable transcoding, usefull if you only need the feeds (default: "true")
 - `MP3_BITRATE`: Set the bitrate of the trascoded stream to your client (default: "192")
 - `SUBFOLDER`: Set the the root path of the app, useful for reverse proxies (default: "/")
