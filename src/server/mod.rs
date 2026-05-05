@@ -67,10 +67,7 @@ async fn index(req: HttpRequest) -> HttpResponse {
         );
     }
 
-    let templates_dir = conf()
-        .get(ConfName::TemplatesDir)
-        .unwrap_or_else(|_| "./templates".to_string());
-    let html = std::fs::read_to_string(format!("{}/index.html", templates_dir)).unwrap();
+    let html = std::fs::read_to_string("./templates/index.html").unwrap();
 
     HttpResponse::Ok().content_type("text/html").body(html)
 }
