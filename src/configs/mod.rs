@@ -26,6 +26,8 @@ pub enum ConfName {
     YoutubeYtDlpExtraArgs,
     CacheTTL,
     FfmpegTimeoutSeconds,
+    Host,
+    Port,
 }
 
 struct EnvConf {}
@@ -118,6 +120,12 @@ impl Conf for EnvConf {
             }
             ConfName::FfmpegTimeoutSeconds => {
                 Ok(std::env::var("FFMPEG_TIMEOUT_SECONDS").unwrap_or_else(|_| "300".to_string()))
+            }
+            ConfName::Host => {
+                Ok(std::env::var("VOD2POD_RSS_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()))
+            }
+            ConfName::Port => {
+                Ok(std::env::var("VOD2POD_RSS_PORT").unwrap_or_else(|_| "8080".to_string()))
             }
         }
     }
