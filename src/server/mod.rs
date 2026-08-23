@@ -1,9 +1,10 @@
 use std::{collections::HashMap, net::TcpListener, time::Instant};
 
 use actix_web::{
-    dev::Server, guard, http, middleware, web, App, HttpRequest, HttpResponse, HttpResponseBuilder,
-    HttpServer,
+    body::SizedStream, dev::Server, guard, http, middleware, web, App, HttpRequest, HttpResponse,
+    HttpResponseBuilder, HttpServer,
 };
+use futures::stream;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
 use url::Url;
@@ -265,6 +266,11 @@ fn media_response_builder(
     response
 }
 
+fn head_media_response(mut response: HttpResponseBuilder, content_length: u64) -> HttpResponse {
+    let empty_body = stream::empty::<Result<web::Bytes, actix_web::Error>>();
+    response.body(SizedStream::new(content_length, empty_body))
+}
+
 async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>) -> HttpResponse {
     let stream_url = &query.url;
     let bitrate = query.bitrate;
@@ -343,15 +349,17 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
     if req.method() == http::Method::HEAD {
-        return media_response_builder(
-            is_partial,
-            start_bytes,
-            end_bytes,
-            total_streamable_bytes,
+        return head_media_response(
+            media_response_builder(
+                is_partial,
+                start_bytes,
+                end_bytes,
+                total_streamable_bytes,
+                expected_bytes,
+                codec.get_mime_type_str(),
+            ),
             expected_bytes,
-            codec.get_mime_type_str(),
-        )
-        .finish();
+        );
     }
 
     match Transcoder::new(&ffmpeg_paramenters).await {
@@ -375,6 +383,7 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::body::{BodySize, MessageBody};
 
     #[test]
     fn test_get_start_and_end_start_to_end() {
@@ -462,5 +471,15 @@ mod tests {
             response.headers().get(http::header::CONTENT_RANGE).unwrap(),
             "bytes 0-0/100"
         );
+    }
+
+    #[test]
+    fn head_response_preserves_the_declared_body_size() {
+        let response = head_media_response(
+            media_response_builder(false, 0, 99, 100, 100, "audio/mpeg"),
+            100,
+        );
+
+        assert_eq!(response.body().size(), BodySize::Sized(100));
     }
 }
