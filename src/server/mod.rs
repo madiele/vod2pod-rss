@@ -1,10 +1,10 @@
 use std::{collections::HashMap, net::TcpListener, time::Instant};
 
 use actix_web::{
-    dev::Server, guard, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
+    dev::Server, guard, http, middleware, web, App, HttpRequest, HttpResponse, HttpResponseBuilder,
+    HttpServer,
 };
 use log::{debug, error, info, warn};
-use regex::Regex;
 use serde::Deserialize;
 use url::Url;
 
@@ -12,7 +12,7 @@ use crate::{
     configs::{conf, Conf, ConfName},
     provider::{self, MediaProvider},
     rss_transcodizer,
-    transcoder::{FfmpegParameters, Transcoder},
+    transcoder::{estimated_output_bytes, FfmpegParameters, Transcoder},
 };
 
 pub fn spawn_server(listener: TcpListener) -> eyre::Result<Server> {
@@ -187,49 +187,89 @@ struct TranscodizeQuery {
     duration: usize,
 }
 
-fn parse_range_header(
-    content_range_str: &str,
-    bytes_count: usize,
-) -> eyre::Result<(usize, usize, usize)> {
-    let re = Regex::new(r"(?P<start>[0-9]{1,20})-?(?P<end>[0-9]{1,20})?")?;
-    let captures = if let Some(x) = re.captures_iter(content_range_str).next() {
-        x
-    } else {
-        return Err(eyre::eyre!("content range regex failed"));
+#[derive(Debug, PartialEq)]
+enum RangeError {
+    Invalid,
+    Unsatisfiable,
+}
+
+fn parse_range_header(range_header: &str, bytes_count: u64) -> Result<(u64, u64, u64), RangeError> {
+    if bytes_count == 0 {
+        return Err(RangeError::Unsatisfiable);
+    }
+
+    let range = range_header
+        .trim()
+        .strip_prefix("bytes=")
+        .ok_or(RangeError::Invalid)?;
+    if range.contains(',') {
+        return Err(RangeError::Invalid);
+    }
+
+    let (start, end) = range.split_once('-').ok_or(RangeError::Invalid)?;
+    let (start, end) = match (start, end) {
+        ("", "") => return Err(RangeError::Invalid),
+        ("", suffix) => {
+            let suffix = suffix.parse::<u64>().map_err(|_| RangeError::Invalid)?;
+            if suffix == 0 {
+                return Err(RangeError::Invalid);
+            }
+            (bytes_count.saturating_sub(suffix), bytes_count - 1)
+        }
+        (start, "") => {
+            let start = start.parse::<u64>().map_err(|_| RangeError::Invalid)?;
+            if start >= bytes_count {
+                return Err(RangeError::Unsatisfiable);
+            }
+            (start, bytes_count - 1)
+        }
+        (start, end) => {
+            let start = start.parse::<u64>().map_err(|_| RangeError::Invalid)?;
+            let end = end.parse::<u64>().map_err(|_| RangeError::Invalid)?;
+            if start >= bytes_count || end < start {
+                return Err(RangeError::Unsatisfiable);
+            }
+            (start, end.min(bytes_count - 1))
+        }
     };
 
-    let mut start = 0;
-    if let Some(x) = captures.name("start") {
-        start = x.as_str().parse()?;
-    }
+    Ok((start, end, end - start + 1))
+}
 
-    if bytes_count == 0 {
-        error!("The requested Rage header with a length of 0 is invalid: {content_range_str}");
-        return Err(eyre::eyre!(
-            "The requested Rage header with a length of 0 is invalid: {content_range_str}"
+fn media_response_builder(
+    is_partial: bool,
+    start_bytes: u64,
+    end_bytes: u64,
+    total_bytes: u64,
+    content_length: u64,
+    content_type: &str,
+) -> HttpResponseBuilder {
+    let mut response = if is_partial {
+        HttpResponse::PartialContent()
+    } else {
+        HttpResponse::Ok()
+    };
+
+    response
+        .insert_header((http::header::ACCEPT_RANGES, "bytes"))
+        .insert_header((http::header::CONTENT_LENGTH, content_length.to_string()))
+        .content_type(content_type);
+
+    if is_partial {
+        response.insert_header((
+            http::header::CONTENT_RANGE,
+            format!("bytes {start_bytes}-{end_bytes}/{total_bytes}"),
         ));
     }
-    let mut end = bytes_count - 1;
-    if let Some(x) = captures.name("end") {
-        end = x.as_str().parse()?;
-    }
 
-    if end == start {
-        return Err(eyre::eyre!(
-            "The requested Rage header with a length of 0 is invalid: {content_range_str}"
-        ));
-    }
-
-    let expected = (end + 1) - start;
-
-    Ok((start, end, expected))
+    response
 }
 
 async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>) -> HttpResponse {
     let stream_url = &query.url;
     let bitrate = query.bitrate;
     let duration_secs = query.duration;
-    let total_streamable_bytes = (duration_secs * bitrate * 1000) / 8;
+    let total_streamable_bytes = estimated_output_bytes(duration_secs as u64, bitrate as u64);
     info!("processing transcode at {bitrate}k for {stream_url}");
 
     if let Ok(value) = conf().get(ConfName::TranscodingEnabled) {
@@ -249,29 +289,35 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
         return HttpResponse::Forbidden().body("scheme and host not in whitelist");
     }
 
-    // Range header parsing
-    const DEFAULT_CONTENT_RANGE: &str = "0-";
-    let content_range_str = match req.headers().get("Range") {
-        Some(x) => x.to_str().unwrap_or_default(),
-        None => DEFAULT_CONTENT_RANGE,
+    let range_header = req.headers().get(http::header::RANGE);
+    let is_partial = range_header.is_some();
+    let (start_bytes, end_bytes, expected_bytes) = match range_header {
+        Some(value) => match value
+            .to_str()
+            .map_err(|_| RangeError::Invalid)
+            .and_then(|value| parse_range_header(value, total_streamable_bytes))
+        {
+            Ok(range) => range,
+            Err(RangeError::Invalid) => return HttpResponse::BadRequest().finish(),
+            Err(RangeError::Unsatisfiable) => {
+                return HttpResponse::RangeNotSatisfiable()
+                    .insert_header((
+                        http::header::CONTENT_RANGE,
+                        format!("bytes */{total_streamable_bytes}"),
+                    ))
+                    .finish()
+            }
+        },
+        None if total_streamable_bytes > 0 => {
+            (0, total_streamable_bytes - 1, total_streamable_bytes)
+        }
+        None => return HttpResponse::NoContent().finish(),
     };
-
-    debug!("received content range {content_range_str}");
-
-    let (start_bytes, end_bytes, expected_bytes) =
-        match parse_range_header(content_range_str, total_streamable_bytes) {
-            Ok((start, end, expected)) => (start, end, expected),
-            Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
-        };
 
     debug!("requested content-range: bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}");
 
-    if start_bytes > end_bytes || start_bytes > total_streamable_bytes {
-        return HttpResponse::RangeNotSatisfiable().finish();
-    }
-
     let seek_secs =
-        ((start_bytes as f32) / (total_streamable_bytes as f32)) * (duration_secs as f32);
+        ((start_bytes as f64) / (total_streamable_bytes as f64)) * (duration_secs as f64);
     debug!("choosen seek_time: {seek_secs}");
 
     let timeout_in_seconds = conf()
@@ -283,46 +329,44 @@ async fn transcode_to_mp3(req: HttpRequest, query: web::Query<TranscodizeQuery>)
 
     let codec = conf().get(ConfName::AudioCodec).unwrap().into();
     let ffmpeg_paramenters = FfmpegParameters {
-        seek_time: seek_secs,
+        seek_time: seek_secs as f32,
         url: stream_url.clone(),
         audio_codec: codec,
         bitrate_kbit: bitrate,
         max_rate_kbit: bitrate * 30,
-        expected_bytes_count: expected_bytes,
+        expected_bytes_count: match expected_bytes.try_into() {
+            Ok(expected_bytes) => expected_bytes,
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        },
         timeout_in_seconds: timeout_in_seconds,
     };
     debug!("seconds: {duration_secs}, bitrate: {bitrate}");
 
     if req.method() == http::Method::HEAD {
-        return HttpResponse::Ok()
-            .insert_header(("Accept-Ranges", "bytes"))
-            .insert_header((
-                "Content-Range",
-                format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}"),
-            ))
-            .content_type(codec.get_mime_type_str())
-            .finish();
+        return media_response_builder(
+            is_partial,
+            start_bytes,
+            end_bytes,
+            total_streamable_bytes,
+            expected_bytes,
+            codec.get_mime_type_str(),
+        )
+        .finish();
     }
 
     match Transcoder::new(&ffmpeg_paramenters).await {
         Ok(transcoder) => {
             let stream = transcoder.get_transcode_stream();
 
-            let mut response_builder = if ffmpeg_paramenters.seek_time <= 0.1 {
-                HttpResponse::Ok()
-            } else {
-                HttpResponse::PartialContent()
-            };
-
-            response_builder
-                .insert_header(("Accept-Ranges", "bytes"))
-                .insert_header((
-                    "Content-Range",
-                    format!("bytes {start_bytes}-{end_bytes}/{total_streamable_bytes}"),
-                ))
-                .content_type(codec.get_mime_type_str())
-                .no_chunking((expected_bytes).try_into().unwrap())
-                .streaming(stream)
+            media_response_builder(
+                is_partial,
+                start_bytes,
+                end_bytes,
+                total_streamable_bytes,
+                expected_bytes,
+                codec.get_mime_type_str(),
+            )
+            .streaming(stream)
         }
         Err(e) => HttpResponse::ServiceUnavailable().body(e.to_string()),
     }
@@ -362,5 +406,61 @@ mod tests {
         let bytes_count = 200;
         let (start, end, expected) = parse_range_header(content_range_str, bytes_count).unwrap();
         assert_eq!((start, end, expected), (0, 199, 200));
+    }
+
+    #[test]
+    fn test_get_single_byte_range() {
+        assert_eq!(parse_range_header("bytes=0-0", 100), Ok((0, 0, 1)));
+    }
+
+    #[test]
+    fn test_get_suffix_range() {
+        assert_eq!(parse_range_header("bytes=-25", 100), Ok((75, 99, 25)));
+    }
+
+    #[test]
+    fn test_range_end_is_clamped_to_content_length() {
+        assert_eq!(parse_range_header("bytes=75-200", 100), Ok((75, 99, 25)));
+    }
+
+    #[test]
+    fn test_range_start_beyond_content_is_unsatisfiable() {
+        assert_eq!(
+            parse_range_header("bytes=100-", 100),
+            Err(RangeError::Unsatisfiable)
+        );
+    }
+
+    #[test]
+    fn full_response_has_content_length_without_content_range() {
+        let response = media_response_builder(false, 0, 99, 100, 100, "audio/mpeg").finish();
+
+        assert_eq!(response.status(), http::StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_LENGTH)
+                .unwrap(),
+            "100"
+        );
+        assert!(!response.headers().contains_key(http::header::CONTENT_RANGE));
+    }
+
+    #[test]
+    fn partial_response_has_range_status_and_headers() {
+        let response = media_response_builder(true, 0, 0, 100, 1, "audio/mpeg").finish();
+
+        assert_eq!(response.status(), http::StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_LENGTH)
+                .unwrap(),
+            "1"
+        );
+        assert_eq!(
+            response.headers().get(http::header::CONTENT_RANGE).unwrap(),
+            "bytes 0-0/100"
+        );
     }
 }
