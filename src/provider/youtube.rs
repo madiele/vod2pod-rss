@@ -618,6 +618,12 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
                     .first()
                     .and_then(|d| Some(d.clone().description?.content)),
             );
+            item_builder.pub_date(
+                entry
+                    .published
+                    .or(entry.updated)
+                    .map(|published_at| published_at.to_rfc2822()),
+            );
             let link = entry.links.first().map(|d| d.clone().href);
             item_builder.link(link.clone());
             let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
@@ -706,6 +712,20 @@ fn parse_duration(duration_str: &str) -> Result<Duration, String> {
 mod tests {
     use super::*;
     use test_log::test;
+
+    #[test]
+    fn atom_entry_published_date_is_preserved_in_rss() {
+        let atom = include_str!("../rss_transcodizer/sample_rss/youtube.rss");
+        let feed = feed_rs::parser::parse(atom.as_bytes()).unwrap();
+
+        let rss = convert_atom_to_rss(feed, HashMap::new());
+        let channel = Channel::read_from(rss.as_bytes()).unwrap();
+
+        assert_eq!(
+            channel.items[0].pub_date(),
+            Some("Fri, 31 Mar 2023 20:00:10 +0000")
+        );
+    }
 
     #[tokio::test]
     async fn test_build_items_for_playlist_requires_api_key() {
