@@ -252,7 +252,7 @@ fn media_response_builder(
 
     response
         .insert_header((http::header::ACCEPT_RANGES, "bytes"))
-        .insert_header((http::header::CONTENT_LENGTH, content_length.to_string()))
+        .no_chunking(content_length)
         .content_type(content_type);
 
     if is_partial {
