@@ -1,7 +1,7 @@
 # by using --platform=$BUILDPLATFORM we force the build step 
 # to always run on the native architecture of the build machine
 # making the build time shorter
-FROM --platform=$BUILDPLATFORM rust:1.81 as builder
+FROM --platform=$BUILDPLATFORM rust:1.88 as builder
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
@@ -62,17 +62,36 @@ RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM"
 COPY requirements.txt ./
 #install ffmpeg and yt-dlp
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 curl ca-certificates ffmpeg && \
+    apt-get install -y --no-install-recommends unzip python3 curl ca-certificates ffmpeg && \
     export YT_DLP_VERSION=$(cat requirements.txt | grep yt-dlp | cut -d "=" -f3 | awk -F. '{printf "%d.%02d.%02d\n", $1, $2, $3}') && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/download/$YT_DLP_VERSION/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
+    curl -fsSL https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip -o deno.zip && \
+    unzip deno.zip -d /usr/local/bin && \
+    rm deno.zip && \
     apt-get -y purge curl && \
+    apt-get -y purge unzip && \
+    apt-get -y autoremove && \
+    apt-get -y clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# try to install deno with install script, do not fail if it does not work
+RUN apt-get update && apt-get install -y unzip curl ca-certificates && \
+    curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh || true && \
+    apt-get -y purge curl && \
+    apt-get -y purge unzip && \
     apt-get -y autoremove && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tmp/vod2pod/target/*/release/app /usr/local/bin/vod2pod
 COPY --from=builder /tmp/vod2pod/templates/ ./templates
+
+RUN if deno --version; then \
+        echo "deno runs correctly"; \
+    else \
+        echo "deno not available"; \
+    fi
 
 RUN if vod2pod --version; then \
         echo "vod2pod starts correctly"; \

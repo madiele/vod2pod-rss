@@ -17,7 +17,7 @@ services:
     extends: api_keys
     #change "latest" to "X.X.X" to pin a version es: "1.0.4" will force the image to use to version 1.0.4, if you do please watch the repo for updates (tutorial in README.md)
     #change "latest" to "beta" if you want to test yet unreleased fixes/features (expect bugs and broken builds from time to time)
-    image: madiele/vod2pod-rss:latest 
+    image: madiele/vod2pod-rss:latest
     # uncomment to build vod2pod from scratch, only do this if your architecture is not supported
     #build: 
     #  dockerfile: ./Dockerfile
@@ -37,7 +37,7 @@ services:
       - REDIS_PORT=6379 #don't edit this
 
   redis:
-    image: "redis:6.2"
+    image: "redis:8.4"
     command: redis-server --save 20 1 --loglevel warning
     restart: unless-stopped
     healthcheck:

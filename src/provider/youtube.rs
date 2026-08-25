@@ -161,7 +161,7 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
             let rss_channel = build_channel_from_playlist(playlist);
 
             let max_fetched_items: usize =
-                conf().get(ConfName::YouutbeMaxResults).unwrap().parse()?;
+                conf().get(ConfName::YoutubeMaxResults).unwrap().parse()?;
             let items = fetch_playlist_items(&playlist_id, &api_key, max_fetched_items).await?;
 
             let duration_map = create_duration_url_map(&items, &api_key).await?;
@@ -186,7 +186,7 @@ async fn fetch_from_api(id: IdType, api_key: String) -> eyre::Result<(Channel, V
             let rss_channel = build_channel_from_yt_channel(channel);
 
             let max_fetched_items: usize =
-                conf().get(ConfName::YouutbeMaxResults).unwrap().parse()?;
+                conf().get(ConfName::YoutubeMaxResults).unwrap().parse()?;
             let items = fetch_playlist_items(&upload_playlist, &api_key, max_fetched_items).await?;
 
             let duration_map = create_duration_url_map(&items, &api_key).await?;
@@ -469,7 +469,7 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
     map_error = r##"|e| eyre::Error::new(e)"##,
     ty = "AsyncRedisCache<Url, Url>",
     create = r##" {
-        AsyncRedisCache::new("cached_yt_stream_url=", 18000)
+        AsyncRedisCache::new("cached_yt_stream_url=", std::time::Duration::from_secs(18000))
             .set_refresh(false)
             .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
@@ -480,7 +480,7 @@ fn get_youtube_hub() -> YouTube<hyper_rustls::HttpsConnector<hyper::client::Http
 async fn get_youtube_stream_url(url: &Url) -> eyre::Result<Url> {
     debug!("getting stream_url for yt video: {}", url);
     let extra_args: Vec<String> =
-        serde_json::from_str(conf().get(ConfName::YouutbeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
+        serde_json::from_str(conf().get(ConfName::YoutubeYtDlpExtraArgs)?.as_str()).map_err(|_| eyre!(r#"failed to parse YOUTUBE_YT_DLP_GET_URL_EXTRA_ARGS allowed syntax is ["arg1#", "arg2", "arg3", ...]"#))?;
     let mut command = tokio::process::Command::new("yt-dlp");
     command
         .arg("-f")
@@ -553,7 +553,7 @@ async fn feed_url_for_yt_channel(url: &Url) -> eyre::Result<Url> {
         map_error = r##"|e| eyre::Error::new(e)"##,
         ty = "AsyncRedisCache<Url, Url>",
         create = r##" {
-        AsyncRedisCache::new("youtube_channel_username_to_id=", 9999999)
+        AsyncRedisCache::new("youtube_channel_username_to_id=", std::time::Duration::from_secs(9999999))
             .set_refresh(false)
             .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
@@ -618,6 +618,12 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
                     .first()
                     .and_then(|d| Some(d.clone().description?.content)),
             );
+            item_builder.pub_date(
+                entry
+                    .published
+                    .or(entry.updated)
+                    .map(|published_at| published_at.to_rfc2822()),
+            );
             let link = entry.links.first().map(|d| d.clone().href);
             item_builder.link(link.clone());
             let mut itunes_item_builder = ITunesItemExtensionBuilder::default();
@@ -649,7 +655,7 @@ fn convert_atom_to_rss(feed: Feed, duration_map: HashMap<String, Option<usize>>)
         map_error = r##"|e| eyre::Error::new(e)"##,
         ty = "AsyncRedisCache<Url, Option<usize>>",
         create = r##" {
-        AsyncRedisCache::new("cached_yt_video_duration=", 86400)
+        AsyncRedisCache::new("cached_yt_video_duration=", std::time::Duration::from_secs(86400))
             .set_refresh(false)
             .set_connection_string(&conf().get(ConfName::RedisUrl).unwrap())
             .build()
@@ -706,6 +712,20 @@ fn parse_duration(duration_str: &str) -> Result<Duration, String> {
 mod tests {
     use super::*;
     use test_log::test;
+
+    #[test]
+    fn atom_entry_published_date_is_preserved_in_rss() {
+        let atom = include_str!("../rss_transcodizer/sample_rss/youtube.rss");
+        let feed = feed_rs::parser::parse(atom.as_bytes()).unwrap();
+
+        let rss = convert_atom_to_rss(feed, HashMap::new());
+        let channel = Channel::read_from(rss.as_bytes()).unwrap();
+
+        assert_eq!(
+            channel.items[0].pub_date(),
+            Some("Fri, 31 Mar 2023 20:00:10 +0000")
+        );
+    }
 
     #[tokio::test]
     async fn test_build_items_for_playlist_requires_api_key() {

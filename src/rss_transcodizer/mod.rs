@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fmt::Display;
 use std::time::Duration;
 
 use eyre::eyre;
@@ -10,6 +9,7 @@ use rss::Channel;
 use rss::{Enclosure, Item};
 
 use crate::configs::{conf, AudioCodec, Conf, ConfName};
+use crate::transcoder::estimated_output_bytes;
 
 pub fn inject_vod2pod_customizations(
     rss_body: String,
@@ -68,7 +68,7 @@ pub fn inject_vod2pod_customizations(
                     .append_pair("ext", ext.as_str()); //this should allways be last, some players refuse to play urls not ending in .mp3
 
                 let enclosure = Enclosure {
-                    length: (bitrate * 1024 * duration_secs).to_string(),
+                    length: estimated_output_bytes(*duration_secs, bitrate).to_string(),
                     url: transcode_service_url.to_string(),
                     mime_type: "audio/mpeg".to_string(),
                 };
@@ -85,18 +85,7 @@ pub fn inject_vod2pod_customizations(
     Ok(injected_feed.to_string())
 }
 
-#[derive(Clone, Hash)]
-struct TranscodeParams {
-    transcode_service_url_str: String,
-    feed_url: Url,
-    should_transcode: bool,
-}
 
-impl Display for TranscodeParams {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", &self.transcode_service_url_str, &self.feed_url)
-    }
-}
 
 fn get_description(item: &Item) -> String {
     const FOOTER: &str = concat!(
@@ -104,7 +93,7 @@ fn get_description(item: &Item) -> String {
         env!("CARGO_PKG_VERSION"),
         " made by Mattia Di Eleuterio (<a href=\"https://github.com/madiele\">madiele</a>). Check out the <a href=\"https://github.com/madiele/vod2pod-rss\">GitHub repository</a>."
     );
-    let description = item.description().unwrap_or_default();
+    let description = item.description().unwrap_or_default().replace("\n", "<br>");
     let url = item.link().unwrap_or_default();
     let img = item
         .itunes_ext()
@@ -140,3 +129,33 @@ fn parse_duration(duration_str: &str) -> Result<Duration, String> {
     Ok(Duration::from_secs(duration_secs))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enclosure_length_matches_the_streamed_byte_count() {
+        let raw_rss = r#"<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+                <channel>
+                    <title>Test feed</title>
+                    <link>https://www.youtube.com/</link>
+                    <description>Test feed</description>
+                    <item>
+                        <title>Test episode</title>
+                        <link>https://www.youtube.com/watch?v=test</link>
+                        <itunes:duration>00:02:36</itunes:duration>
+                    </item>
+                </channel>
+            </rss>"#;
+
+        let result = inject_vod2pod_customizations(
+            raw_rss.to_string(),
+            Some(Url::parse("http://localhost/transcode_media/to.mp3").unwrap()),
+        )
+        .unwrap();
+        let channel = Channel::read_from(result.as_bytes()).unwrap();
+
+        assert_eq!(channel.items[0].enclosure().unwrap().length(), "3744000");
+    }
+}
