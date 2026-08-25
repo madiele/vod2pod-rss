@@ -20,6 +20,13 @@ use crate::configs::AudioCodec;
 use crate::provider;
 use crate::provider::MediaProvider;
 
+pub fn estimated_output_bytes(duration_secs: u64, bitrate_kbit: u64) -> u64 {
+    duration_secs
+        .saturating_mul(bitrate_kbit)
+        .saturating_mul(1000)
+        / 8
+}
+
 #[derive(Serialize)]
 pub struct FfmpegParameters {
     pub seek_time: f32,
