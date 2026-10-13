@@ -24,7 +24,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt
