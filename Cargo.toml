@@ -22,9 +22,9 @@ log = "=0.4.34"
 regex = "=1.13.1"
 reqwest = { version = "=0.12.28", features = ["json"] }
 serde = "=1.0.229"
-serde_json = "=1.0.151"
-tokio = { version = "=1.53.1", features = ["macros", "process"]}
-uuid = { version= "=1.26.1", features = ["v4", "serde"]}
+serde_json = "=1.0.152"
+tokio = { version = "=1.53.2", features = ["macros", "process"]}
+uuid = { version= "=1.28.0", features = ["v4", "serde"]}
 genawaiter = {version = "=0.99", features = ["futures03"] }
 openssl = { version = "*", features = ["vendored"] } #this is here just to make cross-compiling work during github actions
 rss = { version = "=2.1", features = ["serde"] }
